@@ -1,0 +1,67 @@
+name: Publish Plugin Release
+
+# Dispara quando uma tag no formato <plugin-id>-<versão> é publicada
+# Exemplos: cpf-1.0.0, gerador-json-1.2.0
+on:
+  push:
+    tags:
+      - '*-[0-9]*.[0-9]*.[0-9]*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extrair ID do plugin a partir da tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Remove o sufixo de versão: cpf-1.0.0 → cpf
+          PLUGIN_ID="${TAG%-*.*.*}"
+          VERSION="${TAG##*-}"
+          echo "plugin_id=$PLUGIN_ID" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
+          echo "Plugin: $PLUGIN_ID  Versão: $VERSION"
+
+      - name: Verificar se pasta do plugin existe
+        run: |
+          if [ ! -d "plugins/${{ steps.meta.outputs.plugin_id }}" ]; then
+            echo "❌ Pasta plugins/${{ steps.meta.outputs.plugin_id }} não encontrada"
+            exit 1
+          fi
+
+      - name: Criar ZIP do plugin
+        run: |
+          PLUGIN_ID="${{ steps.meta.outputs.plugin_id }}"
+          ZIP_NAME="${PLUGIN_ID}.zip"
+          cd plugins/$PLUGIN_ID
+          # Exclui arquivos de cache Python e outros desnecessários
+          zip -r "../../$ZIP_NAME" . \
+            --exclude "*.pyc" \
+            --exclude "__pycache__/*" \
+            --exclude ".DS_Store" \
+            --exclude "*.egg-info/*" \
+            --exclude "node_modules/*"
+          cd ../..
+          echo "✅ Criado: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
+
+      - name: Publicar Release no GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: "${{ steps.meta.outputs.plugin_id }} v${{ steps.meta.outputs.version }}"
+          body: |
+            ## Plugin: `${{ steps.meta.outputs.plugin_id }}` — v${{ steps.meta.outputs.version }}
+
+            ### Instalação
+
+            Abra o Toolbox → 🛒 Marketplace → Instalar
+
+            Ou manualmente: baixe o ZIP e extraia em `%APPDATA%\Toolbox\plugins\${{ steps.meta.outputs.plugin_id }}\`
+          files: "${{ steps.meta.outputs.plugin_id }}.zip"
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,7 @@
+{
+  "name": "Stract JSON",
+  "version": "1.0.0",
+  "description": "Extrai valores de um campo específico a partir de um JSON colado.",
+  "language": "python",
+  "entry": "main.py"
+}

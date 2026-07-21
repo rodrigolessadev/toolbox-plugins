@@ -1,0 +1,7 @@
+{
+  "name": "Gerador de Marcações",
+  "version": "1.0.0",
+  "description": "Gera INSERTs SQL para a tabela R070ACC (SQL Server e Oracle).",
+  "language": "python",
+  "entry": "main.py"
+}

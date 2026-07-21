@@ -1,0 +1,7 @@
+{
+  "name": "Calculadora de Jornadas",
+  "version": "1.0.0",
+  "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada.",
+  "language": "python",
+  "entry": "main.py"
+}

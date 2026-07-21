@@ -1,0 +1,7 @@
+{
+  "name": "Converter Data",
+  "version": "1.0.0",
+  "description": "Converte data e hora para número serial Excel/Lotus.",
+  "language": "python",
+  "entry": "main.py"
+}

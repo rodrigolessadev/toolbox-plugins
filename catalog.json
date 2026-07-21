@@ -1,0 +1,84 @@
+{
+  "version": "1",
+  "updated_at": "2026-07-21",
+  "plugins": [
+    {
+      "id": "cpf",
+      "name": "Validador de CPF",
+      "description": "Valida e gera CPFs com interface gráfica. Suporta formatação automática e cópia para área de transferência.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["utilidade", "cpf", "validação"],
+      "icon": "shield-check",
+      "command": "cpf",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/cpf-1.0.0/cpf.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "gerador-json",
+      "name": "Gerador de JSON",
+      "description": "Gera mock data em JSON (Pessoa, Produto, Usuário) com quantidade configurável e cópia para área de transferência.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["dev", "json", "mock", "dados"],
+      "icon": "braces",
+      "command": "gerador-json",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.0.0/gerador-json.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "gerador-marcacoes",
+      "name": "Gerador de Marcações SQL",
+      "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["sql", "banco de dados", "insert"],
+      "icon": "database",
+      "command": "gerador-marcacoes",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-1.0.0/gerador-marcacoes.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "calc-jornadas",
+      "name": "Calculadora de Jornadas",
+      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["rh", "jornada", "horas", "trabalho"],
+      "icon": "clock",
+      "command": "calc-jornadas",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.0/calc-jornadas.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "stract-json",
+      "name": "Stract JSON",
+      "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["dev", "json", "extração", "dados"],
+      "icon": "file-json",
+      "command": "stract-json",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "converter-data",
+      "name": "Converter Data",
+      "description": "Converte data e hora para número serial Excel/Lotus e vice-versa.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["excel", "data", "conversão", "utilidade"],
+      "icon": "calendar",
+      "command": "converter-data",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.0/converter-data.zip",
+      "min_toolbox_version": "1.0.0"
+    }
+  ]
+}
