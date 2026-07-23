@@ -3,11 +3,16 @@
 Plugin: Calculadora de Jornadas
 Calcula horas normais, noturnas e noturnas reduzidas por jornada.
 Porta fiel do jornada/page.tsx + jornada-calc.ts do KapiNote.
+
+Correções aplicadas:
+  1. Tema escuro aplicado ao Treeview (cabeçalhos, linhas, listras, seleção).
+  2. A janela agora abre SEM nenhuma jornada pré-preenchida.
+  3. Máscara automática de horário (HH:MM) nos campos Entrada/Saída da tabela
+     e nos campos Início/Fim noturno dos parâmetros.
 """
 import tkinter as tk
 from tkinter import ttk
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 # ─── Lógica de cálculo ────────────────────────────────────────────────────
 
@@ -73,6 +78,35 @@ DARK = {
     "danger":"#ff6369","input_bg":"#0e1014","warning":"#f5a524",
 }
 
+# ─── Máscara automática de horário HH:MM ──────────────────────────────────
+
+def formatar_hora_live(var: tk.StringVar, max_len: int = 5) -> None:
+    """
+    Mantém o conteúdo de `var` sempre no formato HH:MM.
+
+    Comportamento:
+      - mantém apenas dígitos, no máximo `max_len` (5);
+      - ao digitar, insere ':' automaticamente após o 2º dígito;
+      - força horas a ficarem em [00..29] e minutos em [00..59] quando possível.
+    """
+    raw = var.get()
+    digits = "".join(ch for ch in raw if ch.isdigit())[:max_len]
+    if len(digits) <= 2:
+        formatted = digits
+    else:
+        hh, mm = digits[:2], digits[2:]
+        # clamp leve para evitar combinações claramente inválidas
+        try:
+            h = int(hh)
+            if h > 29:
+                h = 23
+            hh = f"{h:02d}"
+        except ValueError:
+            pass
+        formatted = f"{hh}:{mm}"
+    if formatted != raw:
+        # posicione o cursor no fim
+        var.set(formatted)
 
 # ─── UI ──────────────────────────────────────────────────────────────────
 
@@ -88,50 +122,84 @@ def build_ui():
         style.theme_use("clam")
     except tk.TclError:
         pass
-    style.configure("TLabel",      background=DARK["bg"],  foreground=DARK["fg"])
-    style.configure("TFrame",      background=DARK["bg"])
-    style.configure("TLabelframe", background=DARK["bg"],  foreground=DARK["fg"])
+
+    # ── Estilos globais ──
+    style.configure(".",                background=DARK["bg"],  foreground=DARK["fg"])
+    style.configure("TLabel",           background=DARK["bg"],  foreground=DARK["fg"])
+    style.configure("TFrame",           background=DARK["bg"])
+    style.configure("TLabelframe",      background=DARK["bg"],  foreground=DARK["fg"])
     style.configure("TLabelframe.Label",
                     background=DARK["bg"], foreground=DARK["muted"],
-                    font=("Segoe UI",9,"bold"))
-    style.configure("TEntry", fieldbackground=DARK["input_bg"], foreground=DARK["fg"])
+                    font=("Segoe UI", 9, "bold"))
+    style.configure("TEntry",
+                    fieldbackground=DARK["input_bg"],
+                    foreground=DARK["fg"],
+                    insertcolor=DARK["fg"],
+                    bordercolor=DARK["border"],
+                    lightcolor=DARK["border"],
+                    darkcolor=DARK["border"])
+
+    # ── Estilo do Treeview (correção #1: formatação) ──
+    style.configure("Treeview",
+                    background=DARK["bg2"],
+                    fieldbackground=DARK["bg2"],
+                    foreground=DARK["fg"],
+                    bordercolor=DARK["border"],
+                    rowheight=26,
+                    font=("Segoe UI", 10))
+    style.configure("Treeview.Heading",
+                    background=DARK["bg"],
+                    foreground=DARK["accent"],
+                    relief="flat",
+                    font=("Segoe UI", 10, "bold"))
+    # listras alternadas
+    style.map("Treeview",
+              background=[("selected", DARK["accent"])],
+              foreground=[("selected", DARK["bg"])])
+    style.map("Treeview.Heading",
+              background=[("active", DARK["bg2"])])
+    style.layout("Treeview", [
+        ("Treeview.treearea", {"sticky": "nswe"})
+    ])  # remove a borda padrão feia
 
     params = Params()
 
     # ── Título ──
     ttk.Label(root, text="Calculadora de Jornadas",
-              font=("Segoe UI",15,"bold")).pack(pady=(16,2))
+              font=("Segoe UI", 15, "bold")).pack(pady=(16, 2))
     ttk.Label(root, text="Horas normais · Noturnas · Noturnas reduzidas",
-              foreground=DARK["muted"], font=("Segoe UI",9)).pack(pady=(0,10))
+              foreground=DARK["muted"], font=("Segoe UI", 9)).pack(pady=(0, 10))
 
     # ── Parâmetros ──
     fp = ttk.LabelFrame(root, text="Parâmetros", padding=10)
-    fp.pack(fill="x", padx=18, pady=(0,10))
+    fp.pack(fill="x", padx=18, pady=(0, 10))
 
     def min_to_hhmm(m: int) -> str:
         return f"{m//60:02d}:{m%60:02d}"
 
     p_row = ttk.Frame(fp); p_row.pack(fill="x")
 
-    ttk.Label(p_row, text="Início noturno:", font=("Segoe UI",9)).grid(row=0,column=0,sticky="w",padx=(0,6))
+    ttk.Label(p_row, text="Início noturno:", font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", padx=(0, 6))
     ini_var = tk.StringVar(value=min_to_hhmm(params.inicio_noturno))
-    ttk.Entry(p_row, textvariable=ini_var, width=8, font=("Segoe UI",10)).grid(row=0,column=1,padx=(0,20))
+    ini_var.trace_add("write", lambda *_: formatar_hora_live(ini_var))
+    ttk.Entry(p_row, textvariable=ini_var, width=8, font=("Segoe UI", 10)).grid(row=0, column=1, padx=(0, 20))
 
-    ttk.Label(p_row, text="Fim noturno:", font=("Segoe UI",9)).grid(row=0,column=2,sticky="w",padx=(0,6))
+    ttk.Label(p_row, text="Fim noturno:", font=("Segoe UI", 9)).grid(row=0, column=2, sticky="w", padx=(0, 6))
     fim_var = tk.StringVar(value=min_to_hhmm(params.fim_noturno))
-    ttk.Entry(p_row, textvariable=fim_var, width=8, font=("Segoe UI",10)).grid(row=0,column=3,padx=(0,20))
+    fim_var.trace_add("write", lambda *_: formatar_hora_live(fim_var))
+    ttk.Entry(p_row, textvariable=fim_var, width=8, font=("Segoe UI", 10)).grid(row=0, column=3, padx=(0, 20))
 
-    ttk.Label(p_row, text="Min/h noturna:", font=("Segoe UI",9)).grid(row=0,column=4,sticky="w",padx=(0,6))
+    ttk.Label(p_row, text="Min/h noturna:", font=("Segoe UI", 9)).grid(row=0, column=4, sticky="w", padx=(0, 6))
     fator_var = tk.StringVar(value="52,5")
-    ttk.Entry(p_row, textvariable=fator_var, width=8, font=("Segoe UI",10)).grid(row=0,column=5)
+    ttk.Entry(p_row, textvariable=fator_var, width=8, font=("Segoe UI", 10)).grid(row=0, column=5)
     ttk.Label(p_row, text="(CLT: 52,5)", foreground=DARK["muted"],
-              font=("Segoe UI",8)).grid(row=0,column=6,padx=(4,0))
+              font=("Segoe UI", 8)).grid(row=0, column=6, padx=(4, 0))
 
     def apply_params():
         try:
             params.inicio_noturno = hora_para_min(ini_var.get())
             params.fim_noturno    = hora_para_min(fim_var.get())
-            raw = fator_var.get().replace(",",".")
+            raw = fator_var.get().replace(",", ".")
             v = float(raw)
             if v > 0:
                 params.fator_reducao = v / 60
@@ -140,20 +208,23 @@ def build_ui():
         recalc()
 
     tk.Button(fp, text="Aplicar", bg=DARK["bg2"], fg=DARK["accent"],
-              relief="flat", cursor="hand2", font=("Segoe UI",9), padx=10, pady=3,
-              command=apply_params).pack(anchor="e", pady=(8,0))
+              relief="flat", cursor="hand2", font=("Segoe UI", 9), padx=10, pady=3,
+              command=apply_params).pack(anchor="e", pady=(8, 0))
 
     # ── Tabela ──
-    cols = ("entrada","saida","normais","noturnas","not_red","total")
-    headers = ("Entrada","Saída","Normais","Noturnas","Not. Red.","Total")
-    col_w = (100,100,90,90,90,90)
+    cols = ("entrada", "saida", "normais", "noturnas", "not_red", "total")
+    headers = ("Entrada", "Saída", "Normais", "Noturnas", "Not. Red.", "Total")
+    col_w = (100, 100, 90, 90, 90, 90)
 
-    ft = ttk.Frame(root); ft.pack(fill="both", expand=True, padx=18, pady=(0,6))
+    ft = ttk.Frame(root); ft.pack(fill="both", expand=True, padx=18, pady=(0, 6))
 
     tree = ttk.Treeview(ft, columns=cols, show="headings", height=12)
     for c, h, w in zip(cols, headers, col_w):
         tree.heading(c, text=h)
         tree.column(c, width=w, anchor="center")
+    # listras alternadas
+    tree.tag_configure("odd",  background=DARK["bg2"], foreground=DARK["fg"])
+    tree.tag_configure("even", background="#1a1f27",   foreground=DARK["fg"])
     tree.pack(side="left", fill="both", expand=True)
 
     vsb = ttk.Scrollbar(ft, orient="vertical", command=tree.yview)
@@ -161,6 +232,10 @@ def build_ui():
     tree.configure(yscrollcommand=vsb.set)
 
     rows_data = []   # list of (entrada_var, saida_var, iid)
+
+    def _restyle_rows():
+        for idx, (_, _, iid) in enumerate(rows_data):
+            tree.item(iid, tags=("even" if idx % 2 == 0 else "odd",))
 
     def recalc():
         apply_params_quiet()
@@ -200,7 +275,7 @@ def build_ui():
         try:
             params.inicio_noturno = hora_para_min(ini_var.get())
             params.fim_noturno    = hora_para_min(fim_var.get())
-            raw = fator_var.get().replace(",",".")
+            raw = fator_var.get().replace(",", ".")
             v = float(raw)
             if v > 0:
                 params.fator_reducao = v / 60
@@ -212,8 +287,12 @@ def build_ui():
         ev = tk.StringVar(value=e)
         sv = tk.StringVar(value=s)
         rows_data.append((ev, sv, iid))
+        # máscara automática (correção #3) nos campos da tabela
+        ev.trace_add("write", lambda *_: formatar_hora_live(ev))
+        sv.trace_add("write", lambda *_: formatar_hora_live(sv))
         ev.trace_add("write", lambda *_: recalc())
         sv.trace_add("write", lambda *_: recalc())
+        _restyle_rows()
         return ev, sv, iid
 
     def open_editor(event):
@@ -221,7 +300,7 @@ def build_ui():
         if not sel:
             return
         col = tree.identify_column(event.x)
-        col_idx = int(col.replace("#","")) - 1
+        col_idx = int(col.replace("#", "")) - 1
         if col_idx not in (0, 1):
             return
         idx = tree.index(sel)
@@ -232,7 +311,7 @@ def build_ui():
         if not bbox:
             return
         x, y, w, h = bbox
-        entry = ttk.Entry(tree, textvariable=var, font=("Segoe UI",10), width=8)
+        entry = ttk.Entry(tree, textvariable=var, font=("Segoe UI", 10), width=8)
         entry.place(x=x, y=y, width=w, height=h)
         entry.focus()
 
@@ -246,37 +325,42 @@ def build_ui():
 
     tree.bind("<Double-1>", open_editor)
 
-    add_row("08:00","17:00")
+    # Correção #2: a janela agora abre SEM nenhuma jornada pré-preenchida
+    add_row("", "")
 
     # botões
-    fb2 = ttk.Frame(root); fb2.pack(fill="x", padx=18, pady=(0,6))
+    fb2 = ttk.Frame(root); fb2.pack(fill="x", padx=18, pady=(0, 6))
 
     def rm_row():
         sel = tree.focus()
         if not sel:
             return
         idx = tree.index(sel)
-        if len(rows_data) <= 1:
-            return
         rows_data.pop(idx)
         tree.delete(sel)
+        _restyle_rows()
         recalc()
 
-    tk.Button(fb2, text="+ Linha", bg=DARK["bg2"], fg=DARK["accent"],
-              relief="flat", cursor="hand2", font=("Segoe UI",9), padx=10, pady=4,
-              command=lambda: add_row()).pack(side="left", padx=(0,8))
-    tk.Button(fb2, text="Remover selecionada", bg=DARK["bg2"], fg=DARK["danger"],
-              relief="flat", cursor="hand2", font=("Segoe UI",9), padx=10, pady=4,
-              command=rm_row).pack(side="left", padx=(0,8))
-    tk.Button(fb2, text="Limpar tudo", bg=DARK["bg2"], fg=DARK["muted"],
-              relief="flat", cursor="hand2", font=("Segoe UI",9), padx=10, pady=4,
-              command=lambda: [rows_data.clear(),
-                               [tree.delete(i) for i in tree.get_children()],
-                               add_row(), lbl_tot.configure(text="")]).pack(side="left")
+    def clear_all():
+        for iid in tree.get_children():
+            tree.delete(iid)
+        rows_data.clear()
+        add_row("", "")
+        lbl_tot.configure(text="")
 
-    lbl_tot = ttk.Label(root, text="", font=("Segoe UI",10,"bold"),
+    tk.Button(fb2, text="+ Linha", bg=DARK["bg2"], fg=DARK["accent"],
+              relief="flat", cursor="hand2", font=("Segoe UI", 9), padx=10, pady=4,
+              command=lambda: add_row()).pack(side="left", padx=(0, 8))
+    tk.Button(fb2, text="Remover selecionada", bg=DARK["bg2"], fg=DARK["danger"],
+              relief="flat", cursor="hand2", font=("Segoe UI", 9), padx=10, pady=4,
+              command=rm_row).pack(side="left", padx=(0, 8))
+    tk.Button(fb2, text="Limpar tudo", bg=DARK["bg2"], fg=DARK["muted"],
+              relief="flat", cursor="hand2", font=("Segoe UI", 9), padx=10, pady=4,
+              command=clear_all).pack(side="left")
+
+    lbl_tot = ttk.Label(root, text="", font=("Segoe UI", 10, "bold"),
                         foreground=DARK["accent"])
-    lbl_tot.pack(pady=(0,12))
+    lbl_tot.pack(pady=(0, 12))
 
     recalc()
     root.mainloop()
