@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-07-21",
+  "updated_at": "2026-07-23",
   "plugins": [
     {
       "id": "cpf",
@@ -78,6 +78,19 @@
       "icon": "calendar",
       "command": "converter-data",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.0/converter-data.zip",
+      "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "stract-log",
+      "name": "Stract Log",
+      "description": "Filtra e extrai blocos de log por nível, parâmetro adicional e regra de recorrência (mais recente / mais antiga). Salva o resultado em um arquivo .log ao lado do original.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": ["log", "suporte", "filtro", "análise"],
+      "icon": "file-search",
+      "command": "stract-log",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.0.0/stract-log.zip",
       "min_toolbox_version": "1.0.0"
     }
   ]
