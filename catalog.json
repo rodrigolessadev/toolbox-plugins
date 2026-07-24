@@ -3,13 +3,36 @@
   "updated_at": "2026-07-23",
   "plugins": [
     {
+      "id": "calc-jornadas",
+      "name": "Calculadora de Jornadas",
+      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
+      "version": "1.0.2",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "rh",
+        "jornada",
+        "horas",
+        "trabalho"
+      ],
+      "icon": "clock",
+      "command": "calc-jornadas",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.2/calc-jornadas.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-07-24"
+    },
+    {
       "id": "cpf",
       "name": "Validador de CPF",
       "description": "Valida e gera CPFs com interface gráfica. Suporta formatação automática e cópia para área de transferência.",
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["utilidade", "cpf", "validação"],
+      "tags": [
+        "utilidade",
+        "cpf",
+        "validação"
+      ],
       "icon": "shield-check",
       "command": "cpf",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/cpf-1.0.0/cpf.zip",
@@ -22,7 +45,12 @@
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["dev", "json", "mock", "dados"],
+      "tags": [
+        "dev",
+        "json",
+        "mock",
+        "dados"
+      ],
       "icon": "braces",
       "command": "gerador-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.0.0/gerador-json.zip",
@@ -35,23 +63,14 @@
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["sql", "banco de dados", "insert"],
+      "tags": [
+        "sql",
+        "banco de dados",
+        "insert"
+      ],
       "icon": "database",
       "command": "gerador-marcacoes",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-1.0.0/gerador-marcacoes.zip",
-      "min_toolbox_version": "1.0.0"
-    },
-    {
-      "id": "calc-jornadas",
-      "name": "Calculadora de Jornadas",
-      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": ["rh", "jornada", "horas", "trabalho"],
-      "icon": "clock",
-      "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.0/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0"
     },
     {
@@ -61,7 +80,12 @@
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["dev", "json", "extração", "dados"],
+      "tags": [
+        "dev",
+        "json",
+        "extração",
+        "dados"
+      ],
       "icon": "file-json",
       "command": "stract-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
@@ -74,7 +98,12 @@
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["excel", "data", "conversão", "utilidade"],
+      "tags": [
+        "excel",
+        "data",
+        "conversão",
+        "utilidade"
+      ],
       "icon": "calendar",
       "command": "converter-data",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.0/converter-data.zip",
@@ -87,7 +116,12 @@
       "version": "1.0.0",
       "author": "Rodrigo Lessa",
       "language": "python",
-      "tags": ["log", "suporte", "filtro", "análise"],
+      "tags": [
+        "log",
+        "suporte",
+        "filtro",
+        "análise"
+      ],
       "icon": "file-search",
       "command": "stract-log",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.0.0/stract-log.zip",
