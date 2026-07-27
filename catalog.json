@@ -3,6 +3,25 @@
   "updated_at": "2026-07-23",
   "plugins": [
     {
+      "id": "stract-json",
+      "name": "Stract JSON",
+      "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "dev",
+        "json",
+        "extração",
+        "dados"
+      ],
+      "icon": "file-json",
+      "command": "stract-json",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-07-27"
+    },
+    {
       "id": "gerador-marcacoes",
       "name": "Gerador de Marcações SQL",
       "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle.",
@@ -91,24 +110,6 @@
       "icon": "braces",
       "command": "gerador-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.0.0/gerador-json.zip",
-      "min_toolbox_version": "1.0.0"
-    },
-    {
-      "id": "stract-json",
-      "name": "Stract JSON",
-      "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "dev",
-        "json",
-        "extração",
-        "dados"
-      ],
-      "icon": "file-json",
-      "command": "stract-json",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
       "min_toolbox_version": "1.0.0"
     },
     {
