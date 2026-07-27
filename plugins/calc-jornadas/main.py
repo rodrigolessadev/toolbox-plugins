@@ -18,9 +18,33 @@ Correções aplicadas:
   8. Limitado a 4 dígitos (HHMM) no campo de hora.
   9. TAB navega Entrada → Saída da mesma linha; TAB em Saída cria nova linha.
 """
+import json
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 from dataclasses import dataclass
+
+# ─── Metadados do plugin (lidos do plugin.json) ───────────────────────────
+
+_PLUGIN_DIR = Path(__file__).resolve().parent
+_PLUGIN_META: dict = {}
+try:
+    _PLUGIN_META = json.loads((_PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8"))
+except (FileNotFoundError, json.JSONDecodeError, OSError):
+    _PLUGIN_META = {}
+
+
+def _plugin_title() -> str:
+    """Retorna o título da janela no formato '<nome> v<versão>'.
+
+    Lê `name` e `version` do plugin.json em tempo de execução para que a barra
+    de título se mantenha em sincronia com o versionamento. Caso o
+    plugin.json não esteja disponível (build empacotado, execução standalone
+    etc.), usa fallbacks seguros em vez de quebrar a inicialização.
+    """
+    name = _PLUGIN_META.get("name", "Plugin")
+    version = _PLUGIN_META.get("version", "0.0.0")
+    return f"{name} v{version}"
 
 # ─── Lógica de cálculo ────────────────────────────────────────────────────
 
@@ -179,7 +203,7 @@ def bind_hora_mask(entry: tk.Entry, var: tk.StringVar) -> None:
 
 def build_ui():
     root = tk.Tk()
-    root.title("Calculadora de Jornadas")
+    root.title(_plugin_title())
     root.geometry("820x580")
     root.configure(bg=DARK["bg"])
     root.resizable(True, True)
