@@ -3,6 +3,25 @@
   "updated_at": "2026-07-23",
   "plugins": [
     {
+      "id": "calc-jornadas",
+      "name": "Calculadora de Jornadas",
+      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
+      "version": "2.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "rh",
+        "jornada",
+        "horas",
+        "trabalho"
+      ],
+      "icon": "clock",
+      "command": "calc-jornadas",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-2.0.0/calc-jornadas.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-07-27"
+    },
+    {
       "id": "stract-json",
       "name": "Stract JSON",
       "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
@@ -55,25 +74,6 @@
       "icon": "calendar",
       "command": "converter-data",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.0/converter-data.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-27"
-    },
-    {
-      "id": "calc-jornadas",
-      "name": "Calculadora de Jornadas",
-      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "1.1.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "rh",
-        "jornada",
-        "horas",
-        "trabalho"
-      ],
-      "icon": "clock",
-      "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.1.0/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-07-27"
     },
