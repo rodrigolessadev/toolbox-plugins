@@ -1,67 +1,104 @@
-name: Publish Plugin Release
+name: Build plugin zip and publish Release
 
-# Dispara quando uma tag no formato <plugin-id>-<versão> é publicada
-# Exemplos: cpf-1.0.0, gerador-json-1.2.0
 on:
   push:
     tags:
-      - '*-[0-9]*.[0-9]*.[0-9]*'
+      - '*-*.*.*'
 
 jobs:
-  release:
+  build:
+    name: Zip & release plugin
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Extrair ID do plugin a partir da tag
-        id: meta
+      # Extrai "id" e "versao" do nome da tag.
+      # Aceita tanto "<id>-X.Y.Z" quanto "v<id>-X.Y.Z" (defensivo).
+      - name: Parse tag (id, version)
+        id: parse
+        shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-          # Remove o sufixo de versão: cpf-1.0.0 → cpf
-          PLUGIN_ID="${TAG%-*.*.*}"
-          VERSION="${TAG##*-}"
-          echo "plugin_id=$PLUGIN_ID" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
-          echo "Plugin: $PLUGIN_ID  Versão: $VERSION"
+          # tira prefixo 'v' se existir
+          TAG="${TAG#v}"
+          if [[ ! "$TAG" =~ ^([A-Za-z0-9._-]+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Tag invalida: $TAG (esperado: <id>-X.Y.Z)" >&2
+            exit 1
+          fi
+          PLUGIN_ID="${BASH_REMATCH[1]}"
+          PLUGIN_VERSION="${BASH_REMATCH[2]}"
+          echo "plugin_id=$PLUGIN_ID"     >> "$GITHUB_OUTPUT"
+          echo "plugin_version=$PLUGIN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag parseada: id=$PLUGIN_ID version=$PLUGIN_VERSION"
 
-      - name: Verificar se pasta do plugin existe
+      - name: Verify plugin folder exists
+        shell: bash
         run: |
-          if [ ! -d "plugins/${{ steps.meta.outputs.plugin_id }}" ]; then
-            echo "❌ Pasta plugins/${{ steps.meta.outputs.plugin_id }} não encontrada"
+          ID="${{ steps.parse.outputs.plugin_id }}"
+          if [ ! -d "plugins/$ID" ]; then
+            echo "Pasta do plugin nao encontrada: plugins/$ID" >&2
+            exit 1
+          fi
+          if [ ! -f "plugins/$ID/plugin.json" ]; then
+            echo "plugin.json nao encontrado em plugins/$ID" >&2
+            exit 1
+          fi
+          if [ ! -f "plugins/$ID/main.py" ]; then
+            echo "main.py nao encontrado em plugins/$ID" >&2
             exit 1
           fi
 
-      - name: Criar ZIP do plugin
+      # Sincroniza o plugin.json versionado do commit da tag
+      # (a tag aponta para o commit do release; esta etapa garante
+      # que o version dentro do zip bate com a tag)
+      - name: Sync plugin.json version with tag
+        shell: bash
         run: |
-          PLUGIN_ID="${{ steps.meta.outputs.plugin_id }}"
-          ZIP_NAME="${PLUGIN_ID}.zip"
-          cd plugins/$PLUGIN_ID
-          # Exclui arquivos de cache Python e outros desnecessários
-          zip -r "../../$ZIP_NAME" . \
-            --exclude "*.pyc" \
-            --exclude "__pycache__/*" \
-            --exclude ".DS_Store" \
-            --exclude "*.egg-info/*" \
-            --exclude "node_modules/*"
-          cd ../..
-          echo "✅ Criado: $ZIP_NAME ($(du -sh $ZIP_NAME | cut -f1))"
+          ID="${{ steps.parse.outputs.plugin_id }}"
+          VER="${{ steps.parse.outputs.plugin_version }}"
+          PJ="plugins/$ID/plugin.json"
+          python3 - "$PJ" "$VER" <<'PY'
+          import json, sys
+          pj, ver = sys.argv[1], sys.argv[2]
+          with open(pj, encoding="utf-8") as f:
+              data = json.load(f)
+          data["version"] = ver
+          with open(pj, "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+              f.write("\n")
+          print(f"plugin.json version -> {ver}")
+          PY
 
-      - name: Publicar Release no GitHub
+      # Empacota apenas os arquivos do plugin no raiz do zip.
+      # Isso garante que ao descompactar, plugin.json e main.py
+      # ficam no nivel raiz (e nao dentro de plugins/<id>/).
+      - name: Build plugin zip (root layout)
+        shell: bash
+        run: |
+          ID="${{ steps.parse.outputs.plugin_id }}"
+          VER="${{ steps.parse.outputs.plugin_version }}"
+          TMP="$(mktemp -d)"
+          mkdir -p "$TMP/$ID"
+          # copia apenas os arquivos do plugin
+          cp -r "plugins/$ID/." "$TMP/$ID/"
+          # gera o zip com a pasta <id>/ no raiz
+          (cd "$TMP" && zip -r "$ID.zip" "$ID" >/dev/null)
+          mkdir -p dist
+          mv "$TMP/$ID.zip" "dist/$ID.zip"
+          echo "ZIP gerado: dist/$ID.zip"
+          ls -la dist/
+
+      - name: Upload zip as Release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: "${{ steps.meta.outputs.plugin_id }} v${{ steps.meta.outputs.version }}"
-          body: |
-            ## Plugin: `${{ steps.meta.outputs.plugin_id }}` — v${{ steps.meta.outputs.version }}
-
-            ### Instalação
-
-            Abra o Toolbox → 🛒 Marketplace → Instalar
-
-            Ou manualmente: baixe o ZIP e extraia em `%APPDATA%\Toolbox\plugins\${{ steps.meta.outputs.plugin_id }}\`
-          files: "${{ steps.meta.outputs.plugin_id }}.zip"
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.parse.outputs.plugin_id }} v${{ steps.parse.outputs.plugin_version }}
+          generate_release_notes: true
+          files: |
+            dist/${{ steps.parse.outputs.plugin_id }}.zip
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
