@@ -6,7 +6,7 @@
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -17,7 +17,7 @@
       ],
       "icon": "clock",
       "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.2/calc-jornadas.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.3/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-07-27"
     },
