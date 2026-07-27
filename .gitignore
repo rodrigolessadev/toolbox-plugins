@@ -6,4 +6,4 @@ node_modules/
 *.egg-info/
 commits/*
 
-comando.bat
+plugins/release/*
