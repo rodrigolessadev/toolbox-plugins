@@ -3,6 +3,24 @@
   "updated_at": "2026-07-23",
   "plugins": [
     {
+      "id": "gerador-marcacoes",
+      "name": "Gerador de Marcações SQL",
+      "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle.",
+      "version": "2.0.1",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "sql",
+        "banco de dados",
+        "insert"
+      ],
+      "icon": "database",
+      "command": "gerador-marcacoes",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.0.1/gerador-marcacoes.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-07-28"
+    },
+    {
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
@@ -37,24 +55,6 @@
       "icon": "file-json",
       "command": "stract-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-27"
-    },
-    {
-      "id": "gerador-marcacoes",
-      "name": "Gerador de Marcações SQL",
-      "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "sql",
-        "banco de dados",
-        "insert"
-      ],
-      "icon": "database",
-      "command": "gerador-marcacoes",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-1.0.0/gerador-marcacoes.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-07-27"
     },
