@@ -1,12 +1,12 @@
 {
   "version": "1",
-  "updated_at": "2026-07-23",
+  "updated_at": "2026-08-03",
   "plugins": [
     {
       "id": "gerador-marcacoes",
       "name": "Gerador de Marcações SQL",
-      "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle.",
-      "version": "2.0.1",
+      "description": "Gera INSERTs SQL para a tabela R070ACC compatíveis com SQL Server e Oracle. Suporta campos opcionais dinâmicos, múltiplos horários e intervalo de datas.",
+      "version": "2.2.1",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -16,15 +16,34 @@
       ],
       "icon": "database",
       "command": "gerador-marcacoes",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.0.1/gerador-marcacoes.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.2.1/gerador-marcacoes.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-28"
+      "updated_at": "2026-08-03"
+    },
+    {
+      "id": "gerador-afd",
+      "name": "Gerador de AFD",
+      "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "rh",
+        "ponto",
+        "afd",
+        "rep"
+      ],
+      "icon": "file-clock",
+      "command": "gerador-afd",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.0.0/gerador-afd.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-03"
     },
     {
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "2.0.0",
+      "version": "1.0.2",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -35,9 +54,9 @@
       ],
       "icon": "clock",
       "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-2.0.0/calc-jornadas.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.2/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-27"
+      "updated_at": "2026-08-03"
     },
     {
       "id": "stract-json",

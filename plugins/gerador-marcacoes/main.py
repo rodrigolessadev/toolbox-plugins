@@ -1,409 +1,449 @@
+#!/usr/bin/env python3
 """
-Gerador de Marcacoes (INSERT para R070ACC)
-===========================================
+Plugin: Gerador de Marcações
+Gera INSERTs SQL para a tabela R070ACC (SQL Server e Oracle).
+Porta fiel do insert/page.tsx + insert-builder.ts do KapiNote.
 
-Porta fiel do app/(main)/(routes)/insert/page.tsx + _components/insert-builder.ts
-do projeto KapiNote (https://github.com/rodrigolessadev/kapinote).
-
-Gera INSERTs SQL para a tabela R070ACC (TOTVS / Protheus), com suporte a:
-  * 5 campos principais (NUMCRA, USOMAR, NUMEMP, TIPCOL, NUMCAD)
-  * ate 20 campos opcionais (SEQACC, TIPACC, CODPLT, ...) adicionaveis sob demanda
-  * Multiplos horarios por dia (gera um INSERT por horario)
-  * Filtragem por dia da semana (0=Dom ... 6=Sab)
-  * Dialetos SQL Server (GETDATE / ISNULL) e Oracle (SYSDATE / NVL / TO_DATE)
-  * Helpers de dialeto (fn_data_atual, fn_isnull, traduzir_tipo) portados do TS
-
-Execucao:
-    python main.py --name "Gerador de Marcacoes" \\
-                   --commands-file <path> --data-dir <path>
-
-O toolbox ja executa com `cwd = pasta do plugin`, entao:
-    from theme import DARK, apply_dark_style
-funciona sem manipulacao de sys.path.
+v1.1.0 — Campos opcionais dinâmicos (comportamento do KapiNote):
+  - Seletor de campos opcionais via combobox (igual ao Select do KapiNote).
+  - Campos adicionados aparecem no formulário com botão de remoção.
+  - Múltiplos horários (HORACC) com botão + Adicionar Horário.
+  - Intervalo de datas e filtro por dias da semana.
 """
-
-import argparse
-import re
-import sys
 import tkinter as tk
-from datetime import date, datetime
-from pathlib import Path
-from tkinter import messagebox, ttk
-from tkinter.scrolledtext import ScrolledText
+from tkinter import ttk, messagebox, scrolledtext
+from datetime import date, timedelta
 
-# Logica pura separada (testavel sem tkinter).
-from insert_builder import (
-    date_range, escape_sql_string, fn_data_atual, fn_isnull,
-    format_date_value, format_value, gerar_inserts, time_to_minutes,
-    traduzir_tipo, DEFAULTS, NUMERIC_FIELDS, DATE_FIELDS, INSERT_ORDER,
-    OPTIONAL_DEFAULTS,
-)
+# ─── Constantes ──────────────────────────────────────────────────────────
 
-# Tema compartilhado (plugins/_shared/theme.py). O toolbox ja roda com
-# cwd = pasta do plugin, mas adicionamos a pasta mae para resolver
-# quando este plugin vive em plugins/gerador-marcacoes/.
-_THEME_PARENT = Path(__file__).resolve().parent.parent
-if str(_THEME_PARENT) not in sys.path:
-    sys.path.insert(0, str(_THEME_PARENT))
-try:
-    from _shared.theme import DARK, apply_dark_style, style_widget_text
-except ImportError:
-    # Fallback: tema inline (caso o _shared ainda nao tenha sido publicado)
-    DARK = {
-        "bg": "#161a21", "bg2": "#1f242d", "bg3": "#262c36",
-        "fg": "#f0f2f5", "muted": "#8b94a3", "border": "#2c3340",
-        "accent": "#6aa3ff", "success": "#4cc38a",
-        "danger": "#ff6369", "warning": "#f5a624",
-        "input_bg": "#0e1014", "input_border": "#3a4150",
-    }
-    def apply_dark_style(style):  # noqa: F811
-        style.configure("TFrame", background=DARK["bg"])
-        style.configure("TLabel", background=DARK["bg"], foreground=DARK["fg"])
-        style.configure("TButton", background=DARK["bg3"], foreground=DARK["fg"])
-    def style_widget_text(widget, color_key="fg", bold=False, size="sm"):
-        widget.configure(foreground=DARK[color_key])
+NUMERIC_FIELDS = {
+    "NUMCRA","HORACC","SEQACC","TIPACC","CODPLT","CODRLG","CODFNC",
+    "QTDACC","USOMAR","NUMEMP","TIPCOL","NUMCAD","CODREF","USOREF",
+    "VALREF","CODSOR","FLAACC","CODBNF","STARLG","CODDSP","MOTIGN","NUMNSR",
+}
+DATE_FIELDS = {"DATACC", "DATAPU"}
 
+INSERT_ORDER = [
+    "NUMCRA","DATACC","HORACC","SEQACC","TIPACC","CODPLT","CODRLG","CODFNC",
+    "DIRACC","QTDACC","ORIACC","USOMAR","NUMEMP","TIPCOL","NUMCAD",
+    "DATAPU","CODREF","USOREF","VALREF","CODSOR","FLAACC","CODBNF",
+    "STARLG","EXCPON","CODDSP","MOTIGN","NUMNSR",
+]
 
-# ---------------------------------------------------------------------------
-# Constantes de UI (derivadas de insert_builder.OPTIONAL_DEFAULTS)
-# ---------------------------------------------------------------------------
+# Campos que sempre aparecem no formulário
+FIXED_FIELDS = [
+    ("NUMCRA", "NumCra — Número do Crachá", "600000010"),
+]
 
-MAIN_FIELDS = {
-    "NUMCRA": "NumCra - Numero do Cracha",
-    "USOMAR": "UsoMar - Uso da Marcacao",
-    "NUMEMP": "NumEmp - Codigo da Empresa",
-    "TIPCOL": "TipCol - Tipo de Colaborador",
-    "NUMCAD": "NumCad - Cadastro do Colaborador",
+MAIN_FIELDS = [
+    ("USOMAR", "UsoMar — Uso da Marcação",         "2"),
+    ("NUMEMP", "NumEmp — Código da Empresa",        "1"),
+    ("TIPCOL", "TipCol — Tipo de Colaborador",      "1"),
+    ("NUMCAD", "NumCad — Cadastro do Colaborador",  "0"),
+]
+
+# Campos opcionais que o usuário pode adicionar dinamicamente
+OPTIONAL_FIELDS = [
+    ("SEQACC", "SeqAcc — Sequência do Registro",             "1"),
+    ("TIPACC", "TipAcc — Tipo do Acesso",                    "1"),
+    ("CODPLT", "CodPH — Código do Site",                     "1"),
+    ("CODRLG", "CodRlg — Código do Coletor no Acesso",       "1"),
+    ("CODFNC", "CodFnc — Código da Função no Acesso",        "0"),
+    ("DIRACC", "DirAcc — Direção do Acesso",                 "E"),
+    ("QTDACC", "QtdAcc — Quantidade no Acesso",              "1"),
+    ("ORIACC", "OriAcc — Origem da Marcação",                "E"),
+    ("DATAPU", "DatApu — Data de Apuração da Marcação",      "31-12-1900 00:00:00.000"),
+    ("CODREF", "CodRef — Código da Refeição da Marcação",    "0"),
+    ("USOREF", "UsoRef — Uso da Refeição",                   "0"),
+    ("VALREF", "ValRef — Valor da Refeição",                 "0"),
+    ("CODSOR", "CodSoR — Código da Solicitação no Relógio",  "0"),
+    ("FLAACC", "FlaAcc — Flag do Acesso",                    "0"),
+    ("CODBNF", "CodBnf — Código do Benefício",               "0"),
+    ("STARLG", "StaRlg — Status do Coletor",                 "0"),
+    ("EXCPON", "ExCon — Excluído do Ponto",                  "N"),
+    ("CODDSP", "CodDsp — Código do Dispositivo",             "0"),
+    ("MOTIGN", "MotIgn — Motivo Marcação Ignorada",          "0"),
+    ("NUMNSR", "NumNSR — Número NSR",                        "0"),
+]
+
+OPTIONAL_DICT = {name: (label, default) for name, label, default in OPTIONAL_FIELDS}
+
+DEFAULTS = {name: default for name, _, default in FIXED_FIELDS + MAIN_FIELDS + OPTIONAL_FIELDS}
+DEFAULTS.update({
+    "DATACC": "03-04-2025 00:00:00.000",
+    "HORACC": "720",
+})
+
+WEEK_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+
+DARK = {
+    "bg":       "#161a21",
+    "bg2":      "#1f242d",
+    "fg":       "#f0f2f5",
+    "muted":    "#8b94a3",
+    "border":   "#262c36",
+    "accent":   "#6aa3ff",
+    "success":  "#4cc38a",
+    "danger":   "#ff6369",
+    "input_bg": "#0e1014",
 }
 
-# Lista de campos opcionais (Select Radix do KapiNote).
-OPTIONAL_FIELDS = [
-    ("SEQACC", "SeqAcc - Sequencia do Registro",            OPTIONAL_DEFAULTS["SEQACC"]),
-    ("TIPACC", "TipAcc - Tipo do Acesso",                    OPTIONAL_DEFAULTS["TIPACC"]),
-    ("CODPLT", "CodPlt - Codigo do Coletor",                OPTIONAL_DEFAULTS["CODPLT"]),
-    ("CODRLG", "CodRlg - Codigo do Relogio",                OPTIONAL_DEFAULTS["CODRLG"]),
-    ("CODFNC", "CodFnc - Codigo da Funcao",                 OPTIONAL_DEFAULTS["CODFNC"]),
-    ("DIRACC", "DirAcc - Direcao do Acesso",                OPTIONAL_DEFAULTS["DIRACC"]),
-    ("QTDACC", "QtdAcc - Quantidade no Acesso",             OPTIONAL_DEFAULTS["QTDACC"]),
-    ("ORIACC", "OriAcc - Origem da Marcacao",               OPTIONAL_DEFAULTS["ORIACC"]),
-    ("DATAPU", "DatApu - Data de Apuracao",                 OPTIONAL_DEFAULTS["DATAPU"]),
-    ("CODREF", "CodRef - Codigo da Refeicao",               OPTIONAL_DEFAULTS["CODREF"]),
-    ("USOREF", "UsoRef - Uso da Refeicao",                  OPTIONAL_DEFAULTS["USOREF"]),
-    ("VALREF", "ValRef - Valor da Refeicao",                OPTIONAL_DEFAULTS["VALREF"]),
-    ("CODSOR", "CodSoR - Codigo da Solicitacao no Relogio", OPTIONAL_DEFAULTS["CODSOR"]),
-    ("FLAACC", "FlaAcc - Flag do Acesso",                   OPTIONAL_DEFAULTS["FLAACC"]),
-    ("CODBNF", "CodBnf - Codigo do Beneficio",              OPTIONAL_DEFAULTS["CODBNF"]),
-    ("STARLG", "StaRlg - Status do Coletor",                OPTIONAL_DEFAULTS["STARLG"]),
-    ("EXCPON", "ExCon - Excluido do Ponto",                 OPTIONAL_DEFAULTS["EXCPON"]),
-    ("CODDSP", "CodDsp - Codigo do Dispositivo",            OPTIONAL_DEFAULTS["CODDSP"]),
-    ("MOTIGN", "MotIgn - Motivo Marcacao Ignorada",         OPTIONAL_DEFAULTS["MOTIGN"]),
-    ("NUMNSR", "NumNSR - Numero NSR",                       OPTIONAL_DEFAULTS["NUMNSR"]),
-]
-OPTIONAL_BY_NAME = {n: (l, d) for n, l, d in OPTIONAL_FIELDS}
 
-# Dias da semana: 0=Dom, 1=Seg, ..., 6=Sab (mesma convencao do JS getDay)
-WEEKDAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
+# ─── Lógica SQL ───────────────────────────────────────────────────────────
+
+def time_to_minutes(t: str) -> str:
+    h, m = map(int, t.split(":"))
+    return str(h * 60 + m)
 
 
-# ---------------------------------------------------------------------------
-# UI - Tkinter
-# ---------------------------------------------------------------------------
+def escape_sql(v: str) -> str:
+    return v.replace("'", "''")
+
+
+def format_date(value: str, banco: str) -> str:
+    if "/" in value.split(" ")[0]:
+        parts = value.split(" ")
+        d, mo, y = parts[0].split("/")
+        value = f"{d}-{mo}-{y} {parts[1] if len(parts) > 1 else '00:00:00.000'}"
+    if banco == "sqlserver":
+        return f"'{value}'"
+    without_ms = value.rsplit(".", 1)[0]
+    return f"TO_DATE('{without_ms}', 'DD-MM-YYYY HH24:MI:SS')"
+
+
+def format_value(field: str, value: str, banco: str) -> str:
+    if field in NUMERIC_FIELDS:
+        return value
+    if field in DATE_FIELDS:
+        return format_date(value, banco)
+    return f"'{escape_sql(value)}'"
+
+
+def date_range(start: date, end: date, js_weekdays: set) -> list:
+    """Retorna datas no intervalo que caem nos dias selecionados.
+    js_weekdays usa convenção JS: 0=Dom, 1=Seg, ..., 6=Sáb."""
+    js_to_py = {0: 6, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
+    py_days = {js_to_py[w] for w in js_weekdays}
+    result, cur = [], start
+    while cur <= end:
+        if cur.weekday() in py_days:
+            result.append(cur)
+        cur += timedelta(days=1)
+    return result
+
+
+def gerar_inserts(fields: dict, horarios: list, datas: list,
+                  banco: str, selected_optional: list) -> str:
+    """Gera os INSERTs SQL.
+
+    Args:
+        fields: {campo: valor} para campos fixos, principais e opcionais ativos.
+        horarios: lista de strings "HH:MM".
+        datas: lista de objetos date (vazia = sem filtro de data).
+        banco: "sqlserver" ou "oracle".
+        selected_optional: nomes dos campos opcionais que estão ativos no formulário.
+    """
+    lines = []
+    active = [h for h in horarios if h]
+    dates = datas if datas else [None]
+
+    for hora in active:
+        for d in dates:
+            vm = {}
+            for fname in INSERT_ORDER:
+                if fname == "HORACC":
+                    raw = time_to_minutes(hora)
+                elif fname == "DATACC" and d is not None:
+                    raw = d.strftime("%d-%m-%Y 00:00:00.000")
+                elif fname in fields:
+                    raw = fields[fname]
+                else:
+                    raw = DEFAULTS.get(fname, "0")
+                vm[fname] = format_value(fname, raw, banco)
+
+            cols = ",".join(INSERT_ORDER)
+            vals = ",".join(vm[c] for c in INSERT_ORDER)
+            lines.append(f"INSERT INTO R070ACC({cols}) VALUES({vals})")
+
+    return "\n".join(lines)
+
+
+# ─── UI ──────────────────────────────────────────────────────────────────
 
 class GeradorMarcacoesApp:
-    def __init__(self, root: tk.Tk, name: str, commands_file: str, data_dir: str):
+    def __init__(self, root: tk.Tk):
         self.root = root
-        self.name = name
-        self.commands_file = commands_file
-        self.data_dir = data_dir
-
-        # Variaveis de estado
-        self.field_vars = {}             # StringVar por campo (principais + opcionais)
-        self.horario_vars = []           # List[StringVar] para horarios dinamicos
-        self.optional_rows = {}          # { name: row_frame }
-        self.dia_vars = [tk.IntVar(value=1 if i in (1, 2, 3, 4, 5) else 0)
-                         for i in range(7)]  # seg-sex marcados por padrao
-        self.banco_var = tk.StringVar(value="sqlserver")
-
-        self._setup_window()
-        self._build_styles()
+        root.title("Gerador de Marcações")
+        root.geometry("900x780")
+        root.configure(bg=DARK["bg"])
+        root.resizable(True, True)
+        self._apply_style()
         self._build_ui()
-        self._bind_close()
 
-    # -- janela / estilos ----------------------------------------------------
-
-    def _setup_window(self):
-        self.root.title(self.name)
-        self.root.configure(bg=DARK["bg"])
-        self.root.geometry("900x720")
-        self.root.minsize(820, 640)
-
-    def _build_styles(self):
-        self.style = ttk.Style(self.root)
+    def _apply_style(self):
+        style = ttk.Style()
         try:
-            self.style.theme_use("clam")
+            style.theme_use("clam")
         except tk.TclError:
             pass
-        apply_dark_style(self.style)
-
-    # -- construcao da UI ----------------------------------------------------
+        for w, cfg in [
+            ("TLabel",      {"background": DARK["bg"],  "foreground": DARK["fg"]}),
+            ("TFrame",      {"background": DARK["bg"]}),
+            ("TLabelframe", {"background": DARK["bg"],  "foreground": DARK["fg"]}),
+            ("TLabelframe.Label", {
+                "background": DARK["bg"], "foreground": DARK["muted"],
+                "font": ("Segoe UI", 9, "bold"),
+            }),
+            ("TEntry",       {"fieldbackground": DARK["input_bg"], "foreground": DARK["fg"]}),
+            ("TCheckbutton", {"background": DARK["bg"], "foreground": DARK["fg"]}),
+            ("TRadiobutton", {"background": DARK["bg"], "foreground": DARK["fg"]}),
+            ("TCombobox",    {"fieldbackground": DARK["input_bg"], "foreground": DARK["fg"]}),
+        ]:
+            style.configure(w, **cfg)
 
     def _build_ui(self):
-        main = ttk.Frame(self.root, padding=16)
-        main.pack(fill="both", expand=True)
+        # ── Scroll principal ──
+        canvas = tk.Canvas(self.root, bg=DARK["bg"], highlightthickness=0)
+        sb = ttk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self.main = ttk.Frame(canvas)
+        wid = canvas.create_window((0, 0), window=self.main, anchor="nw")
+        self.main.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(wid, width=e.width))
+        canvas.bind_all("<MouseWheel>",
+                        lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
 
-        # Titulo
-        ttk.Label(main, text=self.name, style="Heading.TLabel").pack(anchor="w")
-        ttk.Label(main, text="Gera INSERTs para a tabela R070ACC (TOTVS / Protheus).",
-                  style="Muted.TLabel").pack(anchor="w", pady=(0, 12))
+        # ── Título ──
+        ttk.Label(self.main, text="Gerador de Marcações",
+                  font=("Segoe UI", 15, "bold")).pack(pady=(16, 4))
 
-        # === Secao: Campos Principais ===
-        self._build_main_fields(main)
+        # ── Banco ──
+        self.banco_var = tk.StringVar(value="sqlserver")
+        fb = ttk.Frame(self.main)
+        fb.pack(pady=(0, 12))
+        ttk.Label(fb, text="Banco:", foreground=DARK["muted"],
+                  font=("Segoe UI", 9)).pack(side="left", padx=(0, 8))
+        for val, lbl in [("sqlserver", "SQL Server"), ("oracle", "Oracle")]:
+            ttk.Radiobutton(fb, text=lbl, variable=self.banco_var,
+                            value=val).pack(side="left", padx=6)
 
-        # === Secao: Campos Opcionais (Patch 5) ===
-        self._build_optional_fields(main)
+        # ── Campos fixos + principais ──
+        self.field_vars: dict[str, tk.StringVar] = {}
+        ff = ttk.LabelFrame(self.main, text="Campos", padding=10)
+        ff.pack(fill="x", padx=18, pady=(0, 6))
+        for fname, flabel, fdefault in FIXED_FIELDS + MAIN_FIELDS:
+            self._add_field_row(ff, fname, flabel, fdefault)
 
-        # === Secao: Horarios (HORACC) ===
-        self._build_horarios(main)
+        # ── Campos opcionais ──
+        self.opt_frame = ttk.LabelFrame(self.main, text="Campos Opcionais", padding=10)
+        self.opt_frame.pack(fill="x", padx=18, pady=(0, 6))
+        self.opt_rows: dict[str, tk.Frame] = {}  # fname -> row frame
 
-        # === Secao: Datas (DATACC) ===
-        self._build_datas(main)
+        # Seletor
+        sel_row = ttk.Frame(self.opt_frame)
+        sel_row.pack(fill="x", pady=(0, 6))
+        ttk.Label(sel_row, text="Adicionar campo:",
+                  foreground=DARK["muted"], font=("Segoe UI", 9)).pack(side="left", padx=(0, 8))
+        self.field_to_add = tk.StringVar()
+        opt_values = [f"{name} — {label}" for name, label, _ in OPTIONAL_FIELDS]
+        self.opt_combo = ttk.Combobox(
+            sel_row, textvariable=self.field_to_add,
+            values=opt_values, state="readonly",
+            font=("Segoe UI", 9), width=48,
+        )
+        self.opt_combo.pack(side="left", padx=(0, 8))
+        tk.Button(
+            sel_row, text="Adicionar", font=("Segoe UI", 9),
+            bg=DARK["accent"], fg="#fff", activebackground="#4a83df",
+            relief="flat", cursor="hand2", padx=10, pady=4,
+            command=self._add_optional_field,
+        ).pack(side="left")
 
-        # === Secao: Banco ===
-        self._build_banco(main)
+        # ── Horários ──
+        self.hora_entries: list[tk.StringVar] = []
+        fh = ttk.LabelFrame(self.main, text="Horários (HORACC)", padding=10)
+        fh.pack(fill="x", padx=18, pady=(0, 6))
+        self.hora_list_frame = ttk.Frame(fh)
+        self.hora_list_frame.pack(fill="x")
+        self._add_hora_row("08:00")
+        tk.Button(
+            fh, text="+ Adicionar Horário", font=("Segoe UI", 9),
+            bg=DARK["bg2"], fg=DARK["accent"], relief="flat",
+            cursor="hand2", padx=8, pady=4,
+            command=lambda: self._add_hora_row(""),
+        ).pack(anchor="w", pady=(6, 0))
 
-        # === Botao Gerar ===
-        btn_row = ttk.Frame(main)
-        btn_row.pack(fill="x", pady=(8, 12))
-        ttk.Button(btn_row, text="Gerar INSERTs", style="Accent.TButton",
-                   command=self._on_gerar).pack(side="left")
-        ttk.Button(btn_row, text="Limpar", style="TButton",
-                   command=self._on_limpar).pack(side="left", padx=(8, 0))
+        # ── Datas ──
+        fd = ttk.LabelFrame(self.main, text="Intervalo de Datas (DATACC)", padding=10)
+        fd.pack(fill="x", padx=18, pady=(0, 6))
+        rd = ttk.Frame(fd)
+        rd.pack(fill="x", pady=(0, 8))
+        ttk.Label(rd, text="Início:", font=("Segoe UI", 9)).pack(side="left")
+        self.start_var = tk.StringVar(value=date.today().isoformat())
+        ttk.Entry(rd, textvariable=self.start_var, font=("Segoe UI", 10),
+                  width=13).pack(side="left", padx=(4, 16))
+        ttk.Label(rd, text="Fim:", font=("Segoe UI", 9)).pack(side="left")
+        self.end_var = tk.StringVar(value=date.today().isoformat())
+        ttk.Entry(rd, textvariable=self.end_var, font=("Segoe UI", 10),
+                  width=13).pack(side="left", padx=4)
+        ttk.Label(rd, text="(AAAA-MM-DD)", foreground=DARK["muted"],
+                  font=("Segoe UI", 8)).pack(side="left", padx=4)
 
-        # === Secao: SQL Gerado ===
-        self._build_output(main)
+        ttk.Label(fd, text="Dias da semana:", foreground=DARK["muted"],
+                  font=("Segoe UI", 9)).pack(anchor="w")
+        wf = ttk.Frame(fd)
+        wf.pack(anchor="w", pady=(4, 0))
+        self.week_vars: dict[int, tk.BooleanVar] = {}
+        for js_day, label in enumerate(WEEK_LABELS):
+            var = tk.BooleanVar(value=(1 <= js_day <= 5))  # Seg–Sex padrão
+            self.week_vars[js_day] = var
+            ttk.Checkbutton(wf, text=label, variable=var).pack(side="left", padx=3)
 
-    def _build_main_fields(self, parent):
-        frame = ttk.LabelFrame(parent, text="Campos Principais", padding=12)
-        frame.pack(fill="x", pady=(0, 10))
-        for name, label in MAIN_FIELDS.items():
-            row = ttk.Frame(frame)
-            row.pack(fill="x", pady=3)
-            ttk.Label(row, text=label, width=42, anchor="w").pack(side="left")
-            var = tk.StringVar(value=DEFAULTS[name])
-            self.field_vars[name] = var
-            ttk.Entry(row, textvariable=var).pack(side="left", fill="x", expand=True)
+        # ── Resultado ──
+        fr = ttk.LabelFrame(self.main, text="SQL Gerado", padding=8)
+        fr.pack(fill="both", expand=True, padx=18, pady=(0, 4))
+        self.result_txt = scrolledtext.ScrolledText(
+            fr, font=("Consolas", 9), bg=DARK["input_bg"], fg=DARK["fg"],
+            insertbackground=DARK["fg"], relief="flat", state="disabled", height=12,
+        )
+        self.result_txt.pack(fill="both", expand=True)
 
-    def _build_optional_fields(self, parent):
-        frame = ttk.LabelFrame(parent, text="Adicionar Campo Opcional", padding=12)
-        frame.pack(fill="x", pady=(0, 10))
+        self.lbl_copied = ttk.Label(self.main, text="", foreground=DARK["success"],
+                                    font=("Segoe UI", 9))
+        self.lbl_copied.pack(pady=(2, 0))
 
-        top = ttk.Frame(frame)
-        top.pack(fill="x")
-        self.opt_var = tk.StringVar()
-        ttk.Combobox(top, textvariable=self.opt_var, state="readonly", width=14,
-                     values=[n for n, _, _ in OPTIONAL_FIELDS]).pack(side="left", padx=(0, 8))
-        ttk.Button(top, text="+ Adicionar", command=self._add_optional).pack(side="left")
+        # ── Botões ──
+        tk.Button(
+            self.main, text="Gerar INSERT", font=("Segoe UI", 11, "bold"),
+            bg=DARK["accent"], fg="#fff", activebackground="#4a83df",
+            relief="flat", cursor="hand2", pady=9,
+            command=self._do_generate,
+        ).pack(fill="x", padx=18, pady=(4, 4))
 
-        self.opt_container = ttk.Frame(frame)
-        self.opt_container.pack(fill="x", pady=(8, 0))
+        tk.Button(
+            self.main, text="Copiar SQL", font=("Segoe UI", 10),
+            bg=DARK["bg2"], fg=DARK["fg"], activebackground=DARK["border"],
+            relief="flat", cursor="hand2", pady=7,
+            command=self._copy_sql,
+        ).pack(fill="x", padx=18, pady=(0, 16))
 
-    def _build_horarios(self, parent):
-        frame = ttk.LabelFrame(parent, text="Horarios (HORACC)", padding=12)
-        frame.pack(fill="x", pady=(0, 10))
+    # ── Helpers ──────────────────────────────────────────────────────────
 
-        self.horario_container = ttk.Frame(frame)
-        self.horario_container.pack(fill="x")
-        # Adiciona um horario inicial
-        self._add_horario()
-
-        btn_row = ttk.Frame(frame)
-        btn_row.pack(fill="x", pady=(8, 0))
-        ttk.Button(btn_row, text="+ Horario", command=self._add_horario).pack(side="left")
-        ttk.Button(btn_row, text="Limpar horarios", command=self._clear_horarios).pack(side="left", padx=(8, 0))
-
-    def _build_datas(self, parent):
-        frame = ttk.LabelFrame(parent, text="Datas (DATACC)", padding=12)
-        frame.pack(fill="x", pady=(0, 10))
-
-        row1 = ttk.Frame(frame)
-        row1.pack(fill="x")
-        ttk.Label(row1, text="Data inicial (AAAA-MM-DD):", width=28, anchor="w").pack(side="left")
-        self.data_inicio_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
-        ttk.Entry(row1, textvariable=self.data_inicio_var, width=14).pack(side="left", padx=(0, 16))
-
-        ttk.Label(row1, text="Data final (AAAA-MM-DD):", width=24, anchor="w").pack(side="left")
-        self.data_fim_var = tk.StringVar(value=date.today().strftime("%Y-%m-%d"))
-        ttk.Entry(row1, textvariable=self.data_fim_var, width=14).pack(side="left")
-
-        # Dias da semana
-        ttk.Label(frame, text="Dias da semana:").pack(anchor="w", pady=(8, 4))
-        dias_row = ttk.Frame(frame)
-        dias_row.pack(fill="x")
-        for i, label in enumerate(WEEKDAY_LABELS):
-            ttk.Checkbutton(dias_row, text=label, variable=self.dia_vars[i]).pack(side="left", padx=4)
-
-    def _build_banco(self, parent):
-        frame = ttk.LabelFrame(parent, text="Banco de Dados", padding=12)
-        frame.pack(fill="x", pady=(0, 10))
-        ttk.Radiobutton(frame, text="SQL Server (GETDATE / ISNULL)",
-                        variable=self.banco_var, value="sqlserver").pack(side="left", padx=(0, 16))
-        ttk.Radiobutton(frame, text="Oracle (SYSDATE / NVL / TO_DATE)",
-                        variable=self.banco_var, value="oracle").pack(side="left")
-
-    def _build_output(self, parent):
-        frame = ttk.LabelFrame(parent, text="SQL Gerado", padding=12)
-        frame.pack(fill="both", expand=True, pady=(0, 4))
-        self.output = ScrolledText(frame, height=10, wrap="none",
-                                   bg=DARK["input_bg"], fg=DARK["fg"],
-                                   insertbackground=DARK["fg"],
-                                   relief="flat", borderwidth=1)
-        self.output.pack(fill="both", expand=True)
-        # Tags para colorir SQL (Patch 3: CodeBox substituido por tags leve)
-        self.output.tag_configure("kw", foreground=DARK["accent"])
-        self.output.tag_configure("str", foreground=DARK["success"])
-        btn_row = ttk.Frame(frame)
-        btn_row.pack(fill="x", pady=(8, 0))
-        ttk.Button(btn_row, text="Copiar SQL", command=self._on_copy).pack(side="left")
-        ttk.Button(btn_row, text="Salvar em .sql", command=self._on_save).pack(side="left", padx=(8, 0))
-
-    # -- acoes dos botoes ----------------------------------------------------
-
-    def _add_horario(self):
-        row = ttk.Frame(self.horario_container)
-        row.pack(fill="x", pady=2)
-        var = tk.StringVar(value="08:00")
-        self.horario_vars.append(var)
-        ttk.Entry(row, textvariable=var, width=10).pack(side="left")
-        ttk.Button(row, text="x", style="Danger.TButton", width=3,
-                   command=lambda r=row, v=var: self._remove_horario(r, v)).pack(side="left", padx=(6, 0))
-
-    def _remove_horario(self, row, var):
-        if len(self.horario_vars) <= 1:
-            return
-        self.horario_vars.remove(var)
-        row.destroy()
-
-    def _clear_horarios(self):
-        for w in self.horario_container.winfo_children():
-            w.destroy()
-        self.horario_vars.clear()
-        self._add_horario()
-
-    def _add_optional(self):
-        name = self.opt_var.get()
-        if not name or name in self.optional_rows:
-            return
-        label, default = OPTIONAL_BY_NAME[name]
-        row = ttk.Frame(self.opt_container)
+    def _add_field_row(self, parent, fname: str, flabel: str, fdefault: str):
+        row = ttk.Frame(parent)
         row.pack(fill="x", pady=3)
-        ttk.Label(row, text=label, width=42, anchor="w").pack(side="left")
+        ttk.Label(row, text=flabel, width=44, anchor="w",
+                  font=("Segoe UI", 9)).pack(side="left")
+        var = tk.StringVar(value=fdefault)
+        self.field_vars[fname] = var
+        ttk.Entry(row, textvariable=var,
+                  font=("Segoe UI", 10)).pack(side="left", fill="x", expand=True)
+
+    def _add_hora_row(self, value: str = ""):
+        row = ttk.Frame(self.hora_list_frame)
+        row.pack(fill="x", pady=2)
+        var = tk.StringVar(value=value)
+        self.hora_entries.append(var)
+        ttk.Entry(row, textvariable=var, font=("Segoe UI", 10),
+                  width=10).pack(side="left")
+        ttk.Label(row, text="HH:MM", foreground=DARK["muted"],
+                  font=("Segoe UI", 8)).pack(side="left", padx=6)
+        if len(self.hora_entries) > 1:
+            def _rm(v=var, r=row):
+                if v in self.hora_entries:
+                    self.hora_entries.remove(v)
+                r.destroy()
+            tk.Button(
+                row, text="✕", bg=DARK["bg2"], fg=DARK["danger"],
+                relief="flat", cursor="hand2", font=("Segoe UI", 9),
+                command=_rm,
+            ).pack(side="left")
+
+    def _add_optional_field(self):
+        sel = self.field_to_add.get()
+        if not sel:
+            return
+        fname = sel.split(" — ")[0].strip()
+        if fname not in OPTIONAL_DICT:
+            return
+        if fname in self.opt_rows:
+            return  # já adicionado
+
+        label, default = OPTIONAL_DICT[fname]
+
+        # Insere a linha antes do seletor (primeiro filho do opt_frame)
+        anchor = self.opt_frame.winfo_children()[0]
+        row = ttk.Frame(self.opt_frame)
+        row.pack(fill="x", pady=3, before=anchor)
+        self.opt_rows[fname] = row
+
+        ttk.Label(row, text=f"{fname} — {label}", width=44, anchor="w",
+                  font=("Segoe UI", 9)).pack(side="left")
         var = tk.StringVar(value=default)
-        self.field_vars[name] = var
-        self.optional_rows[name] = row
-        ttk.Entry(row, textvariable=var).pack(side="left", fill="x", expand=True)
-        ttk.Button(row, text="x", style="Danger.TButton", width=3,
-                   command=lambda n=name, r=row: self._remove_optional(n, r)).pack(side="left", padx=(6, 0))
-        self.opt_var.set("")
+        self.field_vars[fname] = var
+        ttk.Entry(row, textvariable=var,
+                  font=("Segoe UI", 10)).pack(side="left", fill="x", expand=True)
 
-    def _remove_optional(self, name, row):
-        if name in self.field_vars:
-            del self.field_vars[name]
-        if name in self.optional_rows:
-            del self.optional_rows[name]
-        row.destroy()
-
-    def _on_gerar(self):
-        try:
-            fields = {n: v.get() for n, v in self.field_vars.items()}
-            horarios = [v.get() for v in self.horario_vars if v.get()]
-            selected_optional = list(self.optional_rows.keys())
-            banco = self.banco_var.get()
-            inicio = datetime.strptime(self.data_inicio_var.get(), "%Y-%m-%d").date()
-            fim = datetime.strptime(self.data_fim_var.get(), "%Y-%m-%d").date()
-            if fim < inicio:
-                raise ValueError("Data final deve ser >= data inicial.")
-            dias = {i for i, v in enumerate(self.dia_vars) if v.get() == 1}
-            datas = date_range(inicio, fim, dias)
-            sql = gerar_inserts(fields, horarios, datas, banco, selected_optional)
-            self._render_sql(sql)
-        except ValueError as e:
-            messagebox.showerror("Erro de validacao", str(e))
-        except Exception as e:
-            messagebox.showerror("Erro", f"Falha ao gerar SQL: {e}")
-
-    def _render_sql(self, sql: str):
-        self.output.delete("1.0", "end")
-        # Coloracao leve: keywords e strings
-        keywords = ("INSERT", "INTO", "VALUES", "TO_DATE", "GETDATE", "SYSDATE",
-                    "ISNULL", "NVL")
-        for line in sql.splitlines():
-            upper = line.upper()
-            tokens = re.split(r"(\s+|'[^']*')", line)
-            for tok in tokens:
-                if not tok:
-                    continue
-                if tok.strip().upper() in keywords:
-                    self.output.insert("end", tok, "kw")
-                elif tok.startswith("'") and tok.endswith("'"):
-                    self.output.insert("end", tok, "str")
-                else:
-                    self.output.insert("end", tok)
-            self.output.insert("end", "\n")
-
-    def _on_copy(self):
-        sql = self.output.get("1.0", "end").strip()
-        if not sql:
-            messagebox.showinfo("Copiar", "Nada para copiar.")
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(sql)
-
-    def _on_save(self):
-        sql = self.output.get("1.0", "end").strip()
-        if not sql:
-            messagebox.showinfo("Salvar", "Nada para salvar.")
-            return
-        path = Path(self.data_dir) / "marcacoes.sql" if self.data_dir else Path("marcacoes.sql")
-        try:
-            path.write_text(sql, encoding="utf-8")
-            messagebox.showinfo("Salvar", f"Arquivo salvo em:\n{path}")
-        except OSError as e:
-            messagebox.showerror("Salvar", f"Falha ao salvar: {e}")
-
-    def _on_limpar(self):
-        for v in self.field_vars.values():
-            v.set("")
-        self._clear_horarios()
-        for r in self.optional_rows.values():
+        def _rm(fn=fname, r=row):
             r.destroy()
-        self.optional_rows.clear()
-        self.output.delete("1.0", "end")
+            self.opt_rows.pop(fn, None)
+            self.field_vars.pop(fn, None)
 
-    def _bind_close(self):
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        tk.Button(
+            row, text="✕", bg=DARK["bg2"], fg=DARK["danger"],
+            relief="flat", cursor="hand2", font=("Segoe UI", 9),
+            command=_rm,
+        ).pack(side="left", padx=(6, 0))
 
-    def run(self):
-        self.root.mainloop()
+        self.field_to_add.set("")
+
+    def _do_generate(self):
+        self.lbl_copied.configure(text="")
+        fields = {k: v.get().strip() for k, v in self.field_vars.items()}
+        horarios = [v.get().strip() for v in self.hora_entries if v.get().strip()]
+        if not horarios:
+            messagebox.showwarning("Atenção", "Adicione ao menos um horário.")
+            return
+
+        datas: list[date] = []
+        ss, es = self.start_var.get().strip(), self.end_var.get().strip()
+        if ss and es:
+            try:
+                sd, ed = date.fromisoformat(ss), date.fromisoformat(es)
+                sel_days = {js for js, v in self.week_vars.items() if v.get()}
+                datas = date_range(sd, ed, sel_days)
+            except ValueError:
+                messagebox.showerror("Erro", "Data inválida. Use AAAA-MM-DD.")
+                return
+
+        selected_optional = list(self.opt_rows.keys())
+        sql = gerar_inserts(fields, horarios, datas, self.banco_var.get(),
+                            selected_optional)
+
+        self.result_txt.configure(state="normal")
+        self.result_txt.delete("1.0", "end")
+        self.result_txt.insert("1.0", sql)
+        self.result_txt.configure(state="disabled")
+
+    def _copy_sql(self):
+        sql = self.result_txt.get("1.0", "end").strip()
+        if sql:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(sql)
+            self.lbl_copied.configure(text="✓ SQL copiado.")
+            self.root.after(2500, lambda: self.lbl_copied.configure(text=""))
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-def parse_args():
-    p = argparse.ArgumentParser(description="Gerador de Marcacoes (INSERT R070ACC)")
-    p.add_argument("--name", required=True)
-    p.add_argument("--commands-file", required=True)
-    p.add_argument("--data-dir", required=True)
-    return p.parse_args()
-
-
-def main():
-    args = parse_args()
+def build_ui():
     root = tk.Tk()
-    app = GeradorMarcacoesApp(root, args.name, args.commands_file, args.data_dir)
-    app.run()
+    GeradorMarcacoesApp(root)
+    root.mainloop()
 
 
 if __name__ == "__main__":
-    main()
+    build_ui()
