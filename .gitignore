@@ -2,8 +2,32 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
-node_modules/
-*.egg-info/
+node_modules/*
+*.egg-info/*
 commits/*
 
+
 plugins/release/*
+release
+.issues/*
+
+# grapify
+.kiro/*
+.release_plugin_state/*
+graphify-out/*
+# Added by code-review-graph
+.code-review-graph/*
+.claude/*
+.codebuddy/*
+.cursorrules
+.gemini/*
+.github/code-review-graph.instruction.md
+.mcp.json
+.qoder/*
+.vscode/*
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+CODEBUDDY.md
+GEMINI.md
+QODER.md
