@@ -1,7 +1,64 @@
 {
   "version": "1",
-  "updated_at": "2026-08-03",
+  "updated_at": "2026-08-13",
   "plugins": [
+    {
+      "id": "calc-jornadas",
+      "name": "Calculadora de Jornadas",
+      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
+      "version": "1.1.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "rh",
+        "jornada",
+        "horas",
+        "trabalho"
+      ],
+      "icon": "clock",
+      "command": "calc-jornadas",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.1.0/calc-jornadas.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-13"
+    },
+    {
+      "id": "converter-data",
+      "name": "Converter Data",
+      "description": "Converte data e hora para número serial Excel/Lotus e vice-versa.",
+      "version": "1.0.1",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "excel",
+        "data",
+        "conversão",
+        "utilidade"
+      ],
+      "icon": "calendar",
+      "command": "converter-data",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.1/converter-data.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-13"
+    },
+    {
+      "id": "stract-json",
+      "name": "Stract JSON",
+      "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
+      "version": "1.0.1",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "dev",
+        "json",
+        "extração",
+        "dados"
+      ],
+      "icon": "file-json",
+      "command": "stract-json",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.1/stract-json.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-13"
+    },
     {
       "id": "gerador-marcacoes",
       "name": "Gerador de Marcações SQL",
@@ -38,63 +95,6 @@
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.0.0/gerador-afd.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-08-03"
-    },
-    {
-      "id": "calc-jornadas",
-      "name": "Calculadora de Jornadas",
-      "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "1.0.2",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "rh",
-        "jornada",
-        "horas",
-        "trabalho"
-      ],
-      "icon": "clock",
-      "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.0.2/calc-jornadas.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-03"
-    },
-    {
-      "id": "stract-json",
-      "name": "Stract JSON",
-      "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "dev",
-        "json",
-        "extração",
-        "dados"
-      ],
-      "icon": "file-json",
-      "command": "stract-json",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.0.0/stract-json.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-27"
-    },
-    {
-      "id": "converter-data",
-      "name": "Converter Data",
-      "description": "Converte data e hora para número serial Excel/Lotus e vice-versa.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "excel",
-        "data",
-        "conversão",
-        "utilidade"
-      ],
-      "icon": "calendar",
-      "command": "converter-data",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/converter-data-1.0.0/converter-data.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-07-27"
     },
     {
       "id": "cpf",
