@@ -1,3 +1,34 @@
+import sys
+from pathlib import Path
+
+try:
+    from shared.theme_utils import (
+        THEME, setup_app_theme, create_card_frame, create_styled_entry,
+        create_styled_text, create_primary_button, create_secondary_button,
+        create_info_banner, create_modal_window, enable_high_dpi
+    )
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from shared.theme_utils import (
+        THEME, setup_app_theme, create_card_frame, create_styled_entry,
+        create_styled_text, create_primary_button, create_secondary_button,
+        create_info_banner, create_modal_window, enable_high_dpi
+    )
+
+DARK = {
+    "bg": THEME["bg_base"],
+    "bg2": THEME["bg_surface"],
+    "input_bg": THEME["bg_input"],
+    "fg": THEME["fg_primary"],
+    "muted": THEME["fg_secondary"],
+    "accent": THEME["accent"],
+    "border": THEME["border"],
+    "success": THEME["success"],
+    "danger": THEME["danger"],
+    "editable_bg": THEME["bg_input"],
+    "editable_alt": THEME["bg_hover"],
+}
+
 #!/usr/bin/env python3
 """
 Plugin: Validador e Gerador de CPF
@@ -62,16 +93,16 @@ def open_ui():
     root = tk.Tk()
     root.title("Validador de CPF")
     root.geometry("420x320")
-    root.configure(bg="#1f242d")
+    setup_app_theme(root); root.configure(bg=DARK["bg"])
 
     style = ttk.Style()
     try:
         style.theme_use("clam")
     except tk.TclError:
         pass
-    style.configure("TLabel", background="#1f242d", foreground="#f0f2f5")
+    style.configure("TLabel", background=DARK["bg"], foreground=DARK["fg"])
     style.configure("TButton", padding=6)
-    style.configure("TEntry", fieldbackground="#161a21", foreground="#f0f2f5")
+    style.configure("TEntry", fieldbackground=DARK["input_bg"], foreground=DARK["fg"])
 
     title = ttk.Label(root, text="Validador & Gerador de CPF", font=("Segoe UI", 14, "bold"))
     title.pack(pady=(20, 8))
@@ -102,7 +133,7 @@ def open_ui():
     ttk.Button(btn_frame, text="Gerar", command=do_generate).pack(side="left", padx=4)
     ttk.Button(btn_frame, text="Limpar", command=lambda: entry.delete(0, tk.END)).pack(side="left", padx=4)
 
-    ttk.Label(root, text="Dica: gere um CPF e valide para testar.", foreground="#8b94a3").pack(pady=(10, 0))
+    ttk.Label(root, text="Dica: gere um CPF e valide para testar.", foreground=DARK["muted"]).pack(pady=(10, 0))
 
     entry.focus()
     root.mainloop()
