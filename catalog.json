@@ -3,6 +3,24 @@
   "updated_at": "2026-08-13",
   "plugins": [
     {
+      "id": "log-optimizer",
+      "name": "Log Optimizer",
+      "version": "1.0.0",
+      "description": "Processa e otimiza arquivos de log, gerando resumos estruturados, timelines e clusters de eventos com mascaramento de dados sensíveis.",
+      "author": "Rodrigo Lessa",
+      "icon": "FileText",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/log-optimizer-1.0.0/log-optimizer.zip",
+      "entry": "main.py",
+      "tags": [
+        "logs",
+        "analise",
+        "incidentes",
+        "otimizacao",
+        "seguranca"
+      ],
+      "updated_at": "2026-08-14"
+    },
+    {
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
@@ -148,23 +166,6 @@
       "command": "stract-log",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.0.0/stract-log.zip",
       "min_toolbox_version": "1.0.0"
-    },
-    {
-      "id": "log-optimizer",
-      "name": "Log Optimizer",
-      "version": "1.0.0",
-      "description": "Processa e otimiza arquivos de log, gerando resumos estruturados, timelines e clusters de eventos com mascaramento de dados sensíveis.",
-      "author": "Rodrigo Lessa",
-      "icon": "FileText",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/log-optimizer-1.0.0/log-optimizer.zip",
-      "entry": "main.py",
-      "tags": [
-        "logs",
-        "analise",
-        "incidentes",
-        "otimizacao",
-        "seguranca"
-      ]
     }
   ]
 }
