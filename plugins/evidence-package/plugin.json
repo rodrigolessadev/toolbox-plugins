@@ -1,0 +1,7 @@
+{
+  "name": "Evidence Package",
+  "version": "1.0.0",
+  "description": "Consolida logs, HARs, timelines e dados de incidente em um pacote de evidências rastreável.",
+  "language": "python",
+  "entry": "main.py"
+}
