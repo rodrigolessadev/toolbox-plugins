@@ -3,6 +3,20 @@
   "updated_at": "2026-08-14",
   "plugins": [
     {
+      "id": "analysis-orchestrator",
+      "name": "Analysis Orchestrator",
+      "version": "1.0.0",
+      "description": "Orquestra a análise ponta a ponta executando sanitização, filtragem, otimização, timeline e evidências.",
+      "author": "Rodrigo Lessa",
+      "icon": "Puzzle",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/analysis-orchestrator-1.0.0/analysis-orchestrator.zip",
+      "entry": "main.py",
+      "updated_at": "2026-08-14",
+      "tags": [
+        "analysis-orchestrator"
+      ]
+    },
+    {
       "id": "gerador-afd",
       "name": "Gerador de AFD",
       "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
