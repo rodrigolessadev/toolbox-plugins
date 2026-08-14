@@ -165,6 +165,25 @@
         "otimizacao",
         "seguranca"
       ]
+    },
+    {
+      "id": "har-optimizer",
+      "name": "HAR Optimizer",
+      "version": "1.0.0",
+      "description": "Processa e otimiza arquivos HAR, extraindo evidências de falhas, lentidão e sequência de requisições HTTP com mascaramento de dados sensíveis.",
+      "author": "Rodrigo Lessa",
+      "icon": "Activity",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/har-optimizer-1.0.0/har-optimizer.zip",
+      "entry": "main.py",
+      "tags": [
+        "har",
+        "network",
+        "http",
+        "analise",
+        "incidentes",
+        "otimizacao",
+        "seguranca"
+      ]
     }
   ]
 }

@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Plugin: Log Optimizer
-Entrada: Protocolo IPC v1.0 (STDIN/STDOUT JSON) ou Interface Grafica Tkinter.
+Plugin: HAR Optimizer
+Entrada: Protocolo IPC v1.0 (STDIN/STDOUT JSON) ou Interface Gráfica Tkinter.
 """
 import json
-import os
 import sys
 from pathlib import Path
 
-# Ajuste seguro de encoding para Windows
 if sys.platform == "win32":
     try:
         if hasattr(sys.stdout, "reconfigure"):
@@ -20,16 +18,16 @@ if sys.platform == "win32":
 
 import importlib.util
 def _load_domain():
-    spec = importlib.util.spec_from_file_location("log_optimizer_domain_pkg", Path(__file__).parent / "domain.py")
+    spec = importlib.util.spec_from_file_location("har_optimizer_domain_pkg", Path(__file__).parent / "domain.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
-optimize_logs = _load_domain().optimize_logs
+optimize_har = _load_domain().optimize_har
 
 
 def handle_ipc(input_data: dict) -> dict:
-    """Executa o processamento via Protocolo IPC v1.0."""
+    """Processa requisição via protocolo IPC v1.0."""
     req_id = input_data.get("request_id", "req_default")
     options = input_data.get("options", {})
     file_path = input_data.get("input_file")
@@ -45,12 +43,11 @@ def handle_ipc(input_data: dict) -> dict:
                 "result": None,
                 "error": {
                     "code": "FILE_NOT_FOUND",
-                    "message": f"Arquivo de log nao encontrado: {file_path}",
+                    "message": f"Arquivo HAR não encontrado: {file_path}"
                 },
-                "warnings": [],
+                "warnings": []
             }
         try:
-            # Leitura segura suportando UTF-8 e UTF-8 BOM
             raw_content = p.read_text(encoding="utf-8-sig", errors="replace")
         except Exception as e:
             return {
@@ -60,9 +57,9 @@ def handle_ipc(input_data: dict) -> dict:
                 "result": None,
                 "error": {
                     "code": "READ_ERROR",
-                    "message": f"Erro ao ler arquivo: {e}",
+                    "message": f"Erro ao ler arquivo HAR: {e}"
                 },
-                "warnings": [],
+                "warnings": []
             }
 
     if raw_content is None:
@@ -73,13 +70,13 @@ def handle_ipc(input_data: dict) -> dict:
             "result": None,
             "error": {
                 "code": "INVALID_INPUT",
-                "message": "Nenhum arquivo ou conteudo de log fornecido.",
+                "message": "Nenhum arquivo ou conteúdo HAR fornecido."
             },
-            "warnings": [],
+            "warnings": []
         }
 
     try:
-        res = optimize_logs(raw_content, options)
+        res = optimize_har(raw_content, options)
         out_file = input_data.get("output_file")
         if out_file:
             Path(out_file).write_text(json.dumps(res, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -91,7 +88,7 @@ def handle_ipc(input_data: dict) -> dict:
             "status": "success",
             "result": res,
             "error": None,
-            "warnings": [],
+            "warnings": []
         }
     except Exception as e:
         return {
@@ -101,20 +98,20 @@ def handle_ipc(input_data: dict) -> dict:
             "result": None,
             "error": {
                 "code": "OPTIMIZATION_FAILED",
-                "message": str(e),
+                "message": str(e)
             },
-            "warnings": [],
+            "warnings": []
         }
 
 
 def run_gui():
-    """Interface grafica Tkinter (Dark theme alinhado ao Toolbox)."""
+    """Interface gráfica Tkinter (Dark Theme alinhado ao Toolbox)."""
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     from tkinter.scrolledtext import ScrolledText
 
     root = tk.Tk()
-    root.title("Log Optimizer — Toolbox")
+    root.title("HAR Optimizer — Toolbox")
     root.geometry("850x650")
     root.configure(bg="#0e1014")
 
@@ -133,17 +130,17 @@ def run_gui():
 
     top = ttk.Frame(root, style="TFrame")
     top.pack(fill="x", padx=16, pady=12)
-    ttk.Label(top, text="⚡ Log Optimizer", style="Title.TLabel").pack(side="left")
+    ttk.Label(top, text="⚡ HAR Optimizer", style="Title.TLabel").pack(side="left")
 
     file_var = tk.StringVar()
 
     row_file = ttk.Frame(root, style="TFrame")
     row_file.pack(fill="x", padx=16, pady=6)
-    ttk.Label(row_file, text="Arquivo de Log:").pack(side="left", padx=(0, 8))
+    ttk.Label(row_file, text="Arquivo .HAR:").pack(side="left", padx=(0, 8))
     ttk.Entry(row_file, textvariable=file_var, width=50).pack(side="left", fill="x", expand=True, padx=(0, 8))
 
     def select_file():
-        fn = filedialog.askopenfilename(title="Selecione o arquivo de log")
+        fn = filedialog.askopenfilename(title="Selecione o arquivo .HAR", filetypes=[("HTTP Archive", "*.har"), ("JSON", "*.json"), ("Todos", "*.*")])
         if fn:
             file_var.set(fn)
 
@@ -155,7 +152,7 @@ def run_gui():
     def process():
         fn = file_var.get().strip()
         if not fn:
-            messagebox.showwarning("Aviso", "Selecione um arquivo de log.")
+            messagebox.showwarning("Aviso", "Selecione um arquivo .har.")
             return
         payload = {"input_file": fn, "options": {"mask_sensitive_data": True}}
         resp = handle_ipc(payload)
@@ -164,7 +161,7 @@ def run_gui():
 
     btn_row = ttk.Frame(root, style="TFrame")
     btn_row.pack(fill="x", padx=16, pady=(0, 12))
-    ttk.Button(btn_row, text="Otimizar Log", style="Accent.TButton", command=process).pack(side="right")
+    ttk.Button(btn_row, text="Otimizar HAR", style="Accent.TButton", command=process).pack(side="right")
 
     root.mainloop()
 
@@ -188,7 +185,7 @@ if __name__ == "__main__":
                 "status": "error",
                 "result": None,
                 "error": {"code": "PARSE_ERROR", "message": str(e)},
-                "warnings": [],
+                "warnings": []
             }
             print(json.dumps(err_res, ensure_ascii=False), flush=True)
     else:
