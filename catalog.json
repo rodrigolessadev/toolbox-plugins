@@ -3,6 +3,25 @@
   "updated_at": "2026-08-13",
   "plugins": [
     {
+      "id": "gerador-afd",
+      "name": "Gerador de AFD",
+      "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "rh",
+        "ponto",
+        "afd",
+        "rep"
+      ],
+      "icon": "file-clock",
+      "command": "gerador-afd",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.0.0/gerador-afd.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-14"
+    },
+    {
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
@@ -74,25 +93,6 @@
       "icon": "database",
       "command": "gerador-marcacoes",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.2.1/gerador-marcacoes.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-03"
-    },
-    {
-      "id": "gerador-afd",
-      "name": "Gerador de AFD",
-      "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
-      "version": "1.0.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "rh",
-        "ponto",
-        "afd",
-        "rep"
-      ],
-      "icon": "file-clock",
-      "command": "gerador-afd",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.0.0/gerador-afd.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-08-03"
     },
