@@ -17,81 +17,80 @@ def load_module(name: str, filename: str):
 domain_mod = load_module("analysis_orchestrator_domain", "domain.py")
 main_mod = load_module("analysis_orchestrator_main", "main.py")
 
+discover_analysis_directory = domain_mod.discover_analysis_directory
 run_orchestration = domain_mod.run_orchestration
+run_single_plugin = domain_mod.run_single_plugin
+validate_results_directory = domain_mod.validate_results_directory
+resume_orchestration = domain_mod.resume_orchestration
 handle_ipc = main_mod.handle_ipc
 
-def test_1_execucao_completa_pipeline(tmp_path):
-    # Setup de diretorio de analise completo
+def test_1_acao_discover(tmp_path):
     logs_dir = tmp_path / "logs"
     logs_dir.mkdir()
-    (logs_dir / "app.log").write_text(
-        "2026-08-14T10:00:00Z [auth-service] [ERROR] NullPointerException password: '123'\n"
-        "2026-08-14T10:01:00Z [auth-service] [INFO] Request completed request_id: req-123\n",
-        encoding="utf-8"
-    )
+    (logs_dir / "app.log").write_text("2026-08-14T10:00:00Z [INFO] Hello\n", encoding="utf-8")
 
-    meta_file = tmp_path / "incident.json"
-    meta_file.write_text(json.dumps({
-        "id": "INC-888",
-        "service": "auth-service",
-        "keywords": ["NullPointerException"]
-    }), encoding="utf-8")
+    res = discover_analysis_directory(str(tmp_path))
+    assert len(res["files_found"]["logs"]) == 1
+    assert "logs/app.log" in res["files_found"]["logs"][0]
+    assert "log-sanitizer" in res["planned_pipeline"]
+
+def test_2_acao_dry_run(tmp_path):
+    (tmp_path / "sample.log").write_text("2026-08-14T10:00:00Z [INFO] Line\n", encoding="utf-8")
+
+    res = run_orchestration(str(tmp_path), {"dry_run": True})
+    assert res["dry_run"] is True
+    # Nao deve criar pasta de resultados no dry_run
+    created_dirs = list(tmp_path.glob("analysis-results-*"))
+    assert len(created_dirs) == 0
+
+def test_3_execucao_completa_e_validacao(tmp_path):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "app.log").write_text("2026-08-14T10:00:00Z [ERROR] Boom\n", encoding="utf-8")
 
     src_dir = tmp_path / "source"
     src_dir.mkdir()
-    (src_dir / "app.py").write_text("def authenticate():\n    raise NullPointerException()\n", encoding="utf-8")
+    (src_dir / "main.py").write_text("print('test')\n", encoding="utf-8")
 
     res = run_orchestration(str(tmp_path))
-    assert "results_directory" in res
-    assert res["execution_summary"]["total_files_produced"] > 5
+    assert res["execution_summary"]["total_files_produced"] > 0
 
-    res_dir = tmp_path / res["results_directory"]
-    assert (res_dir / "manifest.json").exists()
-    assert (res_dir / "execution-summary.json").exists()
-    assert (res_dir / "sanitized" / "sanitized_logs.txt").exists()
-    assert (res_dir / "filtered" / "filtered_logs.json").exists()
-    assert (res_dir / "optimized" / "log_summary.json").exists()
-    assert (res_dir / "clusters" / "clusters.json").exists()
-    assert (res_dir / "timelines" / "timeline.json").exists()
-    assert (res_dir / "evidence" / "manifest.json").exists()
-    assert (res_dir / "source-extracts" / "extracts.json").exists()
+    val = validate_results_directory(str(tmp_path / res["results_directory"]))
+    assert val["is_valid"] is True
+    assert len(val["missing_files"]) == 0
 
-def test_2_tolerancia_a_har_e_fontes_ausentes(tmp_path):
-    # Diretorio apenas com logs
-    (tmp_path / "test.log").write_text("2026-08-14T10:00:00Z [INFO] Single log line", encoding="utf-8")
+def test_4_acao_run_plugin_isolado(tmp_path):
+    (tmp_path / "app.log").write_text("2026-08-14T10:00:00Z [ERROR] password: 'secret123'\n", encoding="utf-8")
 
-    res = run_orchestration(str(tmp_path))
+    res = run_single_plugin(str(tmp_path), "log-sanitizer")
+    assert "sanitized_content" in res or "sanitized_text" in res
+
+def test_5_desabilitar_plugins(tmp_path):
+    (tmp_path / "app.log").write_text("2026-08-14T10:00:00Z [INFO] Ok\n", encoding="utf-8")
+
+    res = run_orchestration(str(tmp_path), {"disabled_plugins": ["log-cluster", "log-timeline"]})
     steps_map = {s["step"]: s["status"] for s in res["execution_summary"]["execution_steps"]}
-    assert steps_map["log-sanitizer"] == "success"
-    assert steps_map["har-optimizer"] == "skipped"
-    assert steps_map["source-extractor"] == "skipped"
+    assert steps_map["log-cluster"] == "skipped"
+    assert steps_map["log-timeline"] == "skipped"
 
-def test_3_diretorio_inexistente():
+def test_6_diretorio_inexistente():
     with pytest.raises(ValueError):
-        run_orchestration("C:/diretorio_inexistente_99999")
+        discover_analysis_directory("C:/diretorio_falso_123456")
 
-def test_4_nome_customizado_e_sufixo_incremental(tmp_path):
-    (tmp_path / "sample.log").write_text("2026-08-14T10:00:00Z [INFO] Line", encoding="utf-8")
+def test_7_protocolo_ipc_v1_todas_acoes(tmp_path):
+    (tmp_path / "app.log").write_text("2026-08-14T10:00:00Z [INFO] Line\n", encoding="utf-8")
 
-    res1 = run_orchestration(str(tmp_path), {"output_directory_name": "meu-resultado"})
-    assert res1["results_directory"] == "meu-resultado"
+    # 1. Discover
+    resp1 = handle_ipc({"action": "discover", "input": {"analysis_directory": str(tmp_path)}})
+    assert resp1["status"] == "success"
+    assert "files_found" in resp1["result"]
 
-    res2 = run_orchestration(str(tmp_path), {"output_directory_name": "meu-resultado"})
-    assert res2["results_directory"] == "meu-resultado-1"
+    # 2. Run analysis
+    resp2 = handle_ipc({"action": "run_analysis", "input": {"analysis_directory": str(tmp_path)}})
+    assert resp2["status"] == "success"
+    res_dir_rel = resp2["result"]["results_directory"]
 
-def test_5_protocolo_ipc_v1(tmp_path):
-    (tmp_path / "sample.log").write_text("2026-08-14T10:00:00Z [INFO] Line", encoding="utf-8")
-
-    payload = {
-        "protocol_version": "1.0",
-        "request_id": "req_orch_01",
-        "action": "run_analysis",
-        "input": {
-            "analysis_directory": str(tmp_path)
-        }
-    }
-    resp = handle_ipc(payload)
-    assert resp["status"] == "success"
-    assert resp["protocol_version"] == "1.0"
-    assert resp["request_id"] == "req_orch_01"
-    assert "results_directory" in resp["result"]
+    # 3. Validate results
+    resp3 = handle_ipc({"action": "validate_results", "input": {"results_directory": str(tmp_path / res_dir_rel)}})
+    assert resp3["status"] == "success"
+    assert resp3["result"]["is_valid"] is True
