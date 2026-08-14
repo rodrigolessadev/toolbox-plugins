@@ -1,0 +1,7 @@
+{
+  "name": "Incident Filter",
+  "version": "1.0.0",
+  "description": "Filtra logs de incidentes por tempo, serviço, níveis, palavras-chave e IDs com preservação de contexto.",
+  "language": "python",
+  "entry": "main.py"
+}
