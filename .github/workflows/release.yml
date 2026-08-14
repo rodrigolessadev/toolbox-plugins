@@ -46,10 +46,14 @@ jobs:
             echo "plugin.json nao encontrado em plugins/$ID" >&2
             exit 1
           fi
-          if [ ! -f "plugins/$ID/main.py" ]; then
-            echo "main.py nao encontrado em plugins/$ID" >&2
+          # Verifica o entrypoint declarado em plugin.json (pode ser main.py, main.js, etc.)
+          ENTRY=$(python3 -c "import json; d=json.load(open('plugins/$ID/plugin.json', encoding='utf-8')); print(d.get('entry','main.py'))")
+          if [ ! -f "plugins/$ID/$ENTRY" ]; then
+            echo "Entrypoint '$ENTRY' nao encontrado em plugins/$ID" >&2
+            echo "(declarado em plugin.json -> entry)" >&2
             exit 1
           fi
+          echo "Verificacao OK: plugins/$ID/$ENTRY encontrado"
 
       # Sincroniza o plugin.json versionado do commit da tag
       # (a tag aponta para o commit do release; esta etapa garante
@@ -72,24 +76,27 @@ jobs:
           print(f"plugin.json version -> {ver}")
           PY
 
-      # Empacota apenas os arquivos do plugin no raiz do zip.
-      # Isso garante que ao descompactar, plugin.json e main.py
-      # ficam no nivel raiz (e nao dentro de plugins/<id>/).
+      # Empacota os arquivos do plugin com layout de raiz:
+      # ao descompactar, plugin.json e main.py ficam direto na raiz (sem subpasta).
+      # Exclui __pycache__ e arquivos .pyc gerados localmente.
       - name: Build plugin zip (root layout)
         shell: bash
         run: |
           ID="${{ steps.parse.outputs.plugin_id }}"
-          VER="${{ steps.parse.outputs.plugin_version }}"
           TMP="$(mktemp -d)"
-          mkdir -p "$TMP/$ID"
-          # copia apenas os arquivos do plugin
-          cp -r "plugins/$ID/." "$TMP/$ID/"
-          # gera o zip com a pasta <id>/ no raiz
-          (cd "$TMP" && zip -r "$ID.zip" "$ID" >/dev/null)
+          # copia os arquivos do plugin para um diretorio temporario
+          cp -r "plugins/$ID/." "$TMP/"
+          # remove artefatos locais que nao devem ir no zip
+          find "$TMP" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find "$TMP" -name "*.pyc" -delete 2>/dev/null || true
+          find "$TMP" -name "*.pyo" -delete 2>/dev/null || true
+          # gera o zip sem subpasta: conteudo fica direto na raiz do zip
+          (cd "$TMP" && zip -r "$ID.zip" . --exclude "*.zip" >/dev/null)
           mkdir -p dist
           mv "$TMP/$ID.zip" "dist/$ID.zip"
           echo "ZIP gerado: dist/$ID.zip"
-          ls -la dist/
+          echo "Conteudo do ZIP:"
+          unzip -l "dist/$ID.zip"
 
       - name: Upload zip as Release asset
         uses: softprops/action-gh-release@v2

@@ -1,0 +1,7 @@
+{
+  "name": "Log Optimizer",
+  "version": "1.0.0",
+  "description": "Processa e otimiza arquivos de log, gerando resumos estruturados, timelines e clusters de eventos com mascaramento de dados sensíveis.",
+  "language": "python",
+  "entry": "main.py"
+}
