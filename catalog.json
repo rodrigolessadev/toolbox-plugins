@@ -3,6 +3,20 @@
   "updated_at": "2026-08-14",
   "plugins": [
     {
+      "id": "har-kibana-planner",
+      "name": "HAR Kibana Planner",
+      "version": "1.0.0",
+      "description": "Gera planos de consulta determinísticos no Elasticsearch/Kibana a partir de arquivos HAR 1.2.",
+      "author": "Rodrigo Lessa",
+      "icon": "Puzzle",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/har-kibana-planner-1.0.0/har-kibana-planner.zip",
+      "entry": "main.py",
+      "updated_at": "2026-08-14",
+      "tags": [
+        "har-kibana-planner"
+      ]
+    },
+    {
       "id": "gerador-afd",
       "name": "Gerador de AFD",
       "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
