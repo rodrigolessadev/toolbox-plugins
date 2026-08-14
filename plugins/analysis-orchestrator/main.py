@@ -25,7 +25,7 @@ def _load_domain():
     return mod
 
 
-run_orchestration = _load_domain().run_orchestration
+domain_pkg = _load_domain()
 
 
 def handle_ipc(input_data: dict) -> dict:
@@ -36,21 +36,47 @@ def handle_ipc(input_data: dict) -> dict:
     options = input_data.get("options", {})
 
     analysis_dir = input_cfg.get("analysis_directory") or input_data.get("analysis_directory") or input_data.get("directory")
-    if not analysis_dir:
+    results_dir = input_cfg.get("results_directory") or input_data.get("results_directory")
+
+    if action in ("run_analysis", "discover") and not analysis_dir:
         return {
             "protocol_version": "1.0",
             "request_id": req_id,
             "status": "error",
             "result": None,
             "error": {
-                "code": "MISSING_ANALYSIS_DIRECTORY",
+                "code": "ANALYSIS_DIRECTORY_NOT_FOUND",
                 "message": "Campo 'analysis_directory' nao fornecido.",
             },
             "warnings": [],
         }
 
     try:
-        res = run_orchestration(analysis_dir, options)
+        if action == "discover":
+            res = domain_pkg.discover_analysis_directory(analysis_dir, options)
+        elif action == "run_plugin":
+            plugin_name = input_cfg.get("plugin") or options.get("plugin")
+            if not plugin_name:
+                return {
+                    "protocol_version": "1.0",
+                    "request_id": req_id,
+                    "status": "error",
+                    "result": None,
+                    "error": {
+                        "code": "PLUGIN_NOT_FOUND",
+                        "message": "Nome do plugin nao informado para run_plugin.",
+                    },
+                    "warnings": [],
+                }
+            res = domain_pkg.run_single_plugin(analysis_dir, plugin_name, options)
+        elif action == "validate_results":
+            target_res_dir = results_dir or analysis_dir
+            res = domain_pkg.validate_results_directory(target_res_dir)
+        elif action == "resume":
+            res = domain_pkg.resume_orchestration(results_dir or analysis_dir, options)
+        else:  # run_analysis
+            res = domain_pkg.run_orchestration(analysis_dir, options)
+
         return {
             "protocol_version": "1.0",
             "request_id": req_id,
@@ -58,6 +84,21 @@ def handle_ipc(input_data: dict) -> dict:
             "result": res,
             "error": None,
             "warnings": res.get("warnings", []),
+        }
+    except ValueError as ve:
+        err_str = str(ve)
+        code = "INVALID_REQUEST"
+        if "inexistente" in err_str.lower():
+            code = "ANALYSIS_DIRECTORY_NOT_FOUND"
+        elif "plugin" in err_str.lower() and "desconhecido" in err_str.lower():
+            code = "PLUGIN_NOT_FOUND"
+        return {
+            "protocol_version": "1.0",
+            "request_id": req_id,
+            "status": "error",
+            "result": None,
+            "error": {"code": code, "message": err_str},
+            "warnings": [],
         }
     except Exception as e:
         return {
@@ -102,6 +143,8 @@ def run_gui():
     ttk.Label(top, text="🚀 Analysis Orchestrator Pipeline", style="Title.TLabel").pack(side="left")
 
     dir_var = tk.StringVar()
+    action_var = tk.StringVar(value="run_analysis")
+    dry_var = tk.BooleanVar(value=False)
 
     row_dir = ttk.Frame(root, style="TFrame")
     row_dir.pack(fill="x", padx=16, pady=6)
@@ -115,6 +158,12 @@ def run_gui():
 
     ttk.Button(row_dir, text="Procurar...", command=select_dir).pack(side="left")
 
+    row_opts = ttk.Frame(root, style="TFrame")
+    row_opts.pack(fill="x", padx=16, pady=4)
+    ttk.Label(row_opts, text="Ação:").pack(side="left", padx=(0, 8))
+    ttk.Combobox(row_opts, textvariable=action_var, values=["run_analysis", "discover", "validate_results", "resume"], width=18, state="readonly").pack(side="left", padx=(0, 16))
+    ttk.Checkbutton(row_opts, text="Simulação (Dry Run)", variable=dry_var).pack(side="left")
+
     out_text = ScrolledText(root, bg="#161a21", fg="#e8eaed", insertbackground="#e8eaed", font=("Consolas", 10))
     out_text.pack(fill="both", expand=True, padx=16, pady=10)
 
@@ -123,14 +172,18 @@ def run_gui():
         if not dn:
             messagebox.showwarning("Aviso", "Selecione o diretório de análise.")
             return
-        payload = {"input": {"analysis_directory": dn}}
+        payload = {
+            "action": action_var.get(),
+            "input": {"analysis_directory": dn},
+            "options": {"dry_run": dry_var.get()}
+        }
         resp = handle_ipc(payload)
         out_text.delete("1.0", tk.END)
         out_text.insert("1.0", json.dumps(resp, indent=2, ensure_ascii=False))
 
     btn_row = ttk.Frame(root, style="TFrame")
     btn_row.pack(fill="x", padx=16, pady=(0, 12))
-    ttk.Button(btn_row, text="Executar Análise Completa", style="Accent.TButton", command=process).pack(side="right")
+    ttk.Button(btn_row, text="Executar Ação", style="Accent.TButton", command=process).pack(side="right")
 
     root.mainloop()
 

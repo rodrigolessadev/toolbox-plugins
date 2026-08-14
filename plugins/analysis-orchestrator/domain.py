@@ -9,6 +9,17 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 PLUGINS_ROOT = Path(__file__).parent.parent
 
+ORDERED_PIPELINE = [
+    "log-sanitizer",
+    "incident-filter",
+    "log-optimizer",
+    "log-cluster",
+    "log-timeline",
+    "har-optimizer",
+    "source-extractor",
+    "evidence-package"
+]
+
 
 def _import_plugin_domain(plugin_name: str, domain_file: str = "domain.py"):
     path = PLUGINS_ROOT / plugin_name / domain_file
@@ -37,35 +48,16 @@ def get_unique_results_dir(analysis_dir: Path, custom_name: Optional[str] = None
     return analysis_dir / f"{base_name}-{suffix}"
 
 
-def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    options = options or {}
-    analysis_dir = Path(analysis_dir_str).resolve()
-    if not analysis_dir.exists() or not analysis_dir.is_dir():
-        raise ValueError(f"Diretorio de analise inexistente ou invalido: {analysis_dir_str}")
-
-    results_dir = get_unique_results_dir(analysis_dir, options.get("output_directory_name"))
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    # Subdiretorios padrao
-    subdirs = [
-        "sanitized", "filtered", "optimized", "clusters",
-        "timelines", "source-extracts", "evidence", "reports", "logs"
-    ]
-    for s in subdirs:
-        (results_dir / s).mkdir(parents=True, exist_ok=True)
-
-    execution_steps = []
-    warnings = []
-    start_time = datetime.datetime.now(datetime.timezone.utc)
-
-    # 1. Descoberta de arquivos originais
+def scan_directory_assets(analysis_dir: Path, exclude_dir: Optional[Path] = None) -> Dict[str, Any]:
     raw_logs = []
     har_files = []
     source_dirs = []
     metadata_files = []
 
     for item in analysis_dir.iterdir():
-        if item == results_dir or item.name.startswith("analysis-results-") or item.name.startswith("."):
+        if exclude_dir and item == exclude_dir:
+            continue
+        if item.name.startswith("analysis-results-") or item.name.startswith("."):
             continue
 
         if item.is_file():
@@ -73,7 +65,7 @@ def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] =
                 raw_logs.append(item)
             elif item.suffix.lower() == ".har":
                 har_files.append(item)
-            elif item.name in ("incident.json", "metadata.json") or item.suffix.lower() == ".json":
+            elif item.name in ("incident.json", "metadata.json") or (item.suffix.lower() == ".json" and not item.name.startswith("analysis-")):
                 metadata_files.append(item)
         elif item.is_dir():
             if item.name.lower() in ("logs", "log"):
@@ -91,7 +83,6 @@ def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] =
                     if sub_f.is_file():
                         metadata_files.append(sub_f)
 
-    # Ler metadata se existente
     incident_metadata = {}
     for mf in metadata_files:
         try:
@@ -101,175 +92,254 @@ def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] =
         except Exception:
             pass
 
-    # Unificar conteudo de logs
+    return {
+        "raw_logs": raw_logs,
+        "har_files": har_files,
+        "source_dirs": source_dirs,
+        "metadata_files": metadata_files,
+        "incident_metadata": incident_metadata
+    }
+
+
+def discover_analysis_directory(analysis_dir_str: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Acao 'discover': cataloga arquivos do diretorio sem executar o pipeline."""
+    analysis_dir = Path(analysis_dir_str).resolve()
+    if not analysis_dir.exists() or not analysis_dir.is_dir():
+        raise ValueError(f"Diretorio de analise inexistente ou invalido: {analysis_dir_str}")
+
+    assets = scan_directory_assets(analysis_dir)
+
+    planned_steps = ["log-sanitizer", "incident-filter", "log-optimizer", "log-cluster", "log-timeline"]
+    if assets["har_files"]:
+        planned_steps.append("har-optimizer")
+    if assets["source_dirs"]:
+        planned_steps.append("source-extractor")
+    planned_steps.append("evidence-package")
+
+    return {
+        "analysis_directory": str(analysis_dir).replace("\\", "/"),
+        "files_found": {
+            "logs": [str(f.relative_to(analysis_dir)).replace("\\", "/") for f in assets["raw_logs"]],
+            "har_files": [str(f.relative_to(analysis_dir)).replace("\\", "/") for f in assets["har_files"]],
+            "source_dirs": [str(d.relative_to(analysis_dir)).replace("\\", "/") for d in assets["source_dirs"]],
+            "metadata_files": [str(f.relative_to(analysis_dir)).replace("\\", "/") for f in assets["metadata_files"]],
+        },
+        "incident_metadata": assets["incident_metadata"],
+        "planned_pipeline": planned_steps,
+        "estimated_output_directory": f"analysis-results-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    }
+
+
+def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Acao 'run_analysis': executa pipeline completo ou simula (dry_run)."""
+    options = options or {}
+    dry_run = bool(options.get("dry_run", False))
+    disabled_plugins = set(options.get("disabled_plugins", []))
+
+    analysis_dir = Path(analysis_dir_str).resolve()
+    if not analysis_dir.exists() or not analysis_dir.is_dir():
+        raise ValueError(f"Diretorio de analise inexistente ou invalido: {analysis_dir_str}")
+
+    if dry_run:
+        disc = discover_analysis_directory(analysis_dir_str, options)
+        return {
+            "dry_run": True,
+            "analysis_directory": disc["analysis_directory"],
+            "planned_pipeline": [p for p in disc["planned_pipeline"] if p not in disabled_plugins],
+            "disabled_plugins": list(disabled_plugins),
+            "estimated_output_directory": disc["estimated_output_directory"],
+            "files_found": disc["files_found"],
+            "warnings": ["Simulacao concluida (dry_run ativo). Nenhum arquivo foi modificado ou gravado."]
+        }
+
+    results_dir = get_unique_results_dir(analysis_dir, options.get("output_directory_name"))
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    subdirs = [
+        "sanitized", "filtered", "optimized", "clusters",
+        "timelines", "source-extracts", "evidence", "reports", "logs"
+    ]
+    for s in subdirs:
+        (results_dir / s).mkdir(parents=True, exist_ok=True)
+
+    execution_steps = []
+    warnings = []
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+
+    assets = scan_directory_assets(analysis_dir, exclude_dir=results_dir)
+    incident_metadata = assets["incident_metadata"]
+
     combined_log_text = ""
-    for lf in raw_logs:
+    for lf in assets["raw_logs"]:
         try:
             combined_log_text += lf.read_text(encoding="utf-8-sig", errors="replace") + "\n"
         except Exception as e:
             warnings.append(f"Erro ao ler log {lf.name}: {e}")
 
-    # =========================================================================
-    # ETAPA 1: log-sanitizer
-    # =========================================================================
+    # Step 1: log-sanitizer
     sanitized_text = combined_log_text
-    sanitizer_mod = _import_plugin_domain("log-sanitizer")
-    if sanitizer_mod and hasattr(sanitizer_mod, "sanitize_content"):
-        try:
-            san_res = sanitizer_mod.sanitize_content(combined_log_text)
-            sanitized_text = san_res.get("sanitized_content") or san_res.get("sanitized_text") or combined_log_text
-            (results_dir / "sanitized" / "sanitized_logs.txt").write_text(sanitized_text, encoding="utf-8")
-            (results_dir / "sanitized" / "summary.json").write_text(json.dumps(san_res.get("summary", {}), indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "log-sanitizer", "status": "success", "files_produced": ["sanitized/sanitized_logs.txt", "sanitized/summary.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "log-sanitizer", "status": "error", "error": str(e)})
-            warnings.append(f"Falha na sanitizacao: {e}")
+    if "log-sanitizer" in disabled_plugins:
+        execution_steps.append({"step": "log-sanitizer", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "log-sanitizer", "status": "skipped", "reason": "plugin indisponivel"})
+        sanitizer_mod = _import_plugin_domain("log-sanitizer")
+        if sanitizer_mod and hasattr(sanitizer_mod, "sanitize_content"):
+            try:
+                san_res = sanitizer_mod.sanitize_content(combined_log_text)
+                sanitized_text = san_res.get("sanitized_content") or san_res.get("sanitized_text") or combined_log_text
+                (results_dir / "sanitized" / "sanitized_logs.txt").write_text(sanitized_text, encoding="utf-8")
+                (results_dir / "sanitized" / "summary.json").write_text(json.dumps(san_res.get("summary", {}), indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "log-sanitizer", "status": "success", "files_produced": ["sanitized/sanitized_logs.txt", "sanitized/summary.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "log-sanitizer", "status": "error", "error": str(e)})
+                warnings.append(f"Falha na sanitizacao: {e}")
+        else:
+            execution_steps.append({"step": "log-sanitizer", "status": "skipped", "reason": "plugin indisponivel"})
 
-    # =========================================================================
-    # ETAPA 2: incident-filter
-    # =========================================================================
+    # Step 2: incident-filter
     filtered_res = {}
-    filter_mod = _import_plugin_domain("incident-filter")
-    if filter_mod and hasattr(filter_mod, "filter_incident_logs"):
-        try:
-            filter_opts = {
-                "time_range": incident_metadata.get("time_range"),
-                "services": incident_metadata.get("services", []),
-                "levels": incident_metadata.get("levels", []),
-                "keywords": incident_metadata.get("keywords", []),
-                "correlation_ids": incident_metadata.get("correlation_ids", {}),
-                "context_lines": options.get("context_lines", 3),
-                "output_format": "compact_text"
-            }
-            filtered_res = filter_mod.filter_incident_logs(sanitized_text, filter_opts)
-            (results_dir / "filtered" / "filtered_logs.json").write_text(json.dumps(filtered_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            if "formatted_output" in filtered_res:
-                (results_dir / "filtered" / "filtered_compact.txt").write_text(filtered_res["formatted_output"], encoding="utf-8")
-            execution_steps.append({"step": "incident-filter", "status": "success", "files_produced": ["filtered/filtered_logs.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "incident-filter", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no filtro de incidente: {e}")
+    if "incident-filter" in disabled_plugins:
+        execution_steps.append({"step": "incident-filter", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "incident-filter", "status": "skipped"})
+        filter_mod = _import_plugin_domain("incident-filter")
+        if filter_mod and hasattr(filter_mod, "filter_incident_logs"):
+            try:
+                filter_opts = {
+                    "time_range": incident_metadata.get("time_range"),
+                    "services": incident_metadata.get("services", []),
+                    "levels": incident_metadata.get("levels", []),
+                    "keywords": incident_metadata.get("keywords", []),
+                    "correlation_ids": incident_metadata.get("correlation_ids", {}),
+                    "context_lines": options.get("context_lines", 3),
+                    "output_format": "compact_text"
+                }
+                filtered_res = filter_mod.filter_incident_logs(sanitized_text, filter_opts)
+                (results_dir / "filtered" / "filtered_logs.json").write_text(json.dumps(filtered_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                if "formatted_output" in filtered_res:
+                    (results_dir / "filtered" / "filtered_compact.txt").write_text(filtered_res["formatted_output"], encoding="utf-8")
+                execution_steps.append({"step": "incident-filter", "status": "success", "files_produced": ["filtered/filtered_logs.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "incident-filter", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no filtro de incidente: {e}")
+        else:
+            execution_steps.append({"step": "incident-filter", "status": "skipped"})
 
-    # =========================================================================
-    # ETAPA 3: log-optimizer
-    # =========================================================================
+    # Step 3: log-optimizer
     log_opt_res = {}
-    opt_mod = _import_plugin_domain("log-optimizer")
-    if opt_mod and hasattr(opt_mod, "optimize_logs"):
-        try:
-            opt_input_text = sanitized_text
-            log_opt_res = opt_mod.optimize_logs(opt_input_text)
-            (results_dir / "optimized" / "log_summary.json").write_text(json.dumps(log_opt_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "log-optimizer", "status": "success", "files_produced": ["optimized/log_summary.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "log-optimizer", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no log-optimizer: {e}")
+    if "log-optimizer" in disabled_plugins:
+        execution_steps.append({"step": "log-optimizer", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "log-optimizer", "status": "skipped"})
+        opt_mod = _import_plugin_domain("log-optimizer")
+        if opt_mod and hasattr(opt_mod, "optimize_logs"):
+            try:
+                log_opt_res = opt_mod.optimize_logs(sanitized_text)
+                (results_dir / "optimized" / "log_summary.json").write_text(json.dumps(log_opt_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "log-optimizer", "status": "success", "files_produced": ["optimized/log_summary.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "log-optimizer", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no log-optimizer: {e}")
+        else:
+            execution_steps.append({"step": "log-optimizer", "status": "skipped"})
 
-    # =========================================================================
-    # ETAPA 4: log-cluster
-    # =========================================================================
+    # Step 4: log-cluster
     cluster_res = {}
-    cluster_mod = _import_plugin_domain("log-cluster")
-    if cluster_mod and hasattr(cluster_mod, "cluster_logs"):
-        try:
-            cluster_res = cluster_mod.cluster_logs(sanitized_text)
-            (results_dir / "clusters" / "clusters.json").write_text(json.dumps(cluster_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "log-cluster", "status": "success", "files_produced": ["clusters/clusters.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "log-cluster", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no cluster de logs: {e}")
+    if "log-cluster" in disabled_plugins:
+        execution_steps.append({"step": "log-cluster", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "log-cluster", "status": "skipped"})
+        cluster_mod = _import_plugin_domain("log-cluster")
+        if cluster_mod and hasattr(cluster_mod, "cluster_logs"):
+            try:
+                cluster_res = cluster_mod.cluster_logs(sanitized_text)
+                (results_dir / "clusters" / "clusters.json").write_text(json.dumps(cluster_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "log-cluster", "status": "success", "files_produced": ["clusters/clusters.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "log-cluster", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no cluster de logs: {e}")
+        else:
+            execution_steps.append({"step": "log-cluster", "status": "skipped"})
 
-    # =========================================================================
-    # ETAPA 5: log-timeline
-    # =========================================================================
+    # Step 5: log-timeline
     timeline_res = {}
-    timeline_mod = _import_plugin_domain("log-timeline")
-    if timeline_mod and hasattr(timeline_mod, "generate_log_timeline"):
-        try:
-            timeline_res = timeline_mod.generate_log_timeline(sanitized_text, {"output_format": "markdown"})
-            (results_dir / "timelines" / "timeline.json").write_text(json.dumps(timeline_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            if "formatted_output" in timeline_res:
-                (results_dir / "timelines" / "timeline.md").write_text(timeline_res["formatted_output"], encoding="utf-8")
-            execution_steps.append({"step": "log-timeline", "status": "success", "files_produced": ["timelines/timeline.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "log-timeline", "status": "error", "error": str(e)})
-            warnings.append(f"Falha na timeline: {e}")
+    if "log-timeline" in disabled_plugins:
+        execution_steps.append({"step": "log-timeline", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "log-timeline", "status": "skipped"})
+        timeline_mod = _import_plugin_domain("log-timeline")
+        if timeline_mod and hasattr(timeline_mod, "generate_log_timeline"):
+            try:
+                timeline_res = timeline_mod.generate_log_timeline(sanitized_text, {"output_format": "markdown"})
+                (results_dir / "timelines" / "timeline.json").write_text(json.dumps(timeline_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                if "formatted_output" in timeline_res:
+                    (results_dir / "timelines" / "timeline.md").write_text(timeline_res["formatted_output"], encoding="utf-8")
+                execution_steps.append({"step": "log-timeline", "status": "success", "files_produced": ["timelines/timeline.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "log-timeline", "status": "error", "error": str(e)})
+                warnings.append(f"Falha na timeline: {e}")
+        else:
+            execution_steps.append({"step": "log-timeline", "status": "skipped"})
 
-    # =========================================================================
-    # ETAPA 6: har-optimizer
-    # =========================================================================
+    # Step 6: har-optimizer
     har_res = {}
-    har_mod = _import_plugin_domain("har-optimizer")
-    if har_files and har_mod and hasattr(har_mod, "optimize_har"):
-        try:
-            har_content = har_files[0].read_text(encoding="utf-8-sig", errors="replace")
-            har_res = har_mod.optimize_har(har_content)
-            (results_dir / "optimized" / "har_optimized.json").write_text(json.dumps(har_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "har-optimizer", "status": "success", "files_produced": ["optimized/har_optimized.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "har-optimizer", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no har-optimizer: {e}")
+    if "har-optimizer" in disabled_plugins:
+        execution_steps.append({"step": "har-optimizer", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "har-optimizer", "status": "skipped", "reason": "Nenhum arquivo HAR fornecido" if not har_files else "plugin indisponivel"})
+        har_mod = _import_plugin_domain("har-optimizer")
+        if assets["har_files"] and har_mod and hasattr(har_mod, "optimize_har"):
+            try:
+                har_content = assets["har_files"][0].read_text(encoding="utf-8-sig", errors="replace")
+                har_res = har_mod.optimize_har(har_content)
+                (results_dir / "optimized" / "har_optimized.json").write_text(json.dumps(har_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "har-optimizer", "status": "success", "files_produced": ["optimized/har_optimized.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "har-optimizer", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no har-optimizer: {e}")
+        else:
+            execution_steps.append({"step": "har-optimizer", "status": "skipped", "reason": "Nenhum arquivo HAR fornecido" if not assets["har_files"] else "plugin indisponivel"})
 
-    # =========================================================================
-    # ETAPA 7: source-extractor
-    # =========================================================================
+    # Step 7: source-extractor
     source_res = {}
-    src_mod = _import_plugin_domain("source-extractor")
-    if source_dirs and src_mod and hasattr(src_mod, "extract_sources"):
-        try:
-            terms = incident_metadata.get("keywords", []) or ["Exception", "Error", "500"]
-            source_res = src_mod.extract_sources({"project_path": str(source_dirs[0]), "terms": terms})
-            (results_dir / "source-extracts" / "extracts.json").write_text(json.dumps(source_res, indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "source-extractor", "status": "success", "files_produced": ["source-extracts/extracts.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "source-extractor", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no source-extractor: {e}")
+    if "source-extractor" in disabled_plugins:
+        execution_steps.append({"step": "source-extractor", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "source-extractor", "status": "skipped", "reason": "Nenhum diretorio de codigo encontrado" if not source_dirs else "plugin indisponivel"})
+        src_mod = _import_plugin_domain("source-extractor")
+        if assets["source_dirs"] and src_mod and hasattr(src_mod, "extract_sources"):
+            try:
+                terms = incident_metadata.get("keywords", []) or ["Exception", "Error", "500"]
+                source_res = src_mod.extract_sources({"project_path": str(assets["source_dirs"][0]), "terms": terms})
+                (results_dir / "source-extracts" / "extracts.json").write_text(json.dumps(source_res, indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "source-extractor", "status": "success", "files_produced": ["source-extracts/extracts.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "source-extractor", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no source-extractor: {e}")
+        else:
+            execution_steps.append({"step": "source-extractor", "status": "skipped", "reason": "Nenhum diretorio de codigo encontrado" if not assets["source_dirs"] else "plugin indisponivel"})
 
-    # =========================================================================
-    # ETAPA 8: evidence-package
-    # =========================================================================
-    evidence_res = {}
-    evidence_mod = _import_plugin_domain("evidence-package")
-    if evidence_mod and hasattr(evidence_mod, "build_evidence_package"):
-        try:
-            ev_payload = {
-                "incident_info": incident_metadata,
-                "summary_logs": log_opt_res.get("summary", {}),
-                "clusters": cluster_res.get("clusters", []),
-                "timeline": timeline_res.get("timeline", []),
-                "har": har_res.get("optimized_har") if har_res else None,
-                "time_range": incident_metadata.get("time_range")
-            }
-            evidence_res = evidence_mod.build_evidence_package(ev_payload)
-            (results_dir / "evidence" / "manifest.json").write_text(json.dumps(evidence_res.get("manifest", {}), indent=2, ensure_ascii=False), encoding="utf-8")
-            (results_dir / "evidence" / "incident-summary.json").write_text(json.dumps(evidence_res.get("incident_summary", {}), indent=2, ensure_ascii=False), encoding="utf-8")
-            (results_dir / "evidence" / "evidence.json").write_text(json.dumps(evidence_res.get("evidence", []), indent=2, ensure_ascii=False), encoding="utf-8")
-            (results_dir / "evidence" / "timeline.json").write_text(json.dumps(evidence_res.get("timeline", []), indent=2, ensure_ascii=False), encoding="utf-8")
-            (results_dir / "evidence" / "references.json").write_text(json.dumps(evidence_res.get("references", {}), indent=2, ensure_ascii=False), encoding="utf-8")
-            execution_steps.append({"step": "evidence-package", "status": "success", "files_produced": ["evidence/evidence.json", "evidence/incident-summary.json"]})
-        except Exception as e:
-            execution_steps.append({"step": "evidence-package", "status": "error", "error": str(e)})
-            warnings.append(f"Falha no evidence-package: {e}")
+    # Step 8: evidence-package
+    if "evidence-package" in disabled_plugins:
+        execution_steps.append({"step": "evidence-package", "status": "skipped", "reason": "desabilitado por configuracao"})
     else:
-        execution_steps.append({"step": "evidence-package", "status": "skipped"})
+        evidence_mod = _import_plugin_domain("evidence-package")
+        if evidence_mod and hasattr(evidence_mod, "build_evidence_package"):
+            try:
+                ev_payload = {
+                    "incident_info": incident_metadata,
+                    "summary_logs": log_opt_res.get("summary", {}),
+                    "clusters": cluster_res.get("clusters", []),
+                    "timeline": timeline_res.get("timeline", []),
+                    "har": har_res.get("optimized_har") if har_res else None,
+                    "time_range": incident_metadata.get("time_range")
+                }
+                evidence_res = evidence_mod.build_evidence_package(ev_payload)
+                (results_dir / "evidence" / "manifest.json").write_text(json.dumps(evidence_res.get("manifest", {}), indent=2, ensure_ascii=False), encoding="utf-8")
+                (results_dir / "evidence" / "incident-summary.json").write_text(json.dumps(evidence_res.get("incident_summary", {}), indent=2, ensure_ascii=False), encoding="utf-8")
+                (results_dir / "evidence" / "evidence.json").write_text(json.dumps(evidence_res.get("evidence", []), indent=2, ensure_ascii=False), encoding="utf-8")
+                (results_dir / "evidence" / "timeline.json").write_text(json.dumps(evidence_res.get("timeline", []), indent=2, ensure_ascii=False), encoding="utf-8")
+                (results_dir / "evidence" / "references.json").write_text(json.dumps(evidence_res.get("references", {}), indent=2, ensure_ascii=False), encoding="utf-8")
+                execution_steps.append({"step": "evidence-package", "status": "success", "files_produced": ["evidence/evidence.json", "evidence/incident-summary.json"]})
+            except Exception as e:
+                execution_steps.append({"step": "evidence-package", "status": "error", "error": str(e)})
+                warnings.append(f"Falha no evidence-package: {e}")
+        else:
+            execution_steps.append({"step": "evidence-package", "status": "skipped"})
 
-    # =========================================================================
-    # MANIFESTO E RESUMO DE EXECUCAO
-    # =========================================================================
     end_time = datetime.datetime.now(datetime.timezone.utc)
     rel_results_dir = str(results_dir.relative_to(analysis_dir)).replace("\\", "/")
 
@@ -299,7 +369,6 @@ def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] =
     (results_dir / "execution-summary.json").write_text(json.dumps(exec_summary, indent=2, ensure_ascii=False), encoding="utf-8")
     (results_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Relatorio executivo markdown
     rep_lines = [
         f"# 📋 Relatório de Execução da Análise — {rel_results_dir}",
         "",
@@ -325,3 +394,109 @@ def run_orchestration(analysis_dir_str: str, options: Optional[Dict[str, Any]] =
         "manifest": manifest,
         "warnings": warnings
     }
+
+
+def run_single_plugin(analysis_dir_str: str, plugin_name: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Acao 'run_plugin': executa um unico plugin isolado sobre o diretorio de analise."""
+    options = options or {}
+    analysis_dir = Path(analysis_dir_str).resolve()
+    if not analysis_dir.exists() or not analysis_dir.is_dir():
+        raise ValueError(f"Diretorio de analise inexistente: {analysis_dir_str}")
+
+    assets = scan_directory_assets(analysis_dir)
+
+    mod = _import_plugin_domain(plugin_name)
+    if not mod:
+        raise ValueError(f"Plugin desconhecido ou nao encontrado: {plugin_name}")
+
+    if plugin_name == "log-sanitizer":
+        log_text = "\n".join(f.read_text(encoding="utf-8-sig", errors="replace") for f in assets["raw_logs"])
+        return mod.sanitize_content(log_text, options)
+    elif plugin_name == "incident-filter":
+        log_text = "\n".join(f.read_text(encoding="utf-8-sig", errors="replace") for f in assets["raw_logs"])
+        return mod.filter_incident_logs(log_text, options)
+    elif plugin_name == "log-optimizer":
+        log_text = "\n".join(f.read_text(encoding="utf-8-sig", errors="replace") for f in assets["raw_logs"])
+        return mod.optimize_logs(log_text)
+    elif plugin_name == "log-cluster":
+        log_text = "\n".join(f.read_text(encoding="utf-8-sig", errors="replace") for f in assets["raw_logs"])
+        return mod.cluster_logs(log_text, options)
+    elif plugin_name == "log-timeline":
+        log_text = "\n".join(f.read_text(encoding="utf-8-sig", errors="replace") for f in assets["raw_logs"])
+        return mod.generate_log_timeline(log_text, options)
+    elif plugin_name == "har-optimizer":
+        if not assets["har_files"]:
+            raise ValueError("Nenhum arquivo HAR encontrado para executar har-optimizer.")
+        har_str = assets["har_files"][0].read_text(encoding="utf-8-sig", errors="replace")
+        return mod.optimize_har(har_str, options)
+    elif plugin_name == "source-extractor":
+        src_path = str(assets["source_dirs"][0]) if assets["source_dirs"] else str(analysis_dir)
+        opts = dict(options)
+        opts["project_path"] = src_path
+        return mod.extract_sources(opts)
+    elif plugin_name == "evidence-package":
+        return mod.build_evidence_package(options)
+    else:
+        raise ValueError(f"Plugin '{plugin_name}' nao suporta execucao isolada.")
+
+
+def validate_results_directory(results_dir_str: str) -> Dict[str, Any]:
+    """Acao 'validate_results': valida integridade dos artefatos em uma pasta de resultados."""
+    target_dir = Path(results_dir_str).resolve()
+    if not target_dir.exists() or not target_dir.is_dir():
+        # Tentar procurar subpasta analysis-results-* se foi passado o analysis_dir
+        sub_res = list(target_dir.glob("analysis-results-*"))
+        if sub_res:
+            target_dir = sub_res[0]
+        else:
+            raise ValueError(f"Diretorio de resultados inexistente: {results_dir_str}")
+
+    manifest_file = target_dir / "manifest.json"
+    summary_file = target_dir / "execution-summary.json"
+
+    is_valid = True
+    missing_files = []
+
+    if not manifest_file.exists():
+        is_valid = False
+        missing_files.append("manifest.json")
+    if not summary_file.exists():
+        is_valid = False
+        missing_files.append("execution-summary.json")
+
+    manifest_data = {}
+    if manifest_file.exists():
+        try:
+            manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+            for f_rel in manifest_data.get("files", []):
+                if not (target_dir / f_rel).exists():
+                    is_valid = False
+                    missing_files.append(f_rel)
+        except Exception:
+            is_valid = False
+
+    return {
+        "results_directory": str(target_dir).replace("\\", "/"),
+        "is_valid": is_valid,
+        "missing_files": missing_files,
+        "manifest_version": manifest_data.get("orchestrator_version", "unknown")
+    }
+
+
+def resume_orchestration(analysis_or_results_dir_str: str, options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Acao 'resume': retoma execucao a partir de resultados anteriores."""
+    target_dir = Path(analysis_or_results_dir_str).resolve()
+    if not target_dir.exists():
+        raise ValueError(f"Diretorio inexistente para retoma: {analysis_or_results_dir_str}")
+
+    val = validate_results_directory(str(target_dir))
+    if val["is_valid"]:
+        return {
+            "status": "already_completed",
+            "message": "Diretorio de resultados já validado e completo.",
+            "results_directory": val["results_directory"]
+        }
+
+    # Se faltar arquivos ou for diretorio pai, roda run_orchestration
+    parent_analysis_dir = target_dir.parent if target_dir.name.startswith("analysis-results-") else target_dir
+    return run_orchestration(str(parent_analysis_dir), options)
