@@ -186,6 +186,24 @@
       "command": "stract-log",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.0.0/stract-log.zip",
       "min_toolbox_version": "1.0.0"
+    },
+    {
+      "id": "log-sanitizer",
+      "name": "Log Sanitizer",
+      "version": "1.0.0",
+      "description": "Sanitiza e mascara dados sensíveis em arquivos de texto, JSON, JSON Lines e HAR antes do compartilhamento.",
+      "author": "Rodrigo Lessa",
+      "icon": "ShieldAlert",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/log-sanitizer-1.0.0/log-sanitizer.zip",
+      "entry": "main.py",
+      "tags": [
+        "sanitizacao",
+        "seguranca",
+        "mascaramento",
+        "privacidade",
+        "logs",
+        "har"
+      ]
     }
   ]
 }
