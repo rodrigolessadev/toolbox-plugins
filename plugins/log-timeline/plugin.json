@@ -1,7 +1,0 @@
-{
-  "name": "Log Timeline",
-  "version": "1.0.0",
-  "description": "Gera linha do tempo cronológica ordenada de eventos relevantes de logs com métricas de incidentes.",
-  "language": "python",
-  "entry": "main.py"
-}

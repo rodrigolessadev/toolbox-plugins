@@ -1,7 +1,0 @@
-{
-  "name": "HAR Optimizer",
-  "version": "1.0.0",
-  "description": "Processa e otimiza arquivos HAR, extraindo evidências de falhas, lentidão e sequência de requisições HTTP com mascaramento de dados sensíveis.",
-  "language": "python",
-  "entry": "main.py"
-}
