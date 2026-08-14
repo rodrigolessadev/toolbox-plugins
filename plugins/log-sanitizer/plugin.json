@@ -1,7 +1,0 @@
-{
-  "name": "Log Sanitizer",
-  "version": "1.0.0",
-  "description": "Sanitiza e mascara dados sensíveis em arquivos de texto, JSON, JSON Lines e HAR antes do compartilhamento.",
-  "language": "python",
-  "entry": "main.py"
-}
