@@ -1,0 +1,7 @@
+{
+  "name": "Source Extractor",
+  "version": "1.0.0",
+  "description": "Localiza e extrai trechos de código-fonte por termos, símbolos, rotas e exceções.",
+  "language": "python",
+  "entry": "main.py"
+}
