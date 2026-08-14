@@ -125,22 +125,66 @@ def run_gui():
     root.geometry("950x720")
     root.configure(bg="#0e1014")
 
+    DARK = {
+        "bg": "#0e1014",
+        "bg2": "#161a21",
+        "input_bg": "#161a21",
+        "fg": "#e8eaed",
+        "muted": "#8b94a3",
+        "accent": "#6aa3ff",
+        "border": "#2b3240"
+    }
+
     style = ttk.Style(root)
     try:
         style.theme_use("clam")
     except Exception:
         pass
 
-    style.configure(".", background="#0e1014", foreground="#e8eaed")
-    style.configure("TFrame", background="#0e1014")
-    style.configure("TLabel", background="#0e1014", foreground="#e8eaed", font=("Segoe UI", 10))
-    style.configure("Title.TLabel", font=("Segoe UI", 13, "bold"), foreground="#6aa3ff")
-    style.configure("TButton", padding=(10, 5), font=("Segoe UI", 9))
-    style.configure("Accent.TButton", background="#6aa3ff", foreground="#ffffff", font=("Segoe UI", 9, "bold"))
+    style.configure(".", background=DARK["bg"], foreground=DARK["fg"])
+    style.configure("TFrame", background=DARK["bg"])
+    style.configure("TLabel", background=DARK["bg"], foreground=DARK["fg"], font=("Segoe UI", 10))
+    style.configure("Title.TLabel", font=("Segoe UI", 13, "bold"), foreground=DARK["accent"])
+    style.configure("TButton", padding=(10, 5), font=("Segoe UI", 9), background=DARK["bg2"], foreground=DARK["fg"])
+    style.configure("Accent.TButton", background=DARK["accent"], foreground="#ffffff", font=("Segoe UI", 9, "bold"))
+    style.configure("TCheckbutton", background=DARK["bg"], foreground=DARK["fg"])
+
+    style.configure("TEntry",
+        fieldbackground=DARK["input_bg"],
+        foreground=DARK["fg"],
+        insertcolor=DARK["fg"],
+        bordercolor=DARK["border"],
+        lightcolor=DARK["border"],
+        darkcolor=DARK["border"]
+    )
+    style.map("TEntry",
+        fieldbackground=[("focus", "#1f242d"), ("readonly", DARK["input_bg"])],
+        foreground=[("disabled", DARK["muted"])],
+        bordercolor=[("focus", DARK["accent"])]
+    )
+
+    style.configure("TCombobox",
+        fieldbackground=DARK["input_bg"],
+        background=DARK["bg2"],
+        foreground=DARK["fg"],
+        arrowcolor=DARK["fg"],
+        bordercolor=DARK["border"]
+    )
+    style.map("TCombobox",
+        fieldbackground=[("readonly", DARK["input_bg"]), ("focus", "#1f242d")],
+        selectbackground=[("readonly", DARK["accent"])],
+        selectforeground=[("readonly", "#ffffff")]
+    )
+
+    # Cores do popup do Combobox
+    root.option_add("*TCombobox*Listbox.background", DARK["input_bg"])
+    root.option_add("*TCombobox*Listbox.foreground", DARK["fg"])
+    root.option_add("*TCombobox*Listbox.selectBackground", DARK["accent"])
+    root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
 
     top = ttk.Frame(root, style="TFrame")
     top.pack(fill="x", padx=16, pady=12)
-    ttk.Label(top, text="🚀 Analysis Orchestrator Pipeline", style="Title.TLabel").pack(side="left")
+    ttk.Label(top, text="Analysis Orchestrator Pipeline", style="Title.TLabel").pack(side="left")
 
     dir_var = tk.StringVar()
     action_var = tk.StringVar(value="run_analysis")
@@ -149,14 +193,43 @@ def run_gui():
     row_dir = ttk.Frame(root, style="TFrame")
     row_dir.pack(fill="x", padx=16, pady=6)
     ttk.Label(row_dir, text="Diretório de Análise:").pack(side="left", padx=(0, 8))
-    ttk.Entry(row_dir, textvariable=dir_var, width=50).pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+    # Entrada de texto com fundo e contraste explicitos
+    entry_dir = tk.Entry(
+        row_dir,
+        textvariable=dir_var,
+        font=("Segoe UI", 10),
+        bg=DARK["input_bg"],
+        fg=DARK["fg"],
+        insertbackground=DARK["fg"],
+        relief="solid",
+        bd=1,
+        highlightthickness=1,
+        highlightbackground=DARK["border"],
+        highlightcolor=DARK["accent"]
+    )
+    entry_dir.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=4)
 
     def select_dir():
         dn = filedialog.askdirectory(title="Selecione o diretório de análise")
         if dn:
             dir_var.set(dn)
 
-    ttk.Button(row_dir, text="Procurar...", command=select_dir).pack(side="left")
+    btn_browse = tk.Button(
+        row_dir,
+        text="Procurar...",
+        font=("Segoe UI", 9),
+        bg=DARK["bg2"],
+        fg=DARK["fg"],
+        activebackground=DARK["border"],
+        relief="solid",
+        bd=1,
+        padx=10,
+        pady=2,
+        cursor="hand2",
+        command=select_dir
+    )
+    btn_browse.pack(side="left")
 
     row_opts = ttk.Frame(root, style="TFrame")
     row_opts.pack(fill="x", padx=16, pady=4)
@@ -183,7 +256,21 @@ def run_gui():
 
     btn_row = ttk.Frame(root, style="TFrame")
     btn_row.pack(fill="x", padx=16, pady=(0, 12))
-    ttk.Button(btn_row, text="Executar Ação", style="Accent.TButton", command=process).pack(side="right")
+
+    btn_run = tk.Button(
+        btn_row,
+        text="Executar Ação",
+        font=("Segoe UI", 10, "bold"),
+        bg=DARK["accent"],
+        fg="#ffffff",
+        activebackground="#5090f0",
+        relief="flat",
+        padx=16,
+        pady=6,
+        cursor="hand2",
+        command=process
+    )
+    btn_run.pack(side="right")
 
     root.mainloop()
 
