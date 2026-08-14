@@ -1,0 +1,7 @@
+{
+  "name": "Log Cluster",
+  "version": "1.0.0",
+  "description": "Agrupa mensagens de log em templates normalizados determinísticos, calculando frequência e taxa de redução.",
+  "language": "python",
+  "entry": "main.py"
+}

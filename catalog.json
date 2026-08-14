@@ -204,6 +204,24 @@
         "logs",
         "har"
       ]
+    },
+    {
+      "id": "log-cluster",
+      "name": "Log Cluster",
+      "version": "1.0.0",
+      "description": "Agrupa mensagens de log em templates normalizados determinísticos, calculando frequência e taxa de redução.",
+      "author": "Rodrigo Lessa",
+      "icon": "Layers",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/log-cluster-1.0.0/log-cluster.zip",
+      "entry": "main.py",
+      "tags": [
+        "clustering",
+        "logs",
+        "templates",
+        "analise",
+        "incidentes",
+        "padroes"
+      ]
     }
   ]
 }
