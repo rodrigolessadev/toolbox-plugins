@@ -154,8 +154,6 @@
       "description": "Orquestra a análise ponta a ponta executando sanitização, filtragem, otimização, timeline e evidências.",
       "version": "1.0.0",
       "language": "python",
-      "entry": "main.py",
-      "path": "plugins/analysis-orchestrator",
       "author": "Rodrigo Lessa",
       "tags": [
         "logs",
@@ -163,7 +161,13 @@
         "timeline",
         "orchestrator",
         "incident"
-      ]
+      ],
+      "id": "analysis-orchestrator",
+      "icon": "workflow",
+      "command": "analysis-orchestrator",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/analysis-orchestrator-1.0.0/analysis-orchestrator.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-14"
     }
   ]
 }
