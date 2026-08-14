@@ -1,6 +1,6 @@
 {
   "name": "Analysis Orchestrator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Orquestra a análise ponta a ponta executando sanitização, filtragem, otimização, timeline e evidências.",
   "language": "python",
   "entry": "main.py"
