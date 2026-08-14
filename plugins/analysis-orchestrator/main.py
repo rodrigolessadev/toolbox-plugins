@@ -114,49 +114,80 @@ def handle_ipc(input_data: dict) -> dict:
         }
 
 
+def _get_theme():
+    try:
+        from shared.theme_utils import (
+            THEME,
+            create_card_frame,
+            create_info_banner,
+            create_modal_window,
+            create_primary_button,
+            create_secondary_button,
+            create_styled_entry,
+            create_styled_text,
+            setup_app_theme,
+        )
+        return {
+            "THEME": THEME,
+            "create_card_frame": create_card_frame,
+            "create_info_banner": create_info_banner,
+            "create_modal_window": create_modal_window,
+            "create_primary_button": create_primary_button,
+            "create_secondary_button": create_secondary_button,
+            "create_styled_entry": create_styled_entry,
+            "create_styled_text": create_styled_text,
+            "setup_app_theme": setup_app_theme,
+        }
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from shared.theme_utils import (
+            THEME,
+            create_card_frame,
+            create_info_banner,
+            create_modal_window,
+            create_primary_button,
+            create_secondary_button,
+            create_styled_entry,
+            create_styled_text,
+            setup_app_theme,
+        )
+        return {
+            "THEME": THEME,
+            "create_card_frame": create_card_frame,
+            "create_info_banner": create_info_banner,
+            "create_modal_window": create_modal_window,
+            "create_primary_button": create_primary_button,
+            "create_secondary_button": create_secondary_button,
+            "create_styled_entry": create_styled_entry,
+            "create_styled_text": create_styled_text,
+            "setup_app_theme": setup_app_theme,
+        }
+
+
 def show_help_dialog(parent):
-    """Exibe janela modal com instrucoes detalhadas de operacao."""
+    """Exibe janela modal com instrucoes detalhadas de operacao utilizando o tema compartilhado."""
+    theme_helpers = _get_theme()
+    create_modal_window = theme_helpers["create_modal_window"]
+    create_styled_text = theme_helpers["create_styled_text"]
+    create_primary_button = theme_helpers["create_primary_button"]
+    THEME = theme_helpers["THEME"]
+
     import tkinter as tk
-    from tkinter.scrolledtext import ScrolledText
 
-    DARK = {
-        "bg": "#0e1014",
-        "bg2": "#161a21",
-        "fg": "#e8eaed",
-        "muted": "#8b94a3",
-        "accent": "#6aa3ff",
-        "border": "#2b3240"
-    }
+    win = create_modal_window(parent, "Guia de Uso & Instruções — Analysis Orchestrator", "880x620")
 
-    win = tk.Toplevel(parent)
-    win.title("Guia de Uso & Instruções — Analysis Orchestrator")
-    win.geometry("860x620")
-    win.configure(bg=DARK["bg"])
-    win.transient(parent)
-    win.grab_set()
-
-    header_frame = tk.Frame(win, bg=DARK["bg"])
+    header_frame = tk.Frame(win, bg=THEME["bg_base"])
     header_frame.pack(fill="x", padx=20, pady=(16, 8))
 
     tk.Label(
         header_frame,
         text="📘 Guia de Uso do Analysis Orchestrator",
         font=("Segoe UI", 13, "bold"),
-        bg=DARK["bg"],
-        fg=DARK["accent"]
+        bg=THEME["bg_base"],
+        fg=THEME["accent"]
     ).pack(side="left")
 
-    help_txt = ScrolledText(
-        win,
-        bg=DARK["bg2"],
-        fg=DARK["fg"],
-        insertbackground=DARK["fg"],
-        font=("Segoe UI", 10),
-        relief="solid",
-        bd=1,
-        highlightthickness=1,
-        highlightbackground=DARK["border"]
-    )
+    help_txt = create_styled_text(win, font=("Segoe UI", 9.5))
     help_txt.pack(fill="both", expand=True, padx=20, pady=10)
 
     guide_text = """================================================================================
@@ -233,182 +264,144 @@ Todos os resultados são gravados dentro de 'analysis-results-YYYYMMDD-HHMMSS/':
     help_txt.insert("1.0", guide_text)
     help_txt.configure(state="disabled")
 
-    btn_close = tk.Button(
-        win,
-        text="Fechar",
-        font=("Segoe UI", 9, "bold"),
-        bg=DARK["accent"],
-        fg="#ffffff",
-        relief="flat",
-        padx=16,
-        pady=5,
-        cursor="hand2",
-        command=win.destroy
-    )
-    btn_close.pack(pady=10)
+    btn_close = create_primary_button(win, "Fechar", win.destroy)
+    btn_close.pack(pady=(0, 14))
 
 
 def run_gui():
-    """Interface grafica Tkinter (Dark Theme alinhado ao Toolbox)."""
+    """Interface gráfica Tkinter remodelada com Design System Soft Dark (Slate Navy)."""
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
-    from tkinter.scrolledtext import ScrolledText
+
+    theme_helpers = _get_theme()
+    THEME = theme_helpers["THEME"]
+    setup_app_theme = theme_helpers["setup_app_theme"]
+    create_card_frame = theme_helpers["create_card_frame"]
+    create_styled_entry = theme_helpers["create_styled_entry"]
+    create_styled_text = theme_helpers["create_styled_text"]
+    create_primary_button = theme_helpers["create_primary_button"]
+    create_secondary_button = theme_helpers["create_secondary_button"]
+    create_info_banner = theme_helpers["create_info_banner"]
 
     root = tk.Tk()
     root.title("Analysis Orchestrator — Toolbox")
     root.geometry("960x740")
-    root.configure(bg="#0e1014")
+    setup_app_theme(root)
 
-    DARK = {
-        "bg": "#0e1014",
-        "bg2": "#161a21",
-        "bg_card": "#12151c",
-        "input_bg": "#161a21",
-        "fg": "#e8eaed",
-        "muted": "#8b94a3",
-        "accent": "#6aa3ff",
-        "border": "#2b3240",
-        "info_border": "#3b82f6"
-    }
+    # 1. Header Frame
+    header = ttk.Frame(root, style="TFrame")
+    header.pack(fill="x", padx=18, pady=(14, 8))
 
-    style = ttk.Style(root)
-    try:
-        style.theme_use("clam")
-    except Exception:
-        pass
+    title_box = ttk.Frame(header, style="TFrame")
+    title_box.pack(side="left")
 
-    style.configure(".", background=DARK["bg"], foreground=DARK["fg"])
-    style.configure("TFrame", background=DARK["bg"])
-    style.configure("TLabel", background=DARK["bg"], foreground=DARK["fg"], font=("Segoe UI", 10))
-    style.configure("Title.TLabel", font=("Segoe UI", 13, "bold"), foreground=DARK["accent"])
-    style.configure("TButton", padding=(10, 5), font=("Segoe UI", 9), background=DARK["bg2"], foreground=DARK["fg"])
-    style.configure("Accent.TButton", background=DARK["accent"], foreground="#ffffff", font=("Segoe UI", 9, "bold"))
-    style.configure("TCheckbutton", background=DARK["bg"], foreground=DARK["fg"])
-
-    style.configure("TEntry",
-        fieldbackground=DARK["input_bg"],
-        foreground=DARK["fg"],
-        insertcolor=DARK["fg"],
-        bordercolor=DARK["border"],
-        lightcolor=DARK["border"],
-        darkcolor=DARK["border"]
+    ttk.Label(title_box, text="Analysis Orchestrator", style="Title.TLabel").pack(side="left")
+    
+    badge = tk.Label(
+        title_box,
+        text="v1.0.1",
+        font=("Segoe UI", 8, "bold"),
+        bg=THEME["bg_hover"],
+        fg=THEME["fg_secondary"],
+        padx=6,
+        pady=1
     )
-    style.map("TEntry",
-        fieldbackground=[("focus", "#1f242d"), ("readonly", DARK["input_bg"])],
-        foreground=[("disabled", DARK["muted"])],
-        bordercolor=[("focus", DARK["accent"])]
-    )
+    badge.pack(side="left", padx=(8, 0))
 
-    style.configure("TCombobox",
-        fieldbackground=DARK["input_bg"],
-        background=DARK["bg2"],
-        foreground=DARK["fg"],
-        arrowcolor=DARK["fg"],
-        bordercolor=DARK["border"]
-    )
-    style.map("TCombobox",
-        fieldbackground=[("readonly", DARK["input_bg"]), ("focus", "#1f242d")],
-        selectbackground=[("readonly", DARK["accent"])],
-        selectforeground=[("readonly", "#ffffff")]
-    )
-
-    # Cores do popup do Combobox
-    root.option_add("*TCombobox*Listbox.background", DARK["input_bg"])
-    root.option_add("*TCombobox*Listbox.foreground", DARK["fg"])
-    root.option_add("*TCombobox*Listbox.selectBackground", DARK["accent"])
-    root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
-
-    # Header
-    top = ttk.Frame(root, style="TFrame")
-    top.pack(fill="x", padx=16, pady=(12, 6))
-    ttk.Label(top, text="Analysis Orchestrator Pipeline", style="Title.TLabel").pack(side="left")
-
-    btn_help = tk.Button(
-        top,
-        text="ℹ️ Ajuda & Instruções",
-        font=("Segoe UI", 9),
-        bg=DARK["bg2"],
-        fg=DARK["accent"],
-        activebackground=DARK["border"],
-        relief="solid",
-        bd=1,
-        padx=10,
-        pady=2,
-        cursor="hand2",
+    btn_help = create_secondary_button(
+        header,
+        "ℹ️ Ajuda & Instruções",
         command=lambda: show_help_dialog(root)
     )
     btn_help.pack(side="right")
 
-    # Banner de Instruções Rápidas
-    instruction_card = tk.Frame(root, bg=DARK["bg_card"], bd=1, relief="solid", highlightthickness=1, highlightbackground=DARK["border"])
-    instruction_card.pack(fill="x", padx=16, pady=(0, 10))
+    # 2. Info Banner
+    create_info_banner(
+        root,
+        "💡 Como usar: 1. Selecione o diretório com os dados da análise  •  2. Escolha a ação  •  3. Clique em 'Executar Ação'. Clique em 'Ajuda & Instruções' para o guia completo."
+    ).pack(fill="x", padx=18, pady=(0, 10))
 
-    tk.Label(
-        instruction_card,
-        text="💡 Como usar: 1. Selecione a pasta com os dados da análise  •  2. Escolha a ação  •  3. Clique em 'Executar Ação'. Clique em 'Ajuda & Instruções' para detalhes.",
-        font=("Segoe UI", 9),
-        bg=DARK["bg_card"],
-        fg=DARK["muted"]
-    ).pack(padx=12, pady=6, anchor="w")
+    # 3. Card de Configurações
+    card_config = create_card_frame(root)
+    card_config.pack(fill="x", padx=18, pady=(0, 10))
+
+    card_inner = ttk.Frame(card_config, style="Card.TFrame")
+    card_inner.pack(fill="x", padx=14, pady=12)
+
+    ttk.Label(card_inner, text="Configurações da Investigação", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
 
     dir_var = tk.StringVar()
     action_var = tk.StringVar(value="run_analysis")
     dry_var = tk.BooleanVar(value=False)
 
-    row_dir = ttk.Frame(root, style="TFrame")
-    row_dir.pack(fill="x", padx=16, pady=6)
-    ttk.Label(row_dir, text="Diretório de Análise:").pack(side="left", padx=(0, 8))
+    # Linha do Diretório
+    row_dir = ttk.Frame(card_inner, style="Card.TFrame")
+    row_dir.pack(fill="x", pady=(0, 8))
 
-    entry_dir = tk.Entry(
-        row_dir,
-        textvariable=dir_var,
-        font=("Segoe UI", 10),
-        bg=DARK["input_bg"],
-        fg=DARK["fg"],
-        insertbackground=DARK["fg"],
-        relief="solid",
-        bd=1,
-        highlightthickness=1,
-        highlightbackground=DARK["border"],
-        highlightcolor=DARK["accent"]
-    )
-    entry_dir.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=4)
+    ttk.Label(row_dir, text="Diretório de Análise:", style="Card.TLabel").pack(side="left", padx=(0, 8))
+    
+    entry_dir = create_styled_entry(row_dir, textvariable=dir_var)
+    entry_dir.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=3)
 
     def select_dir():
         dn = filedialog.askdirectory(title="Selecione o diretório de análise")
         if dn:
             dir_var.set(dn)
 
-    btn_browse = tk.Button(
-        row_dir,
-        text="Procurar...",
-        font=("Segoe UI", 9),
-        bg=DARK["bg2"],
-        fg=DARK["fg"],
-        activebackground=DARK["border"],
-        relief="solid",
-        bd=1,
-        padx=10,
-        pady=2,
-        cursor="hand2",
-        command=select_dir
-    )
+    btn_browse = create_secondary_button(row_dir, "Procurar...", command=select_dir)
     btn_browse.pack(side="left")
 
-    row_opts = ttk.Frame(root, style="TFrame")
-    row_opts.pack(fill="x", padx=16, pady=4)
-    ttk.Label(row_opts, text="Ação:").pack(side="left", padx=(0, 8))
-    ttk.Combobox(row_opts, textvariable=action_var, values=["run_analysis", "discover", "validate_results", "resume"], width=18, state="readonly").pack(side="left", padx=(0, 16))
-    ttk.Checkbutton(row_opts, text="Simulação (Dry Run)", variable=dry_var).pack(side="left")
+    # Linha de Opções
+    row_opts = ttk.Frame(card_inner, style="Card.TFrame")
+    row_opts.pack(fill="x")
 
-    out_text = ScrolledText(root, bg="#161a21", fg="#e8eaed", insertbackground="#e8eaed", font=("Consolas", 10))
-    out_text.pack(fill="both", expand=True, padx=16, pady=10)
+    ttk.Label(row_opts, text="Ação:", style="Card.TLabel").pack(side="left", padx=(0, 8))
+    
+    cb_action = ttk.Combobox(
+        row_opts,
+        textvariable=action_var,
+        values=["run_analysis", "discover", "validate_results", "resume"],
+        width=18,
+        state="readonly"
+    )
+    cb_action.pack(side="left", padx=(0, 18))
+
+    chk_dry = ttk.Checkbutton(
+        row_opts,
+        text="Simulação (Dry Run)",
+        variable=dry_var,
+        style="Card.TCheckbutton"
+    )
+    chk_dry.pack(side="left")
+
+    # 4. Card de Resultados & Console
+    card_output = create_card_frame(root)
+    card_output.pack(fill="both", expand=True, padx=18, pady=(0, 10))
+
+    out_inner = ttk.Frame(card_output, style="Card.TFrame")
+    out_inner.pack(fill="both", expand=True, padx=14, pady=12)
+
+    ttk.Label(out_inner, text="Console de Execução & Relatório", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+
+    out_text = create_styled_text(out_inner, font=("Consolas", 9.5))
+    out_text.pack(fill="both", expand=True)
+
+    # 5. Barra Inferior de Ações
+    bottom_bar = ttk.Frame(root, style="TFrame")
+    bottom_bar.pack(fill="x", padx=18, pady=(0, 14))
+
+    lbl_status = ttk.Label(bottom_bar, text="Pronto.", style="Muted.TLabel")
+    lbl_status.pack(side="left")
 
     def process():
         dn = dir_var.get().strip()
         if not dn:
-            messagebox.showwarning("Aviso", "Selecione o diretório de análise.")
+            messagebox.showwarning("Aviso", "Selecione o diretório de análise antes de prosseguir.")
             return
+        
+        lbl_status.configure(text="Executando ação...")
+        root.update_idletasks()
+        
         payload = {
             "action": action_var.get(),
             "input": {"analysis_directory": dn},
@@ -417,23 +410,13 @@ def run_gui():
         resp = handle_ipc(payload)
         out_text.delete("1.0", tk.END)
         out_text.insert("1.0", json.dumps(resp, indent=2, ensure_ascii=False))
+        
+        if resp.get("status") == "success":
+            lbl_status.configure(text="✓ Concluído com sucesso.")
+        else:
+            lbl_status.configure(text="⚠ Ocorreu uma falha na execução.")
 
-    btn_row = ttk.Frame(root, style="TFrame")
-    btn_row.pack(fill="x", padx=16, pady=(0, 12))
-
-    btn_run = tk.Button(
-        btn_row,
-        text="Executar Ação",
-        font=("Segoe UI", 10, "bold"),
-        bg=DARK["accent"],
-        fg="#ffffff",
-        activebackground="#5090f0",
-        relief="flat",
-        padx=16,
-        pady=6,
-        cursor="hand2",
-        command=process
-    )
+    btn_run = create_primary_button(bottom_bar, "Executar Ação", command=process)
     btn_run.pack(side="right")
 
     root.mainloop()
