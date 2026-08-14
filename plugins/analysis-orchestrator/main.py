@@ -114,6 +114,140 @@ def handle_ipc(input_data: dict) -> dict:
         }
 
 
+def show_help_dialog(parent):
+    """Exibe janela modal com instrucoes detalhadas de operacao."""
+    import tkinter as tk
+    from tkinter.scrolledtext import ScrolledText
+
+    DARK = {
+        "bg": "#0e1014",
+        "bg2": "#161a21",
+        "fg": "#e8eaed",
+        "muted": "#8b94a3",
+        "accent": "#6aa3ff",
+        "border": "#2b3240"
+    }
+
+    win = tk.Toplevel(parent)
+    win.title("Guia de Uso & Instruções — Analysis Orchestrator")
+    win.geometry("860x620")
+    win.configure(bg=DARK["bg"])
+    win.transient(parent)
+    win.grab_set()
+
+    header_frame = tk.Frame(win, bg=DARK["bg"])
+    header_frame.pack(fill="x", padx=20, pady=(16, 8))
+
+    tk.Label(
+        header_frame,
+        text="📘 Guia de Uso do Analysis Orchestrator",
+        font=("Segoe UI", 13, "bold"),
+        bg=DARK["bg"],
+        fg=DARK["accent"]
+    ).pack(side="left")
+
+    help_txt = ScrolledText(
+        win,
+        bg=DARK["bg2"],
+        fg=DARK["fg"],
+        insertbackground=DARK["fg"],
+        font=("Segoe UI", 10),
+        relief="solid",
+        bd=1,
+        highlightthickness=1,
+        highlightbackground=DARK["border"]
+    )
+    help_txt.pack(fill="both", expand=True, padx=20, pady=10)
+
+    guide_text = """================================================================================
+                    ANALYSIS ORCHESTRATOR — GUIA DE OPERAÇÃO
+================================================================================
+
+O Analysis Orchestrator automatiza de forma determinística toda a esteira de análise 
+e extração de evidências de incidentes, executando sanitização, filtragem, agrupamento, 
+timelines, inspeção de tráfego HTTP/HAR, extração de código e geração de pacotes.
+
+--------------------------------------------------------------------------------
+1. COMO UTILIZAR O PLUGIN
+--------------------------------------------------------------------------------
+Passo 1: Clique em 'Procurar...' e selecione o diretório que contém os artefatos do 
+         incidente a ser investigado.
+Passo 2: Selecione a ação desejada no campo 'Ação'.
+Passo 3: (Opcional) Marque 'Simulação (Dry Run)' caso queira apenas inspecionar o plano 
+         de execução sem criar pastas nem gravar arquivos em disco.
+Passo 4: Clique em 'Executar Ação' e visualize os detalhes da execução no console abaixo.
+
+--------------------------------------------------------------------------------
+2. AÇÕES DISPONÍVEIS
+--------------------------------------------------------------------------------
+• run_analysis:
+  Executa a esteira analítica completa. Cria automaticamente um diretório versionado 
+  'analysis-results-YYYYMMDD-HHMMSS' dentro da pasta de análise e gera todos os 
+  relatórios e artefatos estruturados.
+
+• discover:
+  Realiza uma varredura recursiva de ativos (logs, HAR, pastas de fontes e metadados) 
+  e exibe o plano previsto do pipeline sem gravar nada em disco.
+
+• validate_results:
+  Verifica a integridade de uma pasta de resultados previamente gerada, validando 
+  a existência do 'manifest.json', 'execution-summary.json' e a integridade de todos 
+  os arquivos derivados.
+
+• resume:
+  Retoma a execução do pipeline a partir de uma pasta de resultados existente.
+
+--------------------------------------------------------------------------------
+3. ESTRUTURA DE ARQUIVOS SUPORTADA
+--------------------------------------------------------------------------------
+O plugin reconhece automaticamente e sem necessidade de organização prévia:
+• Logs: .log, .txt, .jsonl, .ndjson, .out, .err (ou dentro de uma pasta 'logs/').
+• Tráfego HTTP: Arquivos .har (ou dentro de uma pasta 'har/').
+• Código-fonte: Pastas 'source/' ou 'src/' contendo arquivos .py, .ts, .js, .java, etc.
+• Metadados de Incidente: 'incident.json' ou 'metadata.json' contendo time_range, 
+  services, levels, keywords e correlation_ids para guiar as filtragens.
+
+--------------------------------------------------------------------------------
+4. ARTEFATOS E RESULTADOS GERADOS
+--------------------------------------------------------------------------------
+Todos os resultados são gravados dentro de 'analysis-results-YYYYMMDD-HHMMSS/':
+• manifest.json              -> Catálogo completo e versão do pipeline.
+• execution-summary.json     -> Detalhamento do status de cada etapa executada.
+• sanitized/                 -> Logs com credenciais e tokens mascarados.
+• filtered/                  -> Logs filtrados pelos critérios do incidente.
+• optimized/                 -> Redução estatística de logs e requisições HAR.
+• clusters/                  -> Agrupamentos por similaridade de templates.
+• timelines/                 -> Linha do tempo cronológica em UTC (JSON e Markdown).
+• source-extracts/           -> Trechos de código extraídos por termos/funções.
+• evidence/                  -> 5 artefatos padronizados para auditoria e relatórios.
+• reports/summary.md         -> Relatório executivo consolidado em Markdown.
+
+--------------------------------------------------------------------------------
+5. SEGURANÇA E PRIVACIDADE
+--------------------------------------------------------------------------------
+• Execução 100% local e determinística (sem IA, APIs externas ou envio de dados).
+• Os arquivos originais NUNCA são modificados ou sobrescritos.
+• Mascaramento automático de JWT, Bearer tokens, senhas, chaves privadas, CPFs e CNPJs.
+"""
+
+    help_txt.insert("1.0", guide_text)
+    help_txt.configure(state="disabled")
+
+    btn_close = tk.Button(
+        win,
+        text="Fechar",
+        font=("Segoe UI", 9, "bold"),
+        bg=DARK["accent"],
+        fg="#ffffff",
+        relief="flat",
+        padx=16,
+        pady=5,
+        cursor="hand2",
+        command=win.destroy
+    )
+    btn_close.pack(pady=10)
+
+
 def run_gui():
     """Interface grafica Tkinter (Dark Theme alinhado ao Toolbox)."""
     import tkinter as tk
@@ -122,17 +256,19 @@ def run_gui():
 
     root = tk.Tk()
     root.title("Analysis Orchestrator — Toolbox")
-    root.geometry("950x720")
+    root.geometry("960x740")
     root.configure(bg="#0e1014")
 
     DARK = {
         "bg": "#0e1014",
         "bg2": "#161a21",
+        "bg_card": "#12151c",
         "input_bg": "#161a21",
         "fg": "#e8eaed",
         "muted": "#8b94a3",
         "accent": "#6aa3ff",
-        "border": "#2b3240"
+        "border": "#2b3240",
+        "info_border": "#3b82f6"
     }
 
     style = ttk.Style(root)
@@ -182,9 +318,38 @@ def run_gui():
     root.option_add("*TCombobox*Listbox.selectBackground", DARK["accent"])
     root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
 
+    # Header
     top = ttk.Frame(root, style="TFrame")
-    top.pack(fill="x", padx=16, pady=12)
+    top.pack(fill="x", padx=16, pady=(12, 6))
     ttk.Label(top, text="Analysis Orchestrator Pipeline", style="Title.TLabel").pack(side="left")
+
+    btn_help = tk.Button(
+        top,
+        text="ℹ️ Ajuda & Instruções",
+        font=("Segoe UI", 9),
+        bg=DARK["bg2"],
+        fg=DARK["accent"],
+        activebackground=DARK["border"],
+        relief="solid",
+        bd=1,
+        padx=10,
+        pady=2,
+        cursor="hand2",
+        command=lambda: show_help_dialog(root)
+    )
+    btn_help.pack(side="right")
+
+    # Banner de Instruções Rápidas
+    instruction_card = tk.Frame(root, bg=DARK["bg_card"], bd=1, relief="solid", highlightthickness=1, highlightbackground=DARK["border"])
+    instruction_card.pack(fill="x", padx=16, pady=(0, 10))
+
+    tk.Label(
+        instruction_card,
+        text="💡 Como usar: 1. Selecione a pasta com os dados da análise  •  2. Escolha a ação  •  3. Clique em 'Executar Ação'. Clique em 'Ajuda & Instruções' para detalhes.",
+        font=("Segoe UI", 9),
+        bg=DARK["bg_card"],
+        fg=DARK["muted"]
+    ).pack(padx=12, pady=6, anchor="w")
 
     dir_var = tk.StringVar()
     action_var = tk.StringVar(value="run_analysis")
@@ -194,7 +359,6 @@ def run_gui():
     row_dir.pack(fill="x", padx=16, pady=6)
     ttk.Label(row_dir, text="Diretório de Análise:").pack(side="left", padx=(0, 8))
 
-    # Entrada de texto com fundo e contraste explicitos
     entry_dir = tk.Entry(
         row_dir,
         textvariable=dir_var,
