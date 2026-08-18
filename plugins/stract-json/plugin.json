@@ -3,5 +3,6 @@
   "version": "1.0.1",
   "description": "Extrai valores de um campo específico a partir de um JSON colado.",
   "language": "python",
-  "entry": "main.py"
+  "entry": "main.py",
+  "icon": "braces"
 }
