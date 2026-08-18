@@ -3,5 +3,6 @@
   "version": "2.2.1",
   "description": "Gera INSERTs SQL para a tabela R070ACC (SQL Server e Oracle).",
   "language": "python",
-  "entry": "main.py"
+  "entry": "main.py",
+  "icon": "table-properties"
 }

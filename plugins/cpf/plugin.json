@@ -3,5 +3,6 @@
   "version": "1.0.0",
   "description": "Valida e gera CPFs com interface gráfica. Suporta formatação automática e cópia para área de transferência.",
   "language": "python",
-  "entry": "main.py"
+  "entry": "main.py",
+  "icon": "id-card"
 }

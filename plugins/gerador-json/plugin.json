@@ -3,5 +3,6 @@
   "version": "1.0.0",
   "description": "Gera mock data em JSON (Pessoa, Produto, Usuário) com quantidade configurável e cópia para área de transferência.",
   "language": "python",
-  "entry": "main.py"
+  "entry": "main.py",
+  "icon": "box"
 }
