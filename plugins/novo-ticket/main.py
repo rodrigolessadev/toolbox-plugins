@@ -2,7 +2,7 @@
 """
 Plugin: Novo Ticket & Extrator de Logs
 Criação e abertura de tickets padronizados no formato CLIENTE_TICKET
-e filtragem avançada de arquivos .log por subpastas e intervalo de data/hora.
+e filtragem avançada de arquivos .log por subpastas (multinível via checkboxes) e período.
 """
 
 import json
@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 # Garante import do módulo compartilhado theme_utils ou fornece fallback autônomo
 try:
@@ -86,7 +86,7 @@ except Exception:
             style.configure("TLabel", background=THEME["bg_base"], foreground=THEME["fg_primary"])
             style.configure("TEntry", fieldbackground=THEME["bg_input"], foreground=THEME["fg_primary"])
             style.configure("TNotebook", background=THEME["bg_base"], borderwidth=0)
-            style.configure("TNotebook.Tab", background=THEME["bg_surface"], foreground=THEME["fg_secondary"], padding=[12, 6])
+            style.configure("TNotebook.Tab", background=THEME["bg_surface"], foreground=THEME["fg_secondary"], padding=[14, 7])
             style.map("TNotebook.Tab", background=[("selected", THEME["bg_hover"])], foreground=[("selected", THEME["accent_hover"])])
             return style
         except Exception:
@@ -163,6 +163,7 @@ from domain import (
     validate_base_dir,
     create_ticket_directory,
     get_ticket_subdirectories,
+    get_ticket_subdirectories_info,
     parse_datetime_range,
     process_ticket_logs,
 )
@@ -210,8 +211,8 @@ class NovoTicketApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Novo Ticket & Logs — Toolbox")
-        self.root.geometry("680x720")
-        self.root.minsize(620, 600)
+        self.root.geometry("700x740")
+        self.root.minsize(640, 620)
 
         enable_high_dpi()
         setup_app_theme(self.root)
@@ -223,6 +224,9 @@ class NovoTicketApp:
             self.active_ticket_path = Path(last_ticket)
 
         self.last_logs_output_dir: Optional[Path] = None
+
+        # Dados das subpastas: lista de dicts com metadados e BooleanVars
+        self.subdirs_data: List[Dict[str, Any]] = []
 
         self._build_ui()
         self._bind_events()
@@ -250,7 +254,7 @@ class NovoTicketApp:
 
         subtitle_lbl = tk.Label(
             header_frame,
-            text="Criação padronizada de diretórios de tickets e filtragem de logs por subpastas e período.",
+            text="Criação padronizada de diretórios de tickets e filtragem de logs multinível por subpastas e período.",
             font=("Segoe UI", 9),
             bg=THEME["bg_base"],
             fg=THEME["fg_secondary"],
@@ -311,7 +315,7 @@ class NovoTicketApp:
         )
         btn_browse.grid(row=2, column=1, sticky="ew", pady=(0, 8))
 
-        # Campos: Cliente e Ticket em grid lado a lado
+        # Campos: Cliente e Ticket
         row_fields = tk.Frame(create_inner, bg=THEME["bg_surface"])
         row_fields.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(0, 8))
         row_fields.columnconfigure(0, weight=1)
@@ -344,7 +348,7 @@ class NovoTicketApp:
             font=("Consolas", 8),
             bg=THEME["bg_surface"],
             fg=THEME["fg_secondary"],
-            wraplength=580,
+            wraplength=600,
             justify="left",
         )
         self.ticket_preview_lbl.grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, 8))
@@ -412,7 +416,7 @@ class NovoTicketApp:
             font=("Consolas", 9, "bold"),
             bg=THEME["bg_surface"],
             fg=THEME["fg_primary"],
-            wraplength=580,
+            wraplength=600,
             justify="left",
         )
         self.active_ticket_lbl.pack(anchor="w", pady=(2, 8))
@@ -457,9 +461,9 @@ class NovoTicketApp:
     def _build_logs_tab(self):
         # Card: Resumo do Ticket Ativo
         ticket_header_card = create_card_frame(self.tab_logs)
-        ticket_header_card.pack(fill="x", pady=(0, 10), padx=1)
+        ticket_header_card.pack(fill="x", pady=(0, 8), padx=1)
 
-        th_inner = tk.Frame(ticket_header_card, bg=THEME["bg_surface"], padx=12, pady=10)
+        th_inner = tk.Frame(ticket_header_card, bg=THEME["bg_surface"], padx=12, pady=8)
         th_inner.pack(fill="both", expand=True)
 
         self.logs_ticket_header_lbl = tk.Label(
@@ -468,7 +472,7 @@ class NovoTicketApp:
             font=("Segoe UI", 9, "bold"),
             bg=THEME["bg_surface"],
             fg=THEME["accent_hover"],
-            wraplength=580,
+            wraplength=520,
             justify="left",
         )
         self.logs_ticket_header_lbl.pack(side="left", fill="x", expand=True)
@@ -480,77 +484,132 @@ class NovoTicketApp:
         )
         btn_change_tkt.pack(side="right")
 
-        # Card: Subpastas do Ticket (Seleção Múltipla)
+        # Card: Subpastas do Ticket (NOVO DESIGN COM CHECKBOXES E MULTINÍVEL)
         subdirs_card = create_card_frame(self.tab_logs)
-        subdirs_card.pack(fill="both", expand=True, pady=(0, 10), padx=1)
+        subdirs_card.pack(fill="both", expand=True, pady=(0, 8), padx=1)
 
         sd_inner = tk.Frame(subdirs_card, bg=THEME["bg_surface"], padx=12, pady=10)
         sd_inner.pack(fill="both", expand=True)
 
+        # Header do Card de Pastas
+        header_row = tk.Frame(sd_inner, bg=THEME["bg_surface"])
+        header_row.pack(fill="x", pady=(0, 6))
+
         sd_title = tk.Label(
-            sd_inner,
-            text="1. Selecione uma ou mais subpastas do ticket:",
+            header_row,
+            text="1. Subpastas do Ticket (todos os níveis):",
             font=("Segoe UI", 9, "bold"),
             bg=THEME["bg_surface"],
             fg=THEME["fg_primary"],
         )
-        sd_title.pack(anchor="w", pady=(0, 6))
+        sd_title.pack(side="left")
 
-        # Listbox com Scrollbar para subpastas
-        list_container = tk.Frame(sd_inner, bg=THEME["bg_surface"])
-        list_container.pack(fill="both", expand=True, pady=(0, 6))
-
-        self.subdirs_listbox = tk.Listbox(
-            list_container,
-            selectmode="multiple",
-            bg=THEME["bg_input"],
-            fg=THEME["fg_primary"],
-            selectbackground=THEME["accent"],
-            selectforeground=THEME["accent_fg"],
-            highlightthickness=1,
-            highlightbackground=THEME["border"],
-            highlightcolor=THEME["border_focus"],
-            relief="solid",
-            bd=1,
-            font=("Consolas", 9),
-            height=5,
+        self.subdirs_counter_lbl = tk.Label(
+            header_row,
+            text="0 pastas",
+            font=("Segoe UI", 8),
+            bg=THEME["bg_surface"],
+            fg=THEME["fg_secondary"],
         )
-        scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=self.subdirs_listbox.yview)
-        self.subdirs_listbox.configure(yscrollcommand=scrollbar.set)
+        self.subdirs_counter_lbl.pack(side="right")
 
-        self.subdirs_listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        # Botões de seleção de subpastas
-        sd_btns = tk.Frame(sd_inner, bg=THEME["bg_surface"])
-        sd_btns.pack(fill="x")
+        # Barra de Ações Rápidas & Busca de Pastas
+        toolbar_frame = tk.Frame(sd_inner, bg=THEME["bg_surface"])
+        toolbar_frame.pack(fill="x", pady=(0, 8))
 
         btn_select_all = create_secondary_button(
-            sd_btns,
+            toolbar_frame,
             text="Selecionar Todas",
             command=self._on_select_all_subdirs,
         )
         btn_select_all.pack(side="left", padx=(0, 6))
 
         btn_deselect_all = create_secondary_button(
-            sd_btns,
+            toolbar_frame,
             text="Desmarcar Todas",
             command=self._on_deselect_all_subdirs,
         )
         btn_deselect_all.pack(side="left", padx=(0, 6))
 
+        btn_only_logs = create_secondary_button(
+            toolbar_frame,
+            text="Apenas com Logs",
+            command=self._on_select_only_with_logs,
+        )
+        btn_only_logs.pack(side="left", padx=(0, 6))
+
         btn_reload_sd = create_secondary_button(
-            sd_btns,
-            text="🔄 Recarregar Subpastas",
+            toolbar_frame,
+            text="🔄 Recarregar",
             command=self._refresh_subdirectories,
         )
-        btn_reload_sd.pack(side="left")
+        btn_reload_sd.pack(side="left", padx=(0, 8))
+
+        # Campo de filtro textual rápido
+        self.search_folder_var = tk.StringVar()
+        self.search_folder_var.trace_add("write", lambda *args: self._render_subdirectories_list())
+        search_entry = create_styled_entry(
+            toolbar_frame,
+            textvariable=self.search_folder_var,
+            font=("Segoe UI", 8),
+        )
+        search_entry.pack(side="right", fill="x", expand=True)
+
+        lbl_search_icon = tk.Label(
+            toolbar_frame,
+            text="🔍 Filtrar:",
+            font=("Segoe UI", 8),
+            bg=THEME["bg_surface"],
+            fg=THEME["fg_secondary"],
+        )
+        lbl_search_icon.pack(side="right", padx=(0, 4))
+
+        # Container Rolável Moderno com Canvas + Checkboxes
+        canvas_container = tk.Frame(
+            sd_inner,
+            bg=THEME["bg_input"],
+            bd=1,
+            relief="solid",
+            highlightthickness=1,
+            highlightbackground=THEME["border"],
+        )
+        canvas_container.pack(fill="both", expand=True, pady=(0, 4))
+
+        self.canvas = tk.Canvas(
+            canvas_container,
+            bg=THEME["bg_input"],
+            highlightthickness=0,
+            bd=0,
+        )
+        self.scrollbar = ttk.Scrollbar(canvas_container, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = tk.Frame(self.canvas, bg=THEME["bg_input"])
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Ajusta largura do frame interno ao redimensionar canvas
+        self.canvas.bind(
+            "<Configure>",
+            lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width)
+        )
+
+        # Suporte a scroll com mouse wheel
+        self._bind_mousewheel(self.canvas)
+        self._bind_mousewheel(self.scrollable_frame)
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
 
         # Card: Intervalo de Data e Hora
         time_card = create_card_frame(self.tab_logs)
-        time_card.pack(fill="x", pady=(0, 10), padx=1)
+        time_card.pack(fill="x", pady=(0, 8), padx=1)
 
-        tc_inner = tk.Frame(time_card, bg=THEME["bg_surface"], padx=12, pady=10)
+        tc_inner = tk.Frame(time_card, bg=THEME["bg_surface"], padx=12, pady=8)
         tc_inner.pack(fill="both", expand=True)
 
         tc_title = tk.Label(
@@ -560,10 +619,10 @@ class NovoTicketApp:
             bg=THEME["bg_surface"],
             fg=THEME["fg_primary"],
         )
-        tc_title.pack(anchor="w", pady=(0, 6))
+        tc_title.pack(anchor="w", pady=(0, 4))
 
         grid_time = tk.Frame(tc_inner, bg=THEME["bg_surface"])
-        grid_time.pack(fill="x", pady=(0, 6))
+        grid_time.pack(fill="x", pady=(0, 4))
         grid_time.columnconfigure(0, weight=1)
         grid_time.columnconfigure(1, weight=1)
         grid_time.columnconfigure(2, weight=1)
@@ -613,7 +672,7 @@ class NovoTicketApp:
 
         # Botão de Ação Principal
         action_bar = tk.Frame(self.tab_logs, bg=THEME["bg_base"])
-        action_bar.pack(fill="x", pady=(0, 8))
+        action_bar.pack(fill="x", pady=(0, 6))
 
         self.btn_filter_logs = create_primary_button(
             action_bar,
@@ -632,7 +691,7 @@ class NovoTicketApp:
             highlightbackground=THEME["border"],
         )
 
-        self.logs_feedback_inner = tk.Frame(self.logs_feedback_card, bg=THEME["bg_surface"], padx=12, pady=10)
+        self.logs_feedback_inner = tk.Frame(self.logs_feedback_card, bg=THEME["bg_surface"], padx=12, pady=8)
         self.logs_feedback_inner.pack(fill="both", expand=True)
 
         self.logs_status_lbl = tk.Label(
@@ -641,7 +700,7 @@ class NovoTicketApp:
             font=("Segoe UI", 9),
             bg=THEME["bg_surface"],
             fg=THEME["fg_primary"],
-            wraplength=580,
+            wraplength=600,
             justify="left",
         )
         self.logs_status_lbl.pack(anchor="w")
@@ -653,6 +712,12 @@ class NovoTicketApp:
             command=self._on_open_logs_dir,
         )
         self.btn_open_logs_dir.pack(side="left")
+
+    def _bind_mousewheel(self, widget: Any):
+        def _on_wheel(event):
+            delta = -1 * int(event.delta / 120) if event.delta else 0
+            self.canvas.yview_scroll(delta, "units")
+        widget.bind("<MouseWheel>", _on_wheel)
 
     def _bind_events(self):
         self.base_dir_var.trace_add("write", lambda *args: self._update_ticket_preview())
@@ -749,28 +814,146 @@ class NovoTicketApp:
             self.ticket_status_lbl.config(text="✓ Caminho copiado para a área de transferência!", fg=THEME["success"])
 
     # -----------------------------------------------------------------------
-    # Handlers e Lógica de Filtragem de Logs
+    # Handlers e Lógica de Filtragem de Logs e Subpastas
     # -----------------------------------------------------------------------
     def _refresh_subdirectories(self):
-        self.subdirs_listbox.delete(0, tk.END)
+        self.subdirs_data.clear()
         if not self.active_ticket_path or not self.active_ticket_path.exists():
+            self._render_subdirectories_list()
             return
 
-        subdirs = get_ticket_subdirectories(self.active_ticket_path)
-        if not subdirs:
-            self.subdirs_listbox.insert(tk.END, "(Nenhuma subpasta encontrada no ticket)")
+        infos = get_ticket_subdirectories_info(self.active_ticket_path)
+        for item in infos:
+            var = tk.BooleanVar(value=True)  # Selecionada por padrão
+            self.subdirs_data.append({
+                "path": item["path"],
+                "log_count": item["log_count"],
+                "has_logs": item["has_logs"],
+                "var": var,
+            })
+
+        self._render_subdirectories_list()
+
+    def _render_subdirectories_list(self):
+        # Limpa widgets existentes no scrollable_frame
+        for widget in self.scrollable_frame.winfo_children():
+            widget.destroy()
+
+        if not self.active_ticket_path or not self.active_ticket_path.exists():
+            empty_lbl = tk.Label(
+                self.scrollable_frame,
+                text="Nenhum ticket ativo selecionado. Crie ou abra um ticket na aba anterior.",
+                font=("Segoe UI", 9, "italic"),
+                bg=THEME["bg_input"],
+                fg=THEME["fg_muted"],
+                pady=16,
+            )
+            empty_lbl.pack(fill="x", padx=12)
+            self.subdirs_counter_lbl.config(text="0 pastas")
             return
 
-        for sd in subdirs:
-            self.subdirs_listbox.insert(tk.END, sd)
+        if not self.subdirs_data:
+            empty_lbl = tk.Label(
+                self.scrollable_frame,
+                text="📁 Nenhuma subpasta encontrada dentro do ticket ativo.\nCrie subpastas com arquivos .log para realizar a filtragem.",
+                font=("Segoe UI", 9, "italic"),
+                bg=THEME["bg_input"],
+                fg=THEME["fg_muted"],
+                pady=16,
+                justify="center",
+            )
+            empty_lbl.pack(fill="x", padx=12)
+            self.subdirs_counter_lbl.config(text="0 pastas")
+            return
 
-        self._on_select_all_subdirs()
+        search_query = self.search_folder_var.get().strip().lower()
+        displayed_count = 0
+        selected_count = 0
+
+        for idx, item in enumerate(self.subdirs_data):
+            rel_path = item["path"]
+            log_count = item["log_count"]
+            var = item["var"]
+
+            if var.get():
+                selected_count += 1
+
+            if search_query and search_query not in rel_path.lower():
+                continue
+
+            displayed_count += 1
+
+            # Linha estilizada do item
+            row = tk.Frame(
+                self.scrollable_frame,
+                bg=THEME["bg_input"] if (idx % 2 == 0) else THEME["bg_surface"],
+                padx=8,
+                pady=4,
+            )
+            row.pack(fill="x", expand=True)
+
+            self._bind_mousewheel(row)
+
+            # Checkbox estilizado
+            chk = tk.Checkbutton(
+                row,
+                variable=var,
+                text=f" 📁  {rel_path}",
+                font=("Segoe UI", 9, "bold" if item["has_logs"] else "normal"),
+                bg=row["bg"],
+                fg=THEME["fg_primary"],
+                selectcolor=THEME["bg_base"],
+                activebackground=THEME["bg_hover"],
+                activeforeground=THEME["fg_primary"],
+                relief="flat",
+                bd=0,
+                cursor="hand2",
+                anchor="w",
+            )
+            chk.pack(side="left", fill="x", expand=True)
+            self._bind_mousewheel(chk)
+
+            # Badge lateral com quantidade de arquivos .log
+            if log_count > 0:
+                badge = tk.Label(
+                    row,
+                    text=f" {log_count} log{'s' if log_count > 1 else ''} ",
+                    font=("Segoe UI", 8, "bold"),
+                    bg=THEME["bg_surface"] if (idx % 2 == 0) else THEME["bg_input"],
+                    fg=THEME["accent_hover"],
+                    bd=1,
+                    relief="solid",
+                    highlightthickness=0,
+                )
+            else:
+                badge = tk.Label(
+                    row,
+                    text=" sem logs ",
+                    font=("Segoe UI", 8),
+                    bg=row["bg"],
+                    fg=THEME["fg_muted"],
+                )
+            badge.pack(side="right", padx=(4, 2))
+            self._bind_mousewheel(badge)
+
+        self.subdirs_counter_lbl.config(
+            text=f"{len(self.subdirs_data)} pasta(s) [{selected_count} selecionada(s)]"
+        )
 
     def _on_select_all_subdirs(self):
-        self.subdirs_listbox.select_set(0, tk.END)
+        for item in self.subdirs_data:
+            item["var"].set(True)
+        self._render_subdirectories_list()
 
     def _on_deselect_all_subdirs(self):
-        self.subdirs_listbox.select_clear(0, tk.END)
+        for item in self.subdirs_data:
+            item["var"].set(False)
+        self._render_subdirectories_list()
+
+    def _on_select_only_with_logs(self):
+        for item in self.subdirs_data:
+            item["var"].set(item["has_logs"])
+        self._render_subdirectories_list()
 
     def _set_range_today(self):
         today = datetime.now().strftime("%Y-%m-%d")
@@ -819,14 +1002,9 @@ class NovoTicketApp:
             self._show_logs_feedback(False, "Selecione ou crie um Ticket antes de executar a filtragem.")
             return
 
-        selected_indices = self.subdirs_listbox.curselection()
-        if not selected_indices:
-            self._show_logs_feedback(False, "Selecione ao menos uma subpasta para escanear.")
-            return
-
-        selected_subdirs = [self.subdirs_listbox.get(i) for i in selected_indices if not self.subdirs_listbox.get(i).startswith("(")]
+        selected_subdirs = [item["path"] for item in self.subdirs_data if item["var"].get()]
         if not selected_subdirs:
-            self._show_logs_feedback(False, "Nenhuma subpasta válida selecionada.")
+            self._show_logs_feedback(False, "Selecione ao menos uma subpasta via checkbox para escanear.")
             return
 
         try:

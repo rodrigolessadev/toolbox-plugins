@@ -12,6 +12,7 @@ from domain import (
     validate_inputs,
     create_ticket_directory,
     get_ticket_subdirectories,
+    get_ticket_subdirectories_info,
     parse_datetime_str,
     parse_datetime_range,
     extract_log_line_timestamp,
@@ -100,22 +101,18 @@ def test_parse_datetime_range():
 
 
 def test_extract_log_line_timestamp():
-    # Senior colchetes
     line_senior = "[19-08-2026 10:15:30] INFO: Processo iniciado"
     dt = extract_log_line_timestamp(line_senior)
     assert dt == datetime(2026, 8, 19, 10, 15, 30)
 
-    # ISO
     line_iso = "2026-08-19 14:20:00.123 [main] ERROR - Falha de conexao"
     dt_iso = extract_log_line_timestamp(line_iso)
     assert dt_iso == datetime(2026, 8, 19, 14, 20, 0)
 
-    # BR
     line_br = "19/08/2026 09:00:00 WARN Mensagem de aviso"
     dt_br = extract_log_line_timestamp(line_br)
     assert dt_br == datetime(2026, 8, 19, 9, 0, 0)
 
-    # Sem timestamp
     assert extract_log_line_timestamp("   at org.hibernate.Session.close(Session.java:123)") is None
 
 
@@ -172,25 +169,54 @@ def test_filter_log_file_no_matches_ignored(tmp_path: Path):
 
     count = filter_log_file(source, target, start_dt, end_dt)
     assert count == 0
-    # O arquivo NAO deve ser criado
     assert not target.exists()
 
 
-def test_get_ticket_subdirectories(tmp_path: Path):
-    (tmp_path / "sub1").mkdir()
-    (tmp_path / "sub2").mkdir()
-    (tmp_path / "logs_filtrados").mkdir()
-    (tmp_path / ".git").mkdir()
+def test_get_ticket_subdirectories_multilevel(tmp_path: Path):
+    # Cria estrutura com multiplos niveis de profundidade
+    (tmp_path / "integrador" / "core" / "logs").mkdir(parents=True)
+    (tmp_path / "servicos" / "auth").mkdir(parents=True)
+    (tmp_path / "logs_filtrados" / "ignorado").mkdir(parents=True)
+    (tmp_path / ".git" / "hooks").mkdir(parents=True)
     (tmp_path / "arquivo.txt").write_text("txt", encoding="utf-8")
 
     subdirs = get_ticket_subdirectories(tmp_path)
-    assert subdirs == ["sub1", "sub2"]
+    # Todos os niveis devem ser listados, exceto logs_filtrados e pastas ocultas
+    assert "integrador" in subdirs
+    assert "integrador/core" in subdirs
+    assert "integrador/core/logs" in subdirs
+    assert "servicos" in subdirs
+    assert "servicos/auth" in subdirs
+    assert not any("logs_filtrados" in s for s in subdirs)
+    assert not any(".git" in s for s in subdirs)
 
 
-def test_process_ticket_logs_full_flow(tmp_path: Path):
+def test_get_ticket_subdirectories_info(tmp_path: Path):
+    sub1 = tmp_path / "integrador"
+    sub1.mkdir()
+    (sub1 / "sync.log").write_text("log", encoding="utf-8")
+    (sub1 / "app.log").write_text("log", encoding="utf-8")
+
+    sub2 = tmp_path / "empty_dir"
+    sub2.mkdir()
+
+    infos = get_ticket_subdirectories_info(tmp_path)
+    assert len(infos) == 2
+
+    info_integrador = next(i for i in infos if i["path"] == "integrador")
+    assert info_integrador["log_count"] == 2
+    assert info_integrador["has_logs"] is True
+
+    info_empty = next(i for i in infos if i["path"] == "empty_dir")
+    assert info_empty["log_count"] == 0
+    assert info_empty["has_logs"] is False
+
+
+def test_process_ticket_logs_multilevel_flow(tmp_path: Path):
     ticket_dir = tmp_path / "CLIENTE_TICKET123"
     ticket_dir.mkdir()
 
+    # Subpasta nivel 1
     sub_integrador = ticket_dir / "integrador"
     sub_integrador.mkdir()
     (sub_integrador / "sync.log").write_text(
@@ -198,16 +224,12 @@ def test_process_ticket_logs_full_flow(tmp_path: Path):
         "[19-08-2026 11:00:00] INFO: Fim do lote\n",
         encoding="utf-8"
     )
-    (sub_integrador / "old.log").write_text(
-        "[10-08-2026 08:00:00] INFO: Registro antigo\n",
-        encoding="utf-8"
-    )
 
-    sub_server = ticket_dir / "server"
-    sub_server.mkdir()
-    (sub_server / "server.log").write_text(
-        "[19-08-2026 10:45:00] ERROR: Request timeout\n"
-        "\tat server.handle(server.java:10)\n",
+    # Subpasta nivel 2
+    sub_nested = ticket_dir / "servicos" / "database"
+    sub_nested.mkdir(parents=True)
+    (sub_nested / "query.log").write_text(
+        "[19-08-2026 10:45:00] ERROR: Query timeout\n",
         encoding="utf-8"
     )
 
@@ -216,18 +238,16 @@ def test_process_ticket_logs_full_flow(tmp_path: Path):
 
     summary = process_ticket_logs(
         ticket_dir=ticket_dir,
-        selected_subdirs=["integrador", "server"],
+        selected_subdirs=["integrador", "servicos/database"],
         start_dt=start_dt,
         end_dt=end_dt
     )
 
-    assert summary["total_files_scanned"] == 3
+    assert summary["total_files_scanned"] == 2
     assert summary["total_files_written"] == 2
     assert summary["total_blocks_kept"] == 3
 
-    # Verifica estrutura de diretórios criada
     out_dir = ticket_dir / "logs_filtrados"
     assert out_dir.exists()
     assert (out_dir / "integrador" / "sync.log").exists()
-    assert not (out_dir / "integrador" / "old.log").exists()
-    assert (out_dir / "server" / "server.log").exists()
+    assert (out_dir / "servicos" / "database" / "query.log").exists()

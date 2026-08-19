@@ -2,7 +2,7 @@
 Módulo de regras de negócio para o plugin Novo Ticket.
 Contém funções puras e testáveis para:
 1. Sanitização, validação e criação de diretórios de tickets (CLIENTE_TICKET).
-2. Detecção e listagem de subpastas do ticket.
+2. Detecção e listagem recursiva (multinível) de subpastas do ticket.
 3. Parsing de timestamps e blocos de arquivos de log.
 4. Filtragem temporal e cópia espelhada para pasta logs_filtrados.
 """
@@ -144,22 +144,69 @@ def create_ticket_directory(
 
 def get_ticket_subdirectories(ticket_dir: Path, output_folder_name: str = "logs_filtrados") -> List[str]:
     """
-    Retorna a lista de nomes de subdiretórios presentes dentro da pasta do ticket.
-    Ignora a pasta de saída de logs filtrados e pastas ocultas.
+    Retorna recursivamente a lista de caminhos relativos de TODOS os níveis de subdiretórios
+    presentes dentro da pasta do ticket.
+    Ignora a pasta de saída de logs filtrados e pastas ocultas em qualquer nível.
     """
     if not ticket_dir.exists() or not ticket_dir.is_dir():
         return []
 
     subdirs = []
-    try:
-        for entry in ticket_dir.iterdir():
-            if entry.is_dir():
-                if entry.name != output_folder_name and not entry.name.startswith("."):
-                    subdirs.append(entry.name)
-    except Exception:
-        pass
+    ticket_resolved = ticket_dir.resolve()
+
+    for root, dirs, _ in os.walk(str(ticket_resolved)):
+        # Filtra diretórios ocultos e a pasta output_folder_name in-place para não descer nelas
+        dirs[:] = [
+            d for d in dirs
+            if not d.startswith(".") and d.lower() != output_folder_name.lower()
+        ]
+
+        current_path = Path(root).resolve()
+        if current_path == ticket_resolved:
+            continue
+
+        try:
+            rel_path = current_path.relative_to(ticket_resolved)
+            # Usa barras normais para apresentação consistente
+            rel_str = str(rel_path).replace("\\", "/")
+            if output_folder_name not in rel_str.split("/"):
+                subdirs.append(rel_str)
+        except Exception:
+            continue
 
     return sorted(subdirs, key=lambda s: s.lower())
+
+
+def get_ticket_subdirectories_info(ticket_dir: Path, output_folder_name: str = "logs_filtrados") -> List[Dict[str, Any]]:
+    """
+    Retorna a lista estruturada de subpastas com metadados:
+    [
+        {
+            "path": "servicos/integrador",
+            "log_count": 3,
+            "has_logs": True
+        }, ...
+    ]
+    """
+    subdirs = get_ticket_subdirectories(ticket_dir, output_folder_name)
+    results = []
+
+    for rel_path in subdirs:
+        full_path = ticket_dir / Path(rel_path)
+        log_count = 0
+        try:
+            if full_path.exists() and full_path.is_dir():
+                log_count = sum(1 for f in full_path.iterdir() if f.is_file() and f.suffix.lower() == ".log")
+        except Exception:
+            pass
+
+        results.append({
+            "path": rel_path,
+            "log_count": log_count,
+            "has_logs": log_count > 0,
+        })
+
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -175,11 +222,9 @@ def parse_datetime_str(date_str: str, time_str: str = "00:00:00") -> datetime:
     d_clean = date_str.strip()
     t_clean = time_str.strip() if time_str else "00:00:00"
 
-    # Normaliza separadores de hora
     if len(t_clean.split(":")) == 2:
         t_clean += ":00"
 
-    # Tenta formatos ISO
     for fmt_d in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(f"{d_clean} {t_clean}", f"{fmt_d} %H:%M:%S")
@@ -204,7 +249,6 @@ def parse_datetime_range(
     start_dt = parse_datetime_str(dt_ini_str, tm_ini_str or "00:00")
     end_dt = parse_datetime_str(dt_fim_str, tm_fim_str or "23:59:59")
 
-    # Se a hora final foi dada apenas como HH:MM, ajusta os segundos para 59 se aplicável
     if tm_fim_str and len(tm_fim_str.strip().split(":")) == 2:
         end_dt = end_dt.replace(second=59, microsecond=999999)
 
@@ -220,11 +264,8 @@ def extract_timestamp_from_string(raw_ts: str) -> Optional[datetime]:
     """
     Converte uma string contendo timestamp para datetime.
     """
-    # Remove milissegundos/microssegundos e fuso horário para parsing uniforme
     clean_ts = raw_ts.strip().replace("T", " ")
-    # Remove timezone suffix se houver (ex: Z, +00:00, -03:00)
     clean_ts = re.sub(r"(?:Z|[+-]\d{2}:?\d{2})$", "", clean_ts).strip()
-    # Remove fração de segundo (ex: .123456 ou ,123)
     clean_ts = re.sub(r"[.,]\d+", "", clean_ts).strip()
 
     for fmt in (
@@ -252,21 +293,18 @@ def extract_log_line_timestamp(line: str) -> Optional[datetime]:
     if not line:
         return None
 
-    # 1. Padrão [DD-MM-YYYY HH:MM:SS] ou [YYYY-MM-DD HH:MM:SS]
     m_bracket = RE_BRACKETS_TS.search(line)
     if m_bracket:
         dt = extract_timestamp_from_string(m_bracket.group(1))
         if dt:
             return dt
 
-    # 2. Padrão ISO (YYYY-MM-DD HH:MM:SS)
     m_iso = RE_ISO_TS.search(line)
     if m_iso:
         dt = extract_timestamp_from_string(m_iso.group(1))
         if dt:
             return dt
 
-    # 3. Padrão BR (DD/MM/YYYY HH:MM:SS)
     m_br = RE_BR_TS.search(line)
     if m_br:
         dt = extract_timestamp_from_string(m_br.group(1))
@@ -291,7 +329,6 @@ def read_file_safely(file_path: Path) -> str:
             continue
         except Exception:
             break
-    # Fallback com replace
     return file_path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -307,7 +344,6 @@ def parse_log_blocks(content: str) -> List[Dict[str, Any]]:
     for line in lines:
         ts = extract_log_line_timestamp(line)
         if ts is not None:
-            # Nova linha de log com timestamp
             if current_block is not None:
                 blocks.append(current_block)
             current_block = {
@@ -315,11 +351,9 @@ def parse_log_blocks(content: str) -> List[Dict[str, Any]]:
                 "lines": [line],
             }
         else:
-            # Linha sem timestamp (stack trace, XML, continuação)
             if current_block is not None:
                 current_block["lines"].append(line)
             else:
-                # Linhas antes do primeiro timestamp reconhecido
                 current_block = {
                     "timestamp": None,
                     "lines": [line],
@@ -353,10 +387,8 @@ def filter_log_file(
                 kept_blocks.append(block)
 
     if not kept_blocks:
-        # Nenhum log no intervalo -> ignora o arquivo conforme requisito
         return 0
 
-    # Grava o arquivo de destino
     target_file.parent.mkdir(parents=True, exist_ok=True)
     output_lines = []
     for b in kept_blocks:
@@ -374,7 +406,7 @@ def process_ticket_logs(
     output_folder_name: str = "logs_filtrados",
 ) -> Dict[str, Any]:
     """
-    Orquestra a leitura e filtragem de todas as subpastas selecionadas do ticket:
+    Orquestra a leitura e filtragem de todas as subpastas selecionadas do ticket (em qualquer nível):
     - Cria a pasta 'logs_filtrados' dentro de ticket_dir.
     - Para cada subpasta selecionada, lê os arquivos .log e salva os blocos no intervalo.
     - Se o arquivo não contiver logs no intervalo, ele é ignorado.
@@ -390,14 +422,14 @@ def process_ticket_logs(
     total_blocks_kept = 0
     files_summary: List[Dict[str, Any]] = []
 
-    for subdir_name in selected_subdirs:
-        subdir_path = ticket_dir / subdir_name
+    for subdir_rel in selected_subdirs:
+        # Suporta caminhos relativos multinível (ex: "integrador/sub1")
+        subdir_path = ticket_dir / Path(subdir_rel)
         if not subdir_path.exists() or not subdir_path.is_dir():
             continue
 
-        target_subdir = output_base_dir / subdir_name
+        target_subdir = output_base_dir / Path(subdir_rel)
 
-        # Busca arquivos .log na subpasta
         log_files = [f for f in subdir_path.iterdir() if f.is_file() and f.suffix.lower() == ".log"]
 
         for log_file in log_files:
@@ -412,12 +444,11 @@ def process_ticket_logs(
                 files_summary.append({
                     "source": str(log_file),
                     "target": str(target_log_path),
-                    "subfolder": subdir_name,
+                    "subfolder": subdir_rel,
                     "filename": log_file.name,
                     "blocks": blocks_count,
                 })
 
-    # Se pelo menos 1 arquivo foi gravado, assegura que a pasta base existe
     if total_written > 0:
         output_base_dir.mkdir(parents=True, exist_ok=True)
 

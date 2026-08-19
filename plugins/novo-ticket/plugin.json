@@ -1,7 +1,7 @@
 {
   "name": "Novo Ticket",
-  "version": "1.1.0",
-  "description": "Criação e abertura de tickets (CLIENTE_TICKET) com extrator e filtro temporal de logs.",
+  "version": "1.1.1",
+  "description": "Criação e abertura de tickets (CLIENTE_TICKET) com extrator e filtro temporal de logs multinível por subpastas.",
   "language": "python",
   "entry": "main.py",
   "icon": "folder-plus"
