@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-08-14",
+  "updated_at": "2026-08-19",
   "plugins": [
     {
       "id": "har-kibana-planner",
@@ -182,6 +182,26 @@
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/analysis-orchestrator-1.0.1/analysis-orchestrator.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-08-14"
+    },
+    {
+      "id": "novo-ticket",
+      "name": "Novo Ticket",
+      "description": "Cria estrutura de diretórios padronizada (CLIENTE_TICKET) para novos atendimentos e tickets.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "ticket",
+        "atendimento",
+        "suporte",
+        "diretorio",
+        "utilidade"
+      ],
+      "icon": "folder-plus",
+      "command": "novo-ticket",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.0.0/novo-ticket.zip",
+      "min_toolbox_version": "1.0.0",
+      "updated_at": "2026-08-19"
     }
   ]
 }

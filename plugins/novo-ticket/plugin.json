@@ -1,0 +1,8 @@
+{
+  "name": "Novo Ticket",
+  "version": "1.0.0",
+  "description": "Cria estrutura de diretórios padronizada (CLIENTE_TICKET) para novos atendimentos e tickets.",
+  "language": "python",
+  "entry": "main.py",
+  "icon": "folder-plus"
+}
