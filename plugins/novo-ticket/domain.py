@@ -4,7 +4,8 @@ Contém funções puras e testáveis para:
 1. Sanitização, validação e criação de diretórios de tickets (CLIENTE_TICKET).
 2. Detecção e listagem recursiva e hierárquica (multinível) de subpastas do ticket.
 3. Parsing de timestamps universais (ISO, BR, Senior, Wildfly sem data) e blocos de log.
-4. Filtragem temporal, processamento incremental e cópia espelhada para pasta logs_filtrados.
+4. Inferência inteligente de data (caminho da pasta, st_mtime e fallback do filtro).
+5. Filtragem temporal, processamento incremental e cópia espelhada para pasta logs_filtrados.
 """
 
 import os
@@ -36,6 +37,11 @@ RE_BR_TS = re.compile(
 RE_TIME_ONLY_TS = re.compile(
     r"^\s*(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\b"
 )
+
+# Padrões para detecção de datas no caminho/nome de arquivo
+RE_PATH_DATE_ISO = re.compile(r"(?:^|[^0-9])(20\d{2})[-_]([01]\d)[-_]([0-3]\d)(?:[^0-9]|$)")
+RE_PATH_DATE_YYYYMMDD = re.compile(r"(?:^|[^0-9])(20\d{2})([01]\d)([0-3]\d)(?:[^0-9]|$)")
+RE_PATH_DATE_BR = re.compile(r"(?:^|[^0-9])([0-3]\d)[-_]([01]\d)[-_](20\d{2})(?:[^0-9]|$)")
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +230,7 @@ def get_ticket_subdirectories_info(ticket_dir: Path, output_folder_name: str = "
 
 
 # ---------------------------------------------------------------------------
-# 2. Parsing de Datas e Timestamps de Log (com Suporte a Wildfly)
+# 2. Parsing de Datas, Inferência e Timestamps de Log
 # ---------------------------------------------------------------------------
 
 def parse_datetime_str(date_str: str, time_str: str = "00:00:00") -> datetime:
@@ -274,17 +280,76 @@ def parse_datetime_range(
     return start_dt, end_dt
 
 
-def get_file_reference_date(file_path: Path) -> date:
+def extract_date_from_path(file_path: Path) -> Optional[date]:
     """
-    Obtém a data de referência a partir dos metadados do arquivo (data de modificação/criação).
+    Tenta inferir a data a partir do nome do arquivo ou de qualquer pasta no caminho.
+    Procura padrões como YYYYMMDD, YYYY-MM-DD, YYYY_MM_DD, DD-MM-YYYY, DD_MM_YYYY.
+    Exemplo: 'LogsSenior_COMPLETO_20260817/logs_brutos/server.log' -> date(2026, 8, 17).
     """
+    # Analisa o nome do arquivo e todos os diretórios ascendentes
+    components = [file_path.name] + [p.name for p in file_path.parents if p.name]
+
+    for comp in components:
+        # 1. Padrão ISO: 2026-08-17 ou 2026_08_17
+        m_iso = RE_PATH_DATE_ISO.search(comp)
+        if m_iso:
+            try:
+                y, m, d = int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
+                if 2000 <= y <= 2099 and 1 <= m <= 12 and 1 <= d <= 31:
+                    return date(y, m, d)
+            except Exception:
+                pass
+
+        # 2. Padrão YYYYMMDD: 20260817
+        m_ymd = RE_PATH_DATE_YYYYMMDD.search(comp)
+        if m_ymd:
+            try:
+                y, m, d = int(m_ymd.group(1)), int(m_ymd.group(2)), int(m_ymd.group(3))
+                if 2000 <= y <= 2099 and 1 <= m <= 12 and 1 <= d <= 31:
+                    return date(y, m, d)
+            except Exception:
+                pass
+
+        # 3. Padrão BR: 17-08-2026 ou 17_08_2026
+        m_br = RE_PATH_DATE_BR.search(comp)
+        if m_br:
+            try:
+                d, m, y = int(m_br.group(1)), int(m_br.group(2)), int(m_br.group(3))
+                if 2000 <= y <= 2099 and 1 <= m <= 12 and 1 <= d <= 31:
+                    return date(y, m, d)
+            except Exception:
+                pass
+
+    return None
+
+
+def get_file_reference_date(file_path: Path, fallback_date: Optional[date] = None) -> date:
+    """
+    Obtém a data de referência para arquivos de log sem data interna (ex: Wildfly):
+    1. Extração a partir de datas presentes no caminho/nome de pasta (ex: LogsSenior_COMPLETO_20260817).
+    2. Data de modificação real do arquivo (st_mtime / LastWriteTime), preservada pelo descompactador.
+    3. Data informada na interface (fallback_date / start_dt).
+    4. Data atual como fallback final.
+    """
+    # 1. Prioridade: data presente no caminho ou nome de arquivo
+    path_date = extract_date_from_path(file_path)
+    if path_date is not None:
+        return path_date
+
+    # 2. Prioridade: LastWriteTime (st_mtime)
     try:
         st = file_path.stat()
-        # Usa mtime (ou ctime se mtime não estiver disponível)
-        ts = st.st_mtime if st.st_mtime > 0 else st.st_ctime
-        return datetime.fromtimestamp(ts).date()
+        if st.st_mtime > 0:
+            return datetime.fromtimestamp(st.st_mtime).date()
     except Exception:
-        return datetime.now().date()
+        pass
+
+    # 3. Prioridade: fallback da UI (data inicial do filtro)
+    if fallback_date is not None:
+        return fallback_date
+
+    # 4. Fallback final: hoje
+    return datetime.now().date()
 
 
 def extract_timestamp_from_string(raw_ts: str) -> Optional[datetime]:
@@ -431,6 +496,7 @@ def filter_log_file(
     start_dt: datetime,
     end_dt: datetime,
     overwrite: bool = False,
+    fallback_date: Optional[date] = None,
 ) -> Tuple[int, str]:
     """
     Filtra os blocos do arquivo source_file dentro do intervalo [start_dt, end_dt].
@@ -441,7 +507,7 @@ def filter_log_file(
     if target_file.exists() and not overwrite:
         return 0, "skipped_existing"
 
-    ref_date = get_file_reference_date(source_file)
+    ref_date = get_file_reference_date(source_file, fallback_date=fallback_date or start_dt.date())
     content = read_file_safely(source_file)
     if not content or not content.strip():
         return 0, "no_matches"
@@ -480,7 +546,7 @@ def process_ticket_logs(
     - Cria a pasta 'logs_filtrados' dentro de ticket_dir.
     - Suporta processamento incremental: se o arquivo já existir no destino e overwrite for False,
       ele é ignorado e mantido intacto.
-    - Suporta logs Wildfly através da data de criação/modificação do arquivo de origem.
+    - Suporta logs Wildfly através da data no caminho, LastWriteTime (st_mtime) ou fallback da UI.
     - Se o arquivo não contiver logs no intervalo, ele não é gerado.
     Retorna sumário estatístico completo da operação.
     """
@@ -510,7 +576,12 @@ def process_ticket_logs(
             target_log_path = target_subdir / log_file.name
 
             blocks_count, status = filter_log_file(
-                log_file, target_log_path, start_dt, end_dt, overwrite=overwrite
+                log_file,
+                target_log_path,
+                start_dt,
+                end_dt,
+                overwrite=overwrite,
+                fallback_date=start_dt.date(),
             )
 
             if status == "written":
