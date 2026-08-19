@@ -2,7 +2,8 @@
 """
 Plugin: Novo Ticket & Extrator de Logs
 Criação e abertura de tickets padronizados no formato CLIENTE_TICKET
-e filtragem avançada de arquivos .log por subpastas (multinível via checkboxes) e período.
+e filtragem avançada de arquivos .log por subpastas (árvore hierárquica indentada via checkboxes)
+com suporte a logs Wildfly e processamento incremental.
 """
 
 import json
@@ -162,7 +163,6 @@ from domain import (
     format_ticket_folder_name,
     validate_base_dir,
     create_ticket_directory,
-    get_ticket_subdirectories,
     get_ticket_subdirectories_info,
     parse_datetime_range,
     process_ticket_logs,
@@ -254,7 +254,7 @@ class NovoTicketApp:
 
         subtitle_lbl = tk.Label(
             header_frame,
-            text="Criação padronizada de diretórios de tickets e filtragem de logs multinível por subpastas e período.",
+            text="Criação padronizada de tickets e filtragem de logs multinível (com suporte a Wildfly e incremental).",
             font=("Segoe UI", 9),
             bg=THEME["bg_base"],
             fg=THEME["fg_secondary"],
@@ -484,7 +484,7 @@ class NovoTicketApp:
         )
         btn_change_tkt.pack(side="right")
 
-        # Card: Subpastas do Ticket (NOVO DESIGN COM CHECKBOXES E MULTINÍVEL)
+        # Card: Subpastas do Ticket (ÁRVORE INDENTADA VIA CHECKBOXES)
         subdirs_card = create_card_frame(self.tab_logs)
         subdirs_card.pack(fill="both", expand=True, pady=(0, 8), padx=1)
 
@@ -497,7 +497,7 @@ class NovoTicketApp:
 
         sd_title = tk.Label(
             header_row,
-            text="1. Subpastas do Ticket (todos os níveis):",
+            text="1. Subpastas do Ticket (estrutura hierárquica):",
             font=("Segoe UI", 9, "bold"),
             bg=THEME["bg_surface"],
             fg=THEME["fg_primary"],
@@ -592,13 +592,11 @@ class NovoTicketApp:
         self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        # Ajusta largura do frame interno ao redimensionar canvas
         self.canvas.bind(
             "<Configure>",
             lambda e: self.canvas.itemconfig(self.canvas_window, width=e.width)
         )
 
-        # Suporte a scroll com mouse wheel
         self._bind_mousewheel(self.canvas)
         self._bind_mousewheel(self.scrollable_frame)
 
@@ -655,9 +653,12 @@ class NovoTicketApp:
         self.entry_tm_fim = create_styled_entry(grid_time, textvariable=self.tm_fim_var)
         self.entry_tm_fim.grid(row=1, column=3, sticky="ew", padx=(4, 0), pady=(2, 0))
 
-        # Atalhos rápidos de data
-        shortcuts_frame = tk.Frame(tc_inner, bg=THEME["bg_surface"])
-        shortcuts_frame.pack(fill="x", pady=(4, 0))
+        # Atalhos rápidos de data e Opção Incremental
+        options_row = tk.Frame(tc_inner, bg=THEME["bg_surface"])
+        options_row.pack(fill="x", pady=(4, 0))
+
+        shortcuts_frame = tk.Frame(options_row, bg=THEME["bg_surface"])
+        shortcuts_frame.pack(side="left")
 
         tk.Label(shortcuts_frame, text="Atalhos:", font=("Segoe UI", 8), bg=THEME["bg_surface"], fg=THEME["fg_secondary"]).pack(side="left", padx=(0, 6))
 
@@ -669,6 +670,22 @@ class NovoTicketApp:
 
         btn_last_7days = create_secondary_button(shortcuts_frame, text="Últimos 7 dias", command=self._set_range_last_7days)
         btn_last_7days.pack(side="left")
+
+        # Checkbox Incremental / Sobrescrita
+        self.overwrite_var = tk.BooleanVar(value=False)
+        chk_overwrite = tk.Checkbutton(
+            options_row,
+            variable=self.overwrite_var,
+            text="Sobrescrever já processados",
+            font=("Segoe UI", 8),
+            bg=THEME["bg_surface"],
+            fg=THEME["fg_secondary"],
+            selectcolor=THEME["bg_base"],
+            activebackground=THEME["bg_hover"],
+            activeforeground=THEME["fg_primary"],
+            cursor="hand2",
+        )
+        chk_overwrite.pack(side="right")
 
         # Botão de Ação Principal
         action_bar = tk.Frame(self.tab_logs, bg=THEME["bg_base"])
@@ -814,7 +831,7 @@ class NovoTicketApp:
             self.ticket_status_lbl.config(text="✓ Caminho copiado para a área de transferência!", fg=THEME["success"])
 
     # -----------------------------------------------------------------------
-    # Handlers e Lógica de Filtragem de Logs e Subpastas
+    # Handlers e Lógica de Filtragem de Logs e Subpastas Indentadas
     # -----------------------------------------------------------------------
     def _refresh_subdirectories(self):
         self.subdirs_data.clear()
@@ -827,6 +844,9 @@ class NovoTicketApp:
             var = tk.BooleanVar(value=True)  # Selecionada por padrão
             self.subdirs_data.append({
                 "path": item["path"],
+                "name": item["name"],
+                "depth": item["depth"],
+                "parent": item["parent"],
                 "log_count": item["log_count"],
                 "has_logs": item["has_logs"],
                 "var": var,
@@ -835,7 +855,6 @@ class NovoTicketApp:
         self._render_subdirectories_list()
 
     def _render_subdirectories_list(self):
-        # Limpa widgets existentes no scrollable_frame
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
 
@@ -872,6 +891,8 @@ class NovoTicketApp:
 
         for idx, item in enumerate(self.subdirs_data):
             rel_path = item["path"]
+            folder_name = item["name"]
+            depth = item["depth"]
             log_count = item["log_count"]
             var = item["var"]
 
@@ -883,22 +904,24 @@ class NovoTicketApp:
 
             displayed_count += 1
 
-            # Linha estilizada do item
             row = tk.Frame(
                 self.scrollable_frame,
                 bg=THEME["bg_input"] if (idx % 2 == 0) else THEME["bg_surface"],
                 padx=8,
-                pady=4,
+                pady=3,
             )
             row.pack(fill="x", expand=True)
 
             self._bind_mousewheel(row)
 
-            # Checkbox estilizado
+            # Recuo visual proporcional à profundidade (indentação em árvore)
+            indent_px = 6 + (depth * 20)
+            prefix_tree = "└─ " if depth > 0 else ""
+
             chk = tk.Checkbutton(
                 row,
                 variable=var,
-                text=f" 📁  {rel_path}",
+                text=f"📁 {prefix_tree}{folder_name}",
                 font=("Segoe UI", 9, "bold" if item["has_logs"] else "normal"),
                 bg=row["bg"],
                 fg=THEME["fg_primary"],
@@ -910,10 +933,10 @@ class NovoTicketApp:
                 cursor="hand2",
                 anchor="w",
             )
-            chk.pack(side="left", fill="x", expand=True)
+            chk.pack(side="left", padx=(indent_px, 4), fill="x", expand=True)
             self._bind_mousewheel(chk)
 
-            # Badge lateral com quantidade de arquivos .log
+            # Badge lateral com contagem de logs
             if log_count > 0:
                 badge = tk.Label(
                     row,
@@ -1019,28 +1042,34 @@ class NovoTicketApp:
             return
 
         try:
+            overwrite = self.overwrite_var.get()
             summary = process_ticket_logs(
                 ticket_dir=self.active_ticket_path,
                 selected_subdirs=selected_subdirs,
                 start_dt=start_dt,
                 end_dt=end_dt,
+                overwrite=overwrite,
                 output_folder_name="logs_filtrados",
             )
 
             total_scanned = summary["total_files_scanned"]
             total_written = summary["total_files_written"]
+            total_skipped = summary["total_files_skipped_existing"]
             total_blocks = summary["total_blocks_kept"]
             out_dir = summary["output_dir"]
 
-            if total_written > 0:
-                msg = (
-                    f"Filtragem concluída com sucesso!\n"
-                    f"• {total_scanned} arquivo(s) .log analisado(s)\n"
-                    f"• {total_written} arquivo(s) gravado(s) com ocorrências no período\n"
-                    f"• {total_blocks} bloco(s) de log extraído(s)\n"
-                    f"• Destino: {out_dir}"
-                )
-                self._show_logs_feedback(True, msg, out_dir)
+            if total_written > 0 or total_skipped > 0:
+                lines = [
+                    "Processamento concluído com sucesso!",
+                    f"• {total_scanned} arquivo(s) .log analisado(s)",
+                    f"• {total_written} novo(s) arquivo(s) gravado(s) com logs no período",
+                ]
+                if total_skipped > 0:
+                    lines.append(f"• {total_skipped} arquivo(s) já existentes mantidos (ignorados)")
+                lines.append(f"• {total_blocks} bloco(s) de log extraído(s)")
+                lines.append(f"• Destino: {out_dir}")
+
+                self._show_logs_feedback(True, "\n".join(lines), out_dir)
             else:
                 msg = (
                     f"Filtragem concluída. {total_scanned} arquivo(s) .log analisado(s), "
