@@ -186,8 +186,8 @@
     {
       "id": "novo-ticket",
       "name": "Novo Ticket",
-      "description": "Cria estrutura de diretórios padronizada (CLIENTE_TICKET) para novos atendimentos e tickets.",
-      "version": "1.0.1",
+      "description": "Criação e abertura de tickets (CLIENTE_TICKET) com extrator e filtro temporal de logs por subpastas.",
+      "version": "1.1.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -195,11 +195,13 @@
         "atendimento",
         "suporte",
         "diretorio",
+        "logs",
+        "filtro",
         "utilidade"
       ],
       "icon": "folder-plus",
       "command": "novo-ticket",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.0.1/novo-ticket.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.1.0/novo-ticket.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-08-19"
     }
