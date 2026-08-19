@@ -1,0 +1,100 @@
+/* ==========================================================================
+   Toolbox Official Theme & CSS Tokens (Dark Mode)
+   Extraído diretamente de src/styles/global.css e components.css do Toolbox
+   ========================================================================== */
+
+:root {
+  /* Superfícies Dark Mode */
+  --bg:           #0e1014;   /* Fundo principal */
+  --bg-elev-1:    #161a21;   /* Cards e painéis */
+  --bg-elev-2:    #1f242d;   /* Headers, containers internos */
+  --bg-elev-3:    #262c36;   /* Efeito hover de cards e botões secundários */
+  --bg-elev-4:    #2d3440;   /* Hover ativo */
+  
+  /* Inputs */
+  --input-bg:     #12151c;   /* Fundo de campos */
+  --input-border: #262c36;   /* Borda de campos */
+  --border:       #262c36;   /* Bordas gerais */
+  --border-focus: #6aa3ff;   /* Foco em inputs */
+
+  /* Tipografia */
+  --fg:           #e8eaed;   /* Texto principal (alto contraste) */
+  --fg-muted:     #8b94a3;   /* Texto secundário e labels */
+  --fg-disabled:  #5a6270;   /* Placeholders */
+
+  /* Destaques & Acentos */
+  --accent:       #6aa3ff;   /* Botões primários e seleções */
+  --accent-hover: #7bb3ff;   /* Hover primário */
+  --accent-active:#5a93ef;   /* Clique primário */
+  --accent-soft:  rgba(106, 163, 255, 0.16); /* Badges e fundos sutis */
+
+  /* Status */
+  --success:      #4cc38a;
+  --success-soft: rgba(76, 195, 138, 0.18);
+  --warning:      #f5a524;
+  --warning-soft: rgba(245, 165, 36, 0.18);
+  --danger:       #ff6369;
+  --danger-soft:  rgba(255, 99, 105, 0.18);
+
+  /* Geometria */
+  --radius:       10px;
+  --radius-sm:    6px;
+  --radius-lg:    14px;
+}
+
+/* Reset Global & Alto Contraste */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body {
+  background-color: var(--bg) !important;
+  color: var(--fg) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  user-select: none;
+  overflow-x: hidden;
+  height: 100vh;
+}
+
+/* Inputs, Selects e Textareas - Alto Contraste Forçado */
+input, select, textarea {
+  background-color: var(--input-bg) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--fg-disabled) !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-elev-3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-elev-4);
+}

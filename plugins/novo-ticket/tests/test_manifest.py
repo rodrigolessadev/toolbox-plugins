@@ -12,11 +12,22 @@ def test_manifest_structure():
         data = json.load(f)
 
     assert data.get("name") == "Novo Ticket"
-    assert data.get("version") == "1.3.0"
+    assert data.get("version") == "1.3.1"
     assert data.get("language") == "python"
     assert data.get("entry") == "main.py"
     assert (plugin_dir / data["entry"]).exists()
-    assert (plugin_dir / "ui" / "index.html").exists()
+
+    # Valida autossuficiência de assets locais
+    ui_dir = plugin_dir / "ui"
+    assert (ui_dir / "index.html").exists()
+    assert (ui_dir / "toolbox-theme.css").exists()
+    assert (ui_dir / "icons.js").exists()
+    assert (ui_dir / "style.css").exists()
+    assert (ui_dir / "app.js").exists()
+
+    # Valida que index.html NÃO possui referências relativas externas quebradas
+    html_content = (ui_dir / "index.html").read_text(encoding="utf-8")
+    assert "../../shared" not in html_content, "index.html não deve depender de caminhos relativos externos"
 
 
 def test_python_syntax():
