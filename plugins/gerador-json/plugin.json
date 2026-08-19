@@ -1,8 +1,8 @@
 {
   "name": "Gerador de JSON",
-  "version": "1.0.0",
-  "description": "Gera mock data em JSON (Pessoa, Produto, Usuário) com quantidade configurável e cópia para área de transferência.",
+  "version": "1.1.0",
+  "description": "Formatação, validação e minificação de payloads JSON.",
   "language": "python",
   "entry": "main.py",
-  "icon": "box"
+  "icon": "code"
 }

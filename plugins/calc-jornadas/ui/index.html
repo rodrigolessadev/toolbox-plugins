@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Calculadora de Jornadas — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Calculadora de Jornadas & Horas</h1>
+      <p class="header-desc">Apuração de horas trabalhadas, intervalos, saldo e horas extras</p>
+    </header>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title"><span data-icon="clock"></span> Marcações do Dia</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 11px; color: var(--fg-muted);">Jornada Prevista:</label>
+          <input type="text" id="jornadaPrevista" value="08:00" style="width: 70px; text-align: center;" oninput="handleCalcular()">
+        </div>
+      </div>
+
+      <div id="timesContainer">
+        <div class="time-row">
+          <span style="color: var(--fg-muted); font-weight: 600;">1º Turno:</span>
+          <input type="text" class="t-in" value="08:00" placeholder="Entrada" oninput="handleCalcular()">
+          <input type="text" class="t-out" value="12:00" placeholder="Saída" oninput="handleCalcular()">
+          <div></div>
+        </div>
+        <div class="time-row">
+          <span style="color: var(--fg-muted); font-weight: 600;">2º Turno:</span>
+          <input type="text" class="t-in" value="13:00" placeholder="Entrada" oninput="handleCalcular()">
+          <input type="text" class="t-out" value="18:00" placeholder="Saída" oninput="handleCalcular()">
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+      <div class="card-title"><span data-icon="check"></span> Resumo da Apuração</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px;">
+        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
+          <div style="font-size: 11px; color: var(--fg-muted);">HORAS TRABALHADAS</div>
+          <div id="totTrab" style="font-size: 22px; font-weight: 700; color: var(--fg);">09:00</div>
+        </div>
+        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
+          <div style="font-size: 11px; color: var(--fg-muted);">JORNADA PREVISTA</div>
+          <div id="totPrev" style="font-size: 22px; font-weight: 700; color: var(--fg);">08:00</div>
+        </div>
+        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
+          <div style="font-size: 11px; color: var(--fg-muted);">SALDO / EXTRAS</div>
+          <div id="totSaldo" style="font-size: 22px; font-weight: 700; color: var(--success);">+01:00</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handleCalcular() {
+      const ins = Array.from(document.querySelectorAll('.t-in')).map(e => e.value);
+      const outs = Array.from(document.querySelectorAll('.t-out')).map(e => e.value);
+      const prev = document.getElementById('jornadaPrevista').value;
+      const res = await window.pywebview.api.calcular(ins, outs, prev);
+      if (res.success) {
+        document.getElementById('totTrab').textContent = res.total_trabalhado_str;
+        document.getElementById('totPrev').textContent = res.jornada_prevista_str;
+        const saldoEl = document.getElementById('totSaldo');
+        saldoEl.textContent = (res.saldo_min > 0 ? '+' : '') + res.saldo_str;
+        saldoEl.style.color = res.saldo_min >= 0 ? 'var(--success)' : 'var(--danger)';
+      }
+    }
+    document.addEventListener('DOMContentLoaded', handleCalcular);
+  </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>HAR Kibana Planner — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">HAR Kibana Planner</h1>
+      <p class="header-desc">Análise de tráfego HTTP (.har) e geração automática de queries Kibana de correlação</p>
+    </header>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title"><span data-icon="folder"></span> Arquivo HAR</div>
+        <button class="btn btn-secondary btn-sm" onclick="handlePickFile()"><span data-icon="folder"></span> Selecionar Arquivo HAR...</button>
+      </div>
+      <textarea id="harContent" style="height: 120px; font-family: Consolas, monospace;" placeholder="Selecione um arquivo .har ou cole seu JSON aqui..."></textarea>
+      <div style="display: flex; justify-content: flex-end;">
+        <button class="btn btn-primary" onclick="handlePlan()"><span data-icon="zap"></span> Planejar Queries Kibana</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1; overflow-y: auto;">
+      <div class="card-title" id="planTitle"><span data-icon="check"></span> Queries Planejadas</div>
+      <div id="planResults">
+        <div style="color: var(--fg-muted); text-align: center; padding: 16px;">Carregue um arquivo .har para gerar o plano de busca.</div>
+      </div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handlePickFile() {
+      const res = await window.pywebview.api.pick_har_file();
+      if (res.success) {
+        document.getElementById('harContent').value = res.content;
+        handlePlan();
+      }
+    }
+    async function handlePlan() {
+      const txt = document.getElementById('harContent').value;
+      if (!txt) return;
+      const res = await window.pywebview.api.plan_queries(txt);
+      const container = document.getElementById('planResults');
+      if (res.success && res.data && res.data.queries) {
+        const queries = res.data.queries;
+        document.getElementById('planTitle').innerHTML = `<span data-icon="check"></span> ${queries.length} Queries Geradas`;
+        container.innerHTML = queries.map((q, idx) => `
+          <div class="query-card">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span class="badge badge-accent">${q.strategy || 'Kibana Query'}</span>
+              <button class="btn btn-secondary btn-sm" onclick="copyQuery('${q.query}')"><span data-icon="copy"></span> Copiar</button>
+            </div>
+            <div style="font-family: Consolas, monospace; font-size: 12px; color: var(--fg);">${q.query}</div>
+            <div style="font-size: 11px; color: var(--fg-muted); margin-top: 4px;">${q.reason || ''}</div>
+          </div>
+        `).join('');
+        if (window.renderIcons) window.renderIcons();
+      } else {
+        container.innerHTML = `<div style="color: var(--danger);">${res.message || 'Erro ao processar HAR.'}</div>`;
+      }
+    }
+    async function copyQuery(text) {
+      if (text) await window.pywebview.api.copy_text(text);
+    }
+  </script>
+</body>
+</html>

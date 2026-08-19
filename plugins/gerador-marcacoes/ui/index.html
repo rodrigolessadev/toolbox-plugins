@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Gerador de Marcações SQL — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Gerador de Marcações SQL (Ponto)</h1>
+      <p class="header-desc">Geração de scripts INSERT para tabelas de ponto (R070ACC, R070CON) com suporte a Oracle e SQL Server</p>
+    </header>
+
+    <div class="card">
+      <div class="card-title"><span data-icon="zap"></span> Parâmetros da Geração</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Tabela</label>
+          <input type="text" id="tabela" value="R070ACC" style="width: 100%;">
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Banco de Dados</label>
+          <select id="banco" style="width: 100%;">
+            <option value="ORACLE">Oracle (TO_DATE)</option>
+            <option value="SQLSERVER">SQL Server</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">NumEmp / CodFil</label>
+          <input type="text" id="numEmp" value="1" style="width: 100%;">
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">NumCad (Crachá)</label>
+          <input type="text" id="numCad" value="1001" style="width: 100%;">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Data Inicial</label>
+          <input type="date" id="dtIni" style="width: 100%;">
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Data Final</label>
+          <input type="date" id="dtFim" style="width: 100%;">
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Horários Padrão</label>
+          <input type="text" id="horarios" value="08:00, 12:00, 13:00, 18:00" style="width: 100%;">
+        </div>
+        <div>
+          <label style="font-size: 11px; color: var(--fg-muted);">Variação (min)</label>
+          <input type="number" id="variacao" value="2" style="width: 100%;">
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+        <button class="btn btn-primary" onclick="handleGerar()"><span data-icon="zap"></span> Gerar Comandos SQL</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title" id="resTitle"><span data-icon="check"></span> Script SQL Gerado</div>
+        <button class="btn btn-secondary btn-sm" onclick="handleCopy()"><span data-icon="copy"></span> Copiar SQL</button>
+      </div>
+      <textarea id="sqlOutput" class="sql-textarea" style="flex: 1; height: auto;" readonly></textarea>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('dtIni').value = today;
+      document.getElementById('dtFim').value = today;
+    });
+    async function handleGerar() {
+      const params = {
+        tabela: document.getElementById('tabela').value,
+        banco: document.getElementById('banco').value,
+        campos_fixos: {
+          NUMEMP: document.getElementById('numEmp').value,
+          TIPCOL: 1,
+          NUMCAD: document.getElementById('numCad').value
+        },
+        start_date: document.getElementById('dtIni').value,
+        end_date: document.getElementById('dtFim').value,
+        horarios: document.getElementById('horarios').value.split(',').map(s => s.trim()),
+        variacao_minutos: parseInt(document.getElementById('variacao').value) || 0
+      };
+      const res = await window.pywebview.api.gerar_inserts(params);
+      if (res.success) {
+        document.getElementById('sqlOutput').value = res.sql;
+        document.getElementById('resTitle').innerHTML = `<span data-icon="check"></span> ${res.count} INSERTs gerados`;
+        if (window.renderIcons) window.renderIcons();
+      }
+    }
+    async function handleCopy() {
+      const txt = document.getElementById('sqlOutput').value;
+      if (txt) await window.pywebview.api.copy_text(txt);
+    }
+  </script>
+</body>
+</html>

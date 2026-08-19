@@ -1,7 +1,7 @@
 {
   "name": "Analysis Orchestrator",
-  "version": "1.0.1",
-  "description": "Orquestra a análise ponta a ponta executando sanitização, filtragem, otimização, timeline e evidências.",
+  "version": "1.1.0",
+  "description": "Pipeline automatizado para orquestração de análises e extração de evidências.",
   "language": "python",
   "entry": "main.py",
   "icon": "workflow"

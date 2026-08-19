@@ -1,27 +1,30 @@
 import sys
+import importlib.util
 from datetime import date, datetime
 from pathlib import Path
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+_domain_path = Path(__file__).parent.parent / "domain.py"
+_spec = importlib.util.spec_from_file_location("novo_ticket_domain", _domain_path)
+domain = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(domain)
 
-from domain import (
-    sanitize_component,
-    format_ticket_folder_name,
-    validate_base_dir,
-    validate_inputs,
-    create_ticket_directory,
-    get_ticket_subdirectories,
-    get_ticket_subdirectories_info,
-    parse_datetime_str,
-    parse_datetime_range,
-    extract_date_from_path,
-    get_file_reference_date,
-    extract_log_line_timestamp,
-    parse_log_blocks,
-    filter_log_file,
-    process_ticket_logs,
-)
+sanitize_component = domain.sanitize_component
+format_ticket_folder_name = domain.format_ticket_folder_name
+validate_base_dir = domain.validate_base_dir
+validate_inputs = domain.validate_inputs
+create_ticket_directory = domain.create_ticket_directory
+get_ticket_subdirectories = domain.get_ticket_subdirectories
+get_ticket_subdirectories_info = domain.get_ticket_subdirectories_info
+parse_datetime_str = domain.parse_datetime_str
+parse_datetime_range = domain.parse_datetime_range
+extract_date_from_path = domain.extract_date_from_path
+get_file_reference_date = domain.get_file_reference_date
+extract_log_line_timestamp = domain.extract_log_line_timestamp
+parse_log_blocks = domain.parse_log_blocks
+filter_log_file = domain.filter_log_file
+process_ticket_logs = domain.process_ticket_logs
+
 
 
 def test_sanitize_component():

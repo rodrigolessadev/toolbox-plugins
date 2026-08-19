@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Stract JSON — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Extrator de JSON (Stract JSON)</h1>
+      <p class="header-desc">Extração automática de payloads JSON embutidos em logs e filtragem de campos específicos</p>
+    </header>
+
+    <div class="card">
+      <div class="card-title"><span data-icon="zap"></span> Texto / Log de Entrada</div>
+      <textarea id="inputText" style="height: 140px; font-family: Consolas, monospace;" placeholder="Cole o texto contendo JSONs embutidos..."></textarea>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <input type="text" id="targetField" placeholder="Campo específico (opcional, ex: responseBody)" style="flex: 1;">
+        <button class="btn btn-primary" onclick="handleExtract()"><span data-icon="zap"></span> Extrair JSONs</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1; overflow-y: auto;">
+      <div class="card-title" id="resultsTitle"><span data-icon="check"></span> Itens Extraídos</div>
+      <div id="resultsContainer">
+        <div style="color: var(--fg-muted); text-align: center; padding: 16px;">Nenhum JSON extraído ainda.</div>
+      </div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handleExtract() {
+      const text = document.getElementById('inputText').value;
+      const field = document.getElementById('targetField').value;
+      const res = await window.pywebview.api.extract_json(text, field);
+      const container = document.getElementById('resultsContainer');
+      const title = document.getElementById('resultsTitle');
+
+      if (!res.success || res.items.length === 0) {
+        container.innerHTML = `<div style="color: var(--danger); padding: 12px;">${res.message || 'Nenhum JSON encontrado.'}</div>`;
+        return;
+      }
+
+      title.innerHTML = `<span data-icon="check"></span> ${res.count} item(ns) extraído(s)`;
+      container.innerHTML = res.items.map((item, idx) => `
+        <div class="json-card">
+          <div class="json-card-header">
+            <span class="badge badge-accent">#${idx + 1}</span>
+            <button class="btn btn-secondary btn-sm" onclick="copyItem(${idx})"><span data-icon="copy"></span> Copiar</button>
+          </div>
+          <pre class="json-pre" id="json_item_${idx}">${item}</pre>
+        </div>
+      `).join('');
+      if (window.renderIcons) window.renderIcons();
+    }
+    async function copyItem(idx) {
+      const el = document.getElementById(`json_item_${idx}`);
+      if (el) await window.pywebview.api.copy_text(el.textContent);
+    }
+  </script>
+</body>
+</html>

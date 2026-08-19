@@ -1,8 +1,8 @@
 {
-  "name": "Gerador de Marcações",
-  "version": "2.2.1",
-  "description": "Gera INSERTs SQL para a tabela R070ACC (SQL Server e Oracle).",
+  "name": "Gerador de Marcações SQL",
+  "version": "2.3.0",
+  "description": "Geração de comandos INSERT SQL para tabelas de ponto com variações e horários.",
   "language": "python",
   "entry": "main.py",
-  "icon": "table-properties"
+  "icon": "database"
 }

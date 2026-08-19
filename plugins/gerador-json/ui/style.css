@@ -1,0 +1,8 @@
+
+.editor-textarea {
+  width: 100%;
+  height: 380px;
+  font-family: Consolas, monospace !important;
+  font-size: 12px !important;
+  resize: vertical;
+}

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Converter Data — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Converter Data & Timestamp</h1>
+      <p class="header-desc">Conversão bidirecional entre Epoch Unix, ISO 8601, Formato BR e Excel Serial</p>
+    </header>
+
+    <div class="card">
+      <div class="card-title"><span data-icon="clock"></span> Entrada de Dados</div>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="inputVal" placeholder="Cole timestamp (ex: 1771500000) ou data (ex: 2026-08-19 14:30:00)" style="flex: 1;" oninput="handleConvert()">
+        <button class="btn btn-primary" onclick="setNow()"><span data-icon="zap"></span> Agora</button>
+      </div>
+    </div>
+
+    <div class="card" id="cardResult" style="display: none;">
+      <div class="card-title"><span data-icon="check"></span> Resultados Convertidos</div>
+      <div class="result-grid">
+        <div class="result-label">ISO Local:</div>
+        <div class="result-val" id="resIsoLocal"></div>
+        <button class="btn btn-secondary" onclick="copyField('resIsoLocal')"><span data-icon="copy"></span></button>
+
+        <div class="result-label">Formato BR:</div>
+        <div class="result-val" id="resBrLocal"></div>
+        <button class="btn btn-secondary" onclick="copyField('resBrLocal')"><span data-icon="copy"></span></button>
+
+        <div class="result-label">ISO UTC:</div>
+        <div class="result-val" id="resIsoUtc"></div>
+        <button class="btn btn-secondary" onclick="copyField('resIsoUtc')"><span data-icon="copy"></span></button>
+
+        <div class="result-label">Epoch Segundos:</div>
+        <div class="result-val" id="resEpochSec"></div>
+        <button class="btn btn-secondary" onclick="copyField('resEpochSec')"><span data-icon="copy"></span></button>
+
+        <div class="result-label">Epoch Milissegundos:</div>
+        <div class="result-val" id="resEpochMs"></div>
+        <button class="btn btn-secondary" onclick="copyField('resEpochMs')"><span data-icon="copy"></span></button>
+
+        <div class="result-label">Excel Serial:</div>
+        <div class="result-val" id="resExcel"></div>
+        <button class="btn btn-secondary" onclick="copyField('resExcel')"><span data-icon="copy"></span></button>
+      </div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handleConvert() {
+      const val = document.getElementById('inputVal').value.trim();
+      if (!val) { document.getElementById('cardResult').style.display = 'none'; return; }
+      try {
+        const res = await window.pywebview.api.convert(val);
+        if (res.success) {
+          document.getElementById('cardResult').style.display = 'flex';
+          document.getElementById('resIsoLocal').textContent = res.iso_local;
+          document.getElementById('resBrLocal').textContent = res.br_local;
+          document.getElementById('resIsoUtc').textContent = res.iso_utc;
+          document.getElementById('resEpochSec').textContent = res.epoch_sec;
+          document.getElementById('resEpochMs').textContent = res.epoch_ms;
+          document.getElementById('resExcel').textContent = res.excel;
+        } else {
+          document.getElementById('cardResult').style.display = 'none';
+        }
+      } catch(e) { console.error(e); }
+    }
+    function setNow() {
+      document.getElementById('inputVal').value = Math.floor(Date.now() / 1000);
+      handleConvert();
+    }
+    async function copyField(id) {
+      const txt = document.getElementById(id).textContent;
+      if (txt) await window.pywebview.api.copy_text(txt);
+    }
+  </script>
+</body>
+</html>
