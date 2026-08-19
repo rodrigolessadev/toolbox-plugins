@@ -1,8 +1,8 @@
 {
   "name": "HAR Kibana Planner",
-  "version": "1.0.0",
-  "description": "Gera planos de consulta determinísticos no Elasticsearch/Kibana a partir de arquivos HAR 1.2.",
+  "version": "1.1.0",
+  "description": "Parser de arquivos HAR e planejador de queries para Kibana.",
   "language": "python",
   "entry": "main.py",
-  "icon": "network"
+  "icon": "search"
 }

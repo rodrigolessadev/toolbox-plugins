@@ -1,0 +1,8 @@
+
+.time-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}

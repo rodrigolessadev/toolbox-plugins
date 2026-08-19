@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Formatador de JSON — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Formatador & Minificador de JSON</h1>
+      <p class="header-desc">Formatação elegante, minificação e validação de sintaxe JSON</p>
+    </header>
+
+    <div class="card" style="flex: 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title"><span data-icon="zap"></span> Editor JSON</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="handleMinify()"><span data-icon="zap"></span> Minificar</button>
+          <button class="btn btn-primary" onclick="handleFormat()"><span data-icon="check"></span> Formatar JSON</button>
+          <button class="btn btn-secondary" onclick="handleCopy()"><span data-icon="copy"></span> Copiar</button>
+        </div>
+      </div>
+      <textarea id="jsonEditor" class="editor-textarea" placeholder="Cole seu JSON aqui..."></textarea>
+      <div id="statusMsg" class="badge badge-muted" style="align-self: flex-start;">Pronto</div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handleFormat() {
+      const txt = document.getElementById('jsonEditor').value;
+      const res = await window.pywebview.api.format_json(txt, 2);
+      const st = document.getElementById('statusMsg');
+      if (res.success) {
+        document.getElementById('jsonEditor').value = res.result;
+        st.className = 'badge badge-success';
+        st.textContent = '✔ JSON FORMATADO COM SUCESSO';
+      } else {
+        st.className = 'badge badge-danger';
+        st.textContent = res.message;
+      }
+    }
+    async function handleMinify() {
+      const txt = document.getElementById('jsonEditor').value;
+      const res = await window.pywebview.api.minify_json(txt);
+      const st = document.getElementById('statusMsg');
+      if (res.success) {
+        document.getElementById('jsonEditor').value = res.result;
+        st.className = 'badge badge-success';
+        st.textContent = '✔ JSON MINIFICADO COM SUCESSO';
+      } else {
+        st.className = 'badge badge-danger';
+        st.textContent = res.message;
+      }
+    }
+    async function handleCopy() {
+      const txt = document.getElementById('jsonEditor').value;
+      if (txt) await window.pywebview.api.copy_text(txt);
+    }
+  </script>
+</body>
+</html>

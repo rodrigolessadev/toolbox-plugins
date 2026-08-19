@@ -1,8 +1,8 @@
 {
   "name": "Validador de CPF",
-  "version": "1.0.0",
-  "description": "Valida e gera CPFs com interface gráfica. Suporta formatação automática e cópia para área de transferência.",
+  "version": "1.1.0",
+  "description": "Validação de dígitos verificadores e geração de CPFs válidos para testes.",
   "language": "python",
   "entry": "main.py",
-  "icon": "id-card"
+  "icon": "check"
 }

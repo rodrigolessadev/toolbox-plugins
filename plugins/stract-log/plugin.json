@@ -1,8 +1,8 @@
 {
   "name": "Stract Log",
-  "version": "1.0.0",
-  "description": "Filtra e extrai blocos de log por nível, parâmetro adicional e regra de recorrência (mais recente / mais antiga).",
+  "version": "1.1.0",
+  "description": "Extração e filtragem de logs por nível, regex e período.",
   "language": "python",
   "entry": "main.py",
-  "icon": "filter"
+  "icon": "file-text"
 }

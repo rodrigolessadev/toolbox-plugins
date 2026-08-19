@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Validador de CPF — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Validador & Gerador de CPF</h1>
+      <p class="header-desc">Geração de CPFs válidos e validação instantânea com formatação automática</p>
+    </header>
+
+    <div class="card">
+      <div class="card-title"><span data-icon="zap"></span> Gerador de CPF</div>
+      <div class="cpf-display" id="generatedCpf">Clique em Gerar</div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="checkFormat" checked> <span>Com pontuação</span>
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="copyGenerated()"><span data-icon="copy"></span> Copiar</button>
+          <button class="btn btn-primary" onclick="handleGenerate()"><span data-icon="refresh"></span> Gerar Novo CPF</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span data-icon="check"></span> Validador de CPF</div>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="inputValidate" placeholder="Digite ou cole o CPF a validar..." style="flex: 1;" oninput="handleValidate()">
+      </div>
+      <div id="validateResult" style="display: none; align-items: center; justify-content: space-between; margin-top: 4px;">
+        <div id="validateBadge" class="badge"></div>
+        <div id="validateFormatted" style="font-family: Consolas, monospace; color: var(--fg-muted);"></div>
+      </div>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handleGenerate() {
+      const fmt = document.getElementById('checkFormat').checked;
+      const res = await window.pywebview.api.generate(fmt);
+      document.getElementById('generatedCpf').textContent = res;
+    }
+    async function copyGenerated() {
+      const txt = document.getElementById('generatedCpf').textContent;
+      if (txt && txt !== 'Clique em Gerar') await window.pywebview.api.copy_text(txt);
+    }
+    async function handleValidate() {
+      const val = document.getElementById('inputValidate').value.trim();
+      const resEl = document.getElementById('validateResult');
+      if (!val) { resEl.style.display = 'none'; return; }
+      const res = await window.pywebview.api.validate(val);
+      resEl.style.display = 'flex';
+      const badge = document.getElementById('validateBadge');
+      if (res.valid) {
+        badge.className = 'badge badge-success';
+        badge.textContent = '✔ CPF VÁLIDO';
+        document.getElementById('validateFormatted').textContent = res.formatted;
+      } else {
+        badge.className = 'badge badge-danger';
+        badge.textContent = '✖ CPF INVÁLIDO';
+        document.getElementById('validateFormatted').textContent = '';
+      }
+    }
+    document.addEventListener('DOMContentLoaded', handleGenerate);
+  </script>
+</body>
+</html>

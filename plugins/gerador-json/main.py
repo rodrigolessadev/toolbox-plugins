@@ -1,58 +1,31 @@
 import sys
 from pathlib import Path
+PLUGINS_ROOT = Path(__file__).parent.parent
+if str(PLUGINS_ROOT) not in sys.path:
+    sys.path.insert(0, str(PLUGINS_ROOT))
 
-try:
-    from shared.theme_utils import (
-        THEME, setup_app_theme, create_card_frame, create_styled_entry,
-        create_styled_text, create_primary_button, create_secondary_button,
-        create_info_banner, create_modal_window, enable_high_dpi
-    )
-except ImportError:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from shared.theme_utils import (
-        THEME, setup_app_theme, create_card_frame, create_styled_entry,
-        create_styled_text, create_primary_button, create_secondary_button,
-        create_info_banner, create_modal_window, enable_high_dpi
-    )
+from shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard
+import domain
+import webview
 
-DARK = {
-    "bg": THEME["bg_base"],
-    "bg2": THEME["bg_surface"],
-    "input_bg": THEME["bg_input"],
-    "fg": THEME["fg_primary"],
-    "muted": THEME["fg_secondary"],
-    "accent": THEME["accent"],
-    "border": THEME["border"],
-    "success": THEME["success"],
-    "danger": THEME["danger"],
-    "editable_bg": THEME["bg_input"],
-    "editable_alt": THEME["bg_hover"],
-}
+class GeradorJsonApi(BasePluginApi):
+    def format_json(self, text: str, indent: int) -> dict:
+        return domain.format_json(text, indent)
 
-#!/usr/bin/env python3
-"""
-Plugin: Gerador JSON (Em Desenvolvimento)
-Esta é uma versão placeholder. Implementação completa em Etapa 6.
-"""
-import tkinter as tk
-from tkinter import messagebox
-
+    def minify_json(self, text: str) -> dict:
+        return domain.minify_json(text)
 
 def main():
-    """Mostra mensagem informativa."""
-    root = tk.Tk()
-    root.withdraw()  # Esconde a janela principal
-    
-    messagebox.showinfo(
-        "Gerador JSON",
-        "🚧 Este plugin está em desenvolvimento.\n\n"
-        "Versão completa em breve com templates para:\n"
-        "• Pessoa (nome, email, idade, cidade, ativo)\n"
-        "• Produto (nome, preço, estoque, categoria)\n"
-        "• Usuário (id, username, email, role, createdAt)\n"
+    api = GeradorJsonApi()
+    ui_index = Path(__file__).parent / "ui" / "index.html"
+    create_plugin_window(
+        title="Formatador & Validador de JSON",
+        entry_html=ui_index,
+        js_api=api,
+        width=740,
+        height=720,
     )
-    root.destroy()
-
+    webview.start(debug=False)
 
 if __name__ == "__main__":
     main()

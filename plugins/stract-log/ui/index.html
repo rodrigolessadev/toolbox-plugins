@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Stract Log — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="header-title">Extrator & Filtro de Logs (Stract Log)</h1>
+      <p class="header-desc">Filtragem estruturada por nível de log, regex e remoção de ocorrências repetidas</p>
+    </header>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title"><span data-icon="folder"></span> Arquivo ou Texto de Log</div>
+        <button class="btn btn-secondary btn-sm" onclick="handlePickFile()"><span data-icon="folder"></span> Carregar Arquivo...</button>
+      </div>
+      <textarea id="inputLogText" class="log-textarea" placeholder="Cole o texto de log aqui ou carregue um arquivo..."></textarea>
+      
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <select id="selectLevel" style="width: 140px;">
+          <option value="TODOS">Todos os Níveis</option>
+          <option value="ERROR">ERROR / FATAL</option>
+          <option value="WARN">WARN / WARNING</option>
+          <option value="INFO">INFO</option>
+          <option value="DEBUG">DEBUG</option>
+        </select>
+        <input type="text" id="inputRegex" placeholder="Filtro Regex / Termo (ex: NullPointerException)" style="flex: 1;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+          <input type="checkbox" id="checkDedup"> <span>Dedup</span>
+        </label>
+        <button class="btn btn-primary" onclick="handleFilter()"><span data-icon="zap"></span> Filtrar</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex: 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title" id="resTitle"><span data-icon="check"></span> Logs Filtrados</div>
+        <button class="btn btn-secondary btn-sm" onclick="handleCopyResult()"><span data-icon="copy"></span> Copiar Resultado</button>
+      </div>
+      <textarea id="outputLogText" class="log-textarea" style="flex: 1; height: auto;" readonly placeholder="Os logs filtrados aparecerão aqui..."></textarea>
+    </div>
+  </div>
+  <script src="icons.js"></script>
+  <script>
+    async function handlePickFile() {
+      const res = await window.pywebview.api.pick_log_file();
+      if (res.success) {
+        document.getElementById('inputLogText').value = res.content;
+      }
+    }
+    async function handleFilter() {
+      const text = document.getElementById('inputLogText').value;
+      const regex = document.getElementById('inputRegex').value;
+      const level = document.getElementById('selectLevel').value;
+      const dedup = document.getElementById('checkDedup').checked;
+      const res = await window.pywebview.api.filter_logs(text, regex, level, dedup);
+      if (res.success) {
+        document.getElementById('outputLogText').value = res.result_text;
+        document.getElementById('resTitle').innerHTML = `<span data-icon="check"></span> ${res.filtered_blocks} de ${res.total_blocks} blocos encontrados`;
+        if (window.renderIcons) window.renderIcons();
+      }
+    }
+    async function handleCopyResult() {
+      const text = document.getElementById('outputLogText').value;
+      if (text) await window.pywebview.api.copy_text(text);
+    }
+  </script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 {
   "name": "Stract JSON",
-  "version": "1.0.1",
-  "description": "Extrai valores de um campo específico a partir de um JSON colado.",
+  "version": "1.1.0",
+  "description": "Extração de estruturas JSON embutidas em logs e textos não estruturados.",
   "language": "python",
   "entry": "main.py",
-  "icon": "braces"
+  "icon": "brackets"
 }
