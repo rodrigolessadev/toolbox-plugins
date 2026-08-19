@@ -186,8 +186,8 @@
     {
       "id": "novo-ticket",
       "name": "Novo Ticket",
-      "description": "Criação e abertura de tickets (CLIENTE_TICKET) com extrator de logs multinível (inferência de data Wildfly e incremental).",
-      "version": "1.2.1",
+      "description": "Criação de tickets (CLIENTE_TICKET) e extrator temporal de logs com interface moderna pywebview.",
+      "version": "1.3.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -201,7 +201,7 @@
       ],
       "icon": "folder-plus",
       "command": "novo-ticket",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.2.1/novo-ticket.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.3.0/novo-ticket.zip",
       "min_toolbox_version": "1.0.0",
       "updated_at": "2026-08-19"
     }

@@ -12,10 +12,11 @@ def test_manifest_structure():
         data = json.load(f)
 
     assert data.get("name") == "Novo Ticket"
-    assert data.get("version") == "1.2.1"
+    assert data.get("version") == "1.3.0"
     assert data.get("language") == "python"
     assert data.get("entry") == "main.py"
     assert (plugin_dir / data["entry"]).exists()
+    assert (plugin_dir / "ui" / "index.html").exists()
 
 
 def test_python_syntax():
