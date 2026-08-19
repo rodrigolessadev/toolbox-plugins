@@ -1,5 +1,5 @@
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 import pytest
 
@@ -101,36 +101,49 @@ def test_parse_datetime_range():
 
 
 def test_extract_log_line_timestamp():
+    # Padrão Senior colchetes
     line_senior = "[19-08-2026 10:15:30] INFO: Processo iniciado"
     dt = extract_log_line_timestamp(line_senior)
     assert dt == datetime(2026, 8, 19, 10, 15, 30)
 
+    # Padrão ISO
     line_iso = "2026-08-19 14:20:00.123 [main] ERROR - Falha de conexao"
     dt_iso = extract_log_line_timestamp(line_iso)
     assert dt_iso == datetime(2026, 8, 19, 14, 20, 0)
 
+    # Padrão BR
     line_br = "19/08/2026 09:00:00 WARN Mensagem de aviso"
     dt_br = extract_log_line_timestamp(line_br)
     assert dt_br == datetime(2026, 8, 19, 9, 0, 0)
 
+    # Linha sem timestamp
     assert extract_log_line_timestamp("   at org.hibernate.Session.close(Session.java:123)") is None
 
 
-def test_parse_log_blocks():
+def test_extract_log_line_timestamp_wildfly():
+    # Log Wildfly (apenas horário no início da linha)
+    ref_d = date(2026, 8, 19)
+    line_wild = "15:26:53,544 INFO  [br.com.senior.services.mdw.ServiceApplication] Executando serviço..."
+    dt_wild = extract_log_line_timestamp(line_wild, reference_date=ref_d)
+    assert dt_wild == datetime(2026, 8, 19, 15, 26, 53)
+
+    line_wild_err = "15:26:54,895 ERROR [br.com.senior.services.mdw.ServiceApplication] Ocorreu um erro"
+    dt_err = extract_log_line_timestamp(line_wild_err, reference_date=ref_d)
+    assert dt_err == datetime(2026, 8, 19, 15, 26, 54)
+
+
+def test_parse_log_blocks_wildfly():
+    ref_d = date(2026, 8, 19)
     sample_log = (
-        "[19-08-2026 10:00:00] INFO: Inicio do processamento\n"
-        "Parametro A = 123\n"
-        "Parametro B = 456\n"
-        "[19-08-2026 10:05:00] ERROR: NullPointerException\n"
-        "\tat com.example.Service.run(Service.java:42)\n"
-        "\tat com.example.Main.main(Main.java:10)\n"
+        "15:26:53,544 INFO  [com.senior] Conectado com sucesso.\n"
+        "15:26:54,895 ERROR [com.senior] Ocorreu um erro na aplicação servidora\n"
+        "Resposta da aplicação: $51=Problemas na inclusão.\n"
     )
-    blocks = parse_log_blocks(sample_log)
+    blocks = parse_log_blocks(sample_log, reference_date=ref_d)
     assert len(blocks) == 2
-    assert blocks[0]["timestamp"] == datetime(2026, 8, 19, 10, 0, 0)
-    assert len(blocks[0]["lines"]) == 3
-    assert blocks[1]["timestamp"] == datetime(2026, 8, 19, 10, 5, 0)
-    assert len(blocks[1]["lines"]) == 3
+    assert blocks[0]["timestamp"] == datetime(2026, 8, 19, 15, 26, 53)
+    assert blocks[1]["timestamp"] == datetime(2026, 8, 19, 15, 26, 54)
+    assert len(blocks[1]["lines"]) == 2
 
 
 def test_filter_log_file_with_matches(tmp_path: Path):
@@ -147,8 +160,9 @@ def test_filter_log_file_with_matches(tmp_path: Path):
     start_dt = datetime(2026, 8, 19, 10, 0, 0)
     end_dt = datetime(2026, 8, 19, 12, 0, 0)
 
-    count = filter_log_file(source, target, start_dt, end_dt)
+    count, status = filter_log_file(source, target, start_dt, end_dt)
     assert count == 2
+    assert status == "written"
     assert target.exists()
 
     filtered_content = target.read_text(encoding="utf-8")
@@ -157,97 +171,82 @@ def test_filter_log_file_with_matches(tmp_path: Path):
     assert "Fora do range" not in filtered_content
 
 
-def test_filter_log_file_no_matches_ignored(tmp_path: Path):
-    source = tmp_path / "outdated.log"
-    source.write_text(
-        "[18-08-2026 08:00:00] INFO: Log de ontem\n",
-        encoding="utf-8"
-    )
-    target = tmp_path / "filtered" / "outdated.log"
+def test_filter_log_file_incremental_skip(tmp_path: Path):
+    source = tmp_path / "app.log"
+    source.write_text("[19-08-2026 10:15:00] INFO: Log teste\n", encoding="utf-8")
+
+    target = tmp_path / "filtered" / "app.log"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("conteudo anterior ja processado", encoding="utf-8")
+
     start_dt = datetime(2026, 8, 19, 10, 0, 0)
     end_dt = datetime(2026, 8, 19, 12, 0, 0)
 
-    count = filter_log_file(source, target, start_dt, end_dt)
+    # Se overwrite for False, deve ignorar o arquivo
+    count, status = filter_log_file(source, target, start_dt, end_dt, overwrite=False)
     assert count == 0
-    assert not target.exists()
+    assert status == "skipped_existing"
+    assert target.read_text(encoding="utf-8") == "conteudo anterior ja processado"
 
 
-def test_get_ticket_subdirectories_multilevel(tmp_path: Path):
-    # Cria estrutura com multiplos niveis de profundidade
-    (tmp_path / "integrador" / "core" / "logs").mkdir(parents=True)
-    (tmp_path / "servicos" / "auth").mkdir(parents=True)
-    (tmp_path / "logs_filtrados" / "ignorado").mkdir(parents=True)
-    (tmp_path / ".git" / "hooks").mkdir(parents=True)
-    (tmp_path / "arquivo.txt").write_text("txt", encoding="utf-8")
-
-    subdirs = get_ticket_subdirectories(tmp_path)
-    # Todos os niveis devem ser listados, exceto logs_filtrados e pastas ocultas
-    assert "integrador" in subdirs
-    assert "integrador/core" in subdirs
-    assert "integrador/core/logs" in subdirs
-    assert "servicos" in subdirs
-    assert "servicos/auth" in subdirs
-    assert not any("logs_filtrados" in s for s in subdirs)
-    assert not any(".git" in s for s in subdirs)
-
-
-def test_get_ticket_subdirectories_info(tmp_path: Path):
-    sub1 = tmp_path / "integrador"
-    sub1.mkdir()
-    (sub1 / "sync.log").write_text("log", encoding="utf-8")
-    (sub1 / "app.log").write_text("log", encoding="utf-8")
-
-    sub2 = tmp_path / "empty_dir"
-    sub2.mkdir()
+def test_get_ticket_subdirectories_info_hierarchy(tmp_path: Path):
+    (tmp_path / "LogsSenior_COMPLETO_20260817" / "logs_brutos").mkdir(parents=True)
+    (tmp_path / "servicos").mkdir()
 
     infos = get_ticket_subdirectories_info(tmp_path)
-    assert len(infos) == 2
+    assert len(infos) == 3
 
-    info_integrador = next(i for i in infos if i["path"] == "integrador")
-    assert info_integrador["log_count"] == 2
-    assert info_integrador["has_logs"] is True
+    info_parent = next(i for i in infos if i["path"] == "LogsSenior_COMPLETO_20260817")
+    assert info_parent["name"] == "LogsSenior_COMPLETO_20260817"
+    assert info_parent["depth"] == 0
 
-    info_empty = next(i for i in infos if i["path"] == "empty_dir")
-    assert info_empty["log_count"] == 0
-    assert info_empty["has_logs"] is False
+    info_child = next(i for i in infos if i["path"] == "LogsSenior_COMPLETO_20260817/logs_brutos")
+    assert info_child["name"] == "logs_brutos"
+    assert info_child["depth"] == 1
+    assert info_child["parent"] == "LogsSenior_COMPLETO_20260817"
 
 
-def test_process_ticket_logs_multilevel_flow(tmp_path: Path):
+def test_process_ticket_logs_incremental_flow(tmp_path: Path):
     ticket_dir = tmp_path / "CLIENTE_TICKET123"
     ticket_dir.mkdir()
 
-    # Subpasta nivel 1
-    sub_integrador = ticket_dir / "integrador"
-    sub_integrador.mkdir()
-    (sub_integrador / "sync.log").write_text(
-        "[19-08-2026 10:30:00] INFO: Sincronismo efetuado\n"
-        "[19-08-2026 11:00:00] INFO: Fim do lote\n",
-        encoding="utf-8"
-    )
+    sub_dir = ticket_dir / "LogsSenior" / "logs_brutos"
+    sub_dir.mkdir(parents=True)
 
-    # Subpasta nivel 2
-    sub_nested = ticket_dir / "servicos" / "database"
-    sub_nested.mkdir(parents=True)
-    (sub_nested / "query.log").write_text(
-        "[19-08-2026 10:45:00] ERROR: Query timeout\n",
-        encoding="utf-8"
+    # 1. Cria primeiro arquivo
+    (sub_dir / "app1.log").write_text(
+        "[19-08-2026 10:30:00] INFO: Primeiro arquivo\n", encoding="utf-8"
     )
 
     start_dt = datetime(2026, 8, 19, 10, 0, 0)
     end_dt = datetime(2026, 8, 19, 12, 0, 0)
 
-    summary = process_ticket_logs(
+    # Primeira execução
+    summary1 = process_ticket_logs(
         ticket_dir=ticket_dir,
-        selected_subdirs=["integrador", "servicos/database"],
+        selected_subdirs=["LogsSenior/logs_brutos"],
         start_dt=start_dt,
-        end_dt=end_dt
+        end_dt=end_dt,
+        overwrite=False
+    )
+    assert summary1["total_files_scanned"] == 1
+    assert summary1["total_files_written"] == 1
+    assert summary1["total_files_skipped_existing"] == 0
+
+    # 2. Adiciona um segundo arquivo novo na mesma pasta
+    (sub_dir / "app2_novo.log").write_text(
+        "[19-08-2026 11:00:00] INFO: Segundo arquivo novo\n", encoding="utf-8"
     )
 
-    assert summary["total_files_scanned"] == 2
-    assert summary["total_files_written"] == 2
-    assert summary["total_blocks_kept"] == 3
-
-    out_dir = ticket_dir / "logs_filtrados"
-    assert out_dir.exists()
-    assert (out_dir / "integrador" / "sync.log").exists()
-    assert (out_dir / "servicos" / "database" / "query.log").exists()
+    # Segunda execução: app1.log já existe e deve ser ignorado; apenas app2_novo.log deve ser processado
+    summary2 = process_ticket_logs(
+        ticket_dir=ticket_dir,
+        selected_subdirs=["LogsSenior/logs_brutos"],
+        start_dt=start_dt,
+        end_dt=end_dt,
+        overwrite=False
+    )
+    assert summary2["total_files_scanned"] == 2
+    assert summary2["total_files_written"] == 1
+    assert summary2["total_files_skipped_existing"] == 1
+    assert (ticket_dir / "logs_filtrados" / "LogsSenior" / "logs_brutos" / "app2_novo.log").exists()

@@ -2,14 +2,14 @@
 Módulo de regras de negócio para o plugin Novo Ticket.
 Contém funções puras e testáveis para:
 1. Sanitização, validação e criação de diretórios de tickets (CLIENTE_TICKET).
-2. Detecção e listagem recursiva (multinível) de subpastas do ticket.
-3. Parsing de timestamps e blocos de arquivos de log.
-4. Filtragem temporal e cópia espelhada para pasta logs_filtrados.
+2. Detecção e listagem recursiva e hierárquica (multinível) de subpastas do ticket.
+3. Parsing de timestamps universais (ISO, BR, Senior, Wildfly sem data) e blocos de log.
+4. Filtragem temporal, processamento incremental e cópia espelhada para pasta logs_filtrados.
 """
 
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -30,6 +30,11 @@ RE_ISO_TS = re.compile(
 # 3. Padrão Brasileiro/Europeu: 19/08/2026 10:15:30 ou 19-08-2026 10:15:30
 RE_BR_TS = re.compile(
     r"\b(\d{2}[-/]\d{2}[-/]\d{4}\s+\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\b"
+)
+
+# 4. Padrão Wildfly / Time-Only (inicia linha com hora sem data, ex: "15:26:53,544 INFO ...")
+RE_TIME_ONLY_TS = re.compile(
+    r"^\s*(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)\b"
 )
 
 
@@ -155,7 +160,6 @@ def get_ticket_subdirectories(ticket_dir: Path, output_folder_name: str = "logs_
     ticket_resolved = ticket_dir.resolve()
 
     for root, dirs, _ in os.walk(str(ticket_resolved)):
-        # Filtra diretórios ocultos e a pasta output_folder_name in-place para não descer nelas
         dirs[:] = [
             d for d in dirs
             if not d.startswith(".") and d.lower() != output_folder_name.lower()
@@ -167,7 +171,6 @@ def get_ticket_subdirectories(ticket_dir: Path, output_folder_name: str = "logs_
 
         try:
             rel_path = current_path.relative_to(ticket_resolved)
-            # Usa barras normais para apresentação consistente
             rel_str = str(rel_path).replace("\\", "/")
             if output_folder_name not in rel_str.split("/"):
                 subdirs.append(rel_str)
@@ -179,10 +182,13 @@ def get_ticket_subdirectories(ticket_dir: Path, output_folder_name: str = "logs_
 
 def get_ticket_subdirectories_info(ticket_dir: Path, output_folder_name: str = "logs_filtrados") -> List[Dict[str, Any]]:
     """
-    Retorna a lista estruturada de subpastas com metadados:
+    Retorna a lista estruturada de subpastas com hierarquia (indentação) e metadados:
     [
         {
-            "path": "servicos/integrador",
+            "path": "LogsSenior/logs_brutos",
+            "name": "logs_brutos",
+            "depth": 1,
+            "parent": "LogsSenior",
             "log_count": 3,
             "has_logs": True
         }, ...
@@ -200,8 +206,16 @@ def get_ticket_subdirectories_info(ticket_dir: Path, output_folder_name: str = "
         except Exception:
             pass
 
+        parts = rel_path.split("/")
+        depth = len(parts) - 1
+        name = parts[-1]
+        parent = "/".join(parts[:-1]) if depth > 0 else ""
+
         results.append({
             "path": rel_path,
+            "name": name,
+            "depth": depth,
+            "parent": parent,
             "log_count": log_count,
             "has_logs": log_count > 0,
         })
@@ -210,7 +224,7 @@ def get_ticket_subdirectories_info(ticket_dir: Path, output_folder_name: str = "
 
 
 # ---------------------------------------------------------------------------
-# 2. Parsing de Datas e Timestamps de Log
+# 2. Parsing de Datas e Timestamps de Log (com Suporte a Wildfly)
 # ---------------------------------------------------------------------------
 
 def parse_datetime_str(date_str: str, time_str: str = "00:00:00") -> datetime:
@@ -260,9 +274,22 @@ def parse_datetime_range(
     return start_dt, end_dt
 
 
+def get_file_reference_date(file_path: Path) -> date:
+    """
+    Obtém a data de referência a partir dos metadados do arquivo (data de modificação/criação).
+    """
+    try:
+        st = file_path.stat()
+        # Usa mtime (ou ctime se mtime não estiver disponível)
+        ts = st.st_mtime if st.st_mtime > 0 else st.st_ctime
+        return datetime.fromtimestamp(ts).date()
+    except Exception:
+        return datetime.now().date()
+
+
 def extract_timestamp_from_string(raw_ts: str) -> Optional[datetime]:
     """
-    Converte uma string contendo timestamp para datetime.
+    Converte uma string contendo timestamp completo para datetime.
     """
     clean_ts = raw_ts.strip().replace("T", " ")
     clean_ts = re.sub(r"(?:Z|[+-]\d{2}:?\d{2})$", "", clean_ts).strip()
@@ -285,31 +312,62 @@ def extract_timestamp_from_string(raw_ts: str) -> Optional[datetime]:
     return None
 
 
-def extract_log_line_timestamp(line: str) -> Optional[datetime]:
+def extract_time_only(raw_time_str: str) -> Optional[time]:
     """
-    Detecta e extrai o timestamp de uma linha de log.
+    Extrai o horário (HH:MM:SS) a partir de uma string de hora.
+    """
+    clean_t = raw_time_str.strip()
+    clean_t = re.sub(r"[.,]\d+", "", clean_t).strip()
+    for fmt in ("%H:%M:%S", "%H:%M"):
+        try:
+            dt = datetime.strptime(clean_t, fmt)
+            return dt.time()
+        except ValueError:
+            continue
+    return None
+
+
+def extract_log_line_timestamp(
+    line: str, reference_date: Optional[date] = None
+) -> Optional[datetime]:
+    """
+    Detecta e extrai o timestamp de uma linha de log:
+    1. Verifica padrões com data completa (Senior colchetes, ISO, BR).
+    2. Caso seja log Wildfly / sem data (ex: "15:26:53,544 INFO ..."), utiliza reference_date
+       (ou data atual como fallback) para compor o datetime.
     Retorna datetime se encontrado, ou None.
     """
-    if not line:
+    if not line or not line.strip():
         return None
 
+    # 1. Padrão colchetes: [19-08-2026 10:15:30]
     m_bracket = RE_BRACKETS_TS.search(line)
     if m_bracket:
         dt = extract_timestamp_from_string(m_bracket.group(1))
         if dt:
             return dt
 
+    # 2. Padrão ISO: 2026-08-19 14:20:00
     m_iso = RE_ISO_TS.search(line)
     if m_iso:
         dt = extract_timestamp_from_string(m_iso.group(1))
         if dt:
             return dt
 
+    # 3. Padrão BR: 19/08/2026 14:20:00
     m_br = RE_BR_TS.search(line)
     if m_br:
         dt = extract_timestamp_from_string(m_br.group(1))
         if dt:
             return dt
+
+    # 4. Padrão Wildfly / Time-Only: 15:26:53,544 INFO ...
+    m_time_only = RE_TIME_ONLY_TS.match(line)
+    if m_time_only:
+        parsed_t = extract_time_only(m_time_only.group(1))
+        if parsed_t:
+            ref_d = reference_date or datetime.now().date()
+            return datetime.combine(ref_d, parsed_t)
 
     return None
 
@@ -332,7 +390,9 @@ def read_file_safely(file_path: Path) -> str:
     return file_path.read_text(encoding="utf-8", errors="replace")
 
 
-def parse_log_blocks(content: str) -> List[Dict[str, Any]]:
+def parse_log_blocks(
+    content: str, reference_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
     """
     Divide o texto do log em blocos lógicos estruturados.
     Cada bloco contém o timestamp da linha de cabeçalho e todas as suas linhas de continuação.
@@ -342,7 +402,7 @@ def parse_log_blocks(content: str) -> List[Dict[str, Any]]:
     current_block: Optional[Dict[str, Any]] = None
 
     for line in lines:
-        ts = extract_log_line_timestamp(line)
+        ts = extract_log_line_timestamp(line, reference_date=reference_date)
         if ts is not None:
             if current_block is not None:
                 blocks.append(current_block)
@@ -366,18 +426,27 @@ def parse_log_blocks(content: str) -> List[Dict[str, Any]]:
 
 
 def filter_log_file(
-    source_file: Path, target_file: Path, start_dt: datetime, end_dt: datetime
-) -> int:
+    source_file: Path,
+    target_file: Path,
+    start_dt: datetime,
+    end_dt: datetime,
+    overwrite: bool = False,
+) -> Tuple[int, str]:
     """
     Filtra os blocos do arquivo source_file dentro do intervalo [start_dt, end_dt].
-    Se houver blocos no intervalo, grava em target_file e retorna a quantidade de blocos mantidos.
-    Se NÃO houver nenhum bloco no intervalo, o arquivo NÃO é criado/gravado e retorna 0.
+    - Se target_file já existir e overwrite for False: retorna (0, 'skipped_existing').
+    - Se houver blocos no intervalo, grava em target_file e retorna (num_blocos, 'written').
+    - Se NÃO houver nenhum bloco no intervalo: o arquivo não é criado e retorna (0, 'no_matches').
     """
+    if target_file.exists() and not overwrite:
+        return 0, "skipped_existing"
+
+    ref_date = get_file_reference_date(source_file)
     content = read_file_safely(source_file)
     if not content or not content.strip():
-        return 0
+        return 0, "no_matches"
 
-    blocks = parse_log_blocks(content)
+    blocks = parse_log_blocks(content, reference_date=ref_date)
     kept_blocks: List[Dict[str, Any]] = []
 
     for block in blocks:
@@ -387,7 +456,7 @@ def filter_log_file(
                 kept_blocks.append(block)
 
     if not kept_blocks:
-        return 0
+        return 0, "no_matches"
 
     target_file.parent.mkdir(parents=True, exist_ok=True)
     output_lines = []
@@ -395,7 +464,7 @@ def filter_log_file(
         output_lines.extend(b["lines"])
 
     target_file.write_text("\n".join(output_lines) + "\n", encoding="utf-8")
-    return len(kept_blocks)
+    return len(kept_blocks), "written"
 
 
 def process_ticket_logs(
@@ -403,14 +472,17 @@ def process_ticket_logs(
     selected_subdirs: List[str],
     start_dt: datetime,
     end_dt: datetime,
+    overwrite: bool = False,
     output_folder_name: str = "logs_filtrados",
 ) -> Dict[str, Any]:
     """
-    Orquestra a leitura e filtragem de todas as subpastas selecionadas do ticket (em qualquer nível):
+    Orquestra a leitura e filtragem de todas as subpastas selecionadas do ticket:
     - Cria a pasta 'logs_filtrados' dentro de ticket_dir.
-    - Para cada subpasta selecionada, lê os arquivos .log e salva os blocos no intervalo.
-    - Se o arquivo não contiver logs no intervalo, ele é ignorado.
-    Retorna sumário estatístico da operação.
+    - Suporta processamento incremental: se o arquivo já existir no destino e overwrite for False,
+      ele é ignorado e mantido intacto.
+    - Suporta logs Wildfly através da data de criação/modificação do arquivo de origem.
+    - Se o arquivo não contiver logs no intervalo, ele não é gerado.
+    Retorna sumário estatístico completo da operação.
     """
     if not ticket_dir.exists() or not ticket_dir.is_dir():
         raise ValueError(f"A pasta do ticket não existe: {ticket_dir}")
@@ -419,11 +491,12 @@ def process_ticket_logs(
 
     total_scanned = 0
     total_written = 0
+    total_skipped_existing = 0
+    total_no_match = 0
     total_blocks_kept = 0
     files_summary: List[Dict[str, Any]] = []
 
     for subdir_rel in selected_subdirs:
-        # Suporta caminhos relativos multinível (ex: "integrador/sub1")
         subdir_path = ticket_dir / Path(subdir_rel)
         if not subdir_path.exists() or not subdir_path.is_dir():
             continue
@@ -436,9 +509,11 @@ def process_ticket_logs(
             total_scanned += 1
             target_log_path = target_subdir / log_file.name
 
-            blocks_count = filter_log_file(log_file, target_log_path, start_dt, end_dt)
+            blocks_count, status = filter_log_file(
+                log_file, target_log_path, start_dt, end_dt, overwrite=overwrite
+            )
 
-            if blocks_count > 0:
+            if status == "written":
                 total_written += 1
                 total_blocks_kept += blocks_count
                 files_summary.append({
@@ -447,7 +522,20 @@ def process_ticket_logs(
                     "subfolder": subdir_rel,
                     "filename": log_file.name,
                     "blocks": blocks_count,
+                    "status": "written",
                 })
+            elif status == "skipped_existing":
+                total_skipped_existing += 1
+                files_summary.append({
+                    "source": str(log_file),
+                    "target": str(target_log_path),
+                    "subfolder": subdir_rel,
+                    "filename": log_file.name,
+                    "blocks": 0,
+                    "status": "skipped_existing",
+                })
+            else:
+                total_no_match += 1
 
     if total_written > 0:
         output_base_dir.mkdir(parents=True, exist_ok=True)
@@ -457,6 +545,8 @@ def process_ticket_logs(
         "output_dir": output_base_dir,
         "total_files_scanned": total_scanned,
         "total_files_written": total_written,
+        "total_files_skipped_existing": total_skipped_existing,
+        "total_files_no_match": total_no_match,
         "total_blocks_kept": total_blocks_kept,
         "files": files_summary,
     }
