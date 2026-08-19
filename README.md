@@ -13,6 +13,7 @@ Repositório oficial de plugins para o [Toolbox](https://github.com/rodrigolessa
 | stract-json | Extrator de campos de JSON | 1.0.0 |
 | converter-data | Conversor de data para serial Excel | 1.0.0 |
 | stract-log | Filtro de blocos de log por nível/parâmetro/recorrência | 1.0.0 |
+| novo-ticket | Cria estrutura padronizada de diretórios para tickets (CLIENTE_TICKET) | 1.0.0 |
 
 ## 🛒 Instalando via Marketplace
 
