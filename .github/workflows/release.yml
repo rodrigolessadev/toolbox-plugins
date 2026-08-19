@@ -86,6 +86,10 @@ jobs:
           TMP="$(mktemp -d)"
           # copia os arquivos do plugin para um diretorio temporario
           cp -r "plugins/$ID/." "$TMP/"
+          # copia modulo compartilhado se existir
+          if [ -d "plugins/shared" ] && [ "$ID" != "shared" ]; then
+            cp -r "plugins/shared" "$TMP/shared"
+          fi
           # remove artefatos locais que nao devem ir no zip
           find "$TMP" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
           find "$TMP" -name "*.pyc" -delete 2>/dev/null || true

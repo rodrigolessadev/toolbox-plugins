@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Plugin: Novo Ticket
 Criação de diretório padronizado no formato CLIENTE_TICKET (em caixa alta)
@@ -12,32 +12,145 @@ import sys
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
+from typing import Optional, Any, Callable
 
-# Garante import do módulo compartilhado theme_utils
+# Garante import do módulo compartilhado theme_utils ou fornece fallback autônomo
 try:
-    from shared.theme_utils import (
-        THEME,
-        setup_app_theme,
-        create_card_frame,
-        create_styled_entry,
-        create_primary_button,
-        create_secondary_button,
-        enable_high_dpi,
-    )
-except ImportError:
-    shared_dir = str(Path(__file__).resolve().parent.parent)
-    if shared_dir not in sys.path:
-        sys.path.insert(0, shared_dir)
-    from shared.theme_utils import (
-        THEME,
-        setup_app_theme,
-        create_card_frame,
-        create_styled_entry,
-        create_primary_button,
-        create_secondary_button,
-        enable_high_dpi,
-    )
+    try:
+        from shared.theme_utils import (
+            THEME,
+            setup_app_theme,
+            create_card_frame,
+            create_styled_entry,
+            create_primary_button,
+            create_secondary_button,
+            enable_high_dpi,
+        )
+    except ImportError:
+        shared_dir = str(Path(__file__).resolve().parent.parent)
+        if shared_dir not in sys.path:
+            sys.path.insert(0, shared_dir)
+        from shared.theme_utils import (
+            THEME,
+            setup_app_theme,
+            create_card_frame,
+            create_styled_entry,
+            create_primary_button,
+            create_secondary_button,
+            enable_high_dpi,
+        )
+except Exception:
+    # Fallback autossuficiente para execução standalone em ambientes de produção/Marketplace
+    THEME = {
+        "bg_base": "#0e1014",
+        "bg_surface": "#161a21",
+        "bg_input": "#161a21",
+        "bg_hover": "#1e232d",
+        "fg_primary": "#e8eaed",
+        "fg_secondary": "#8b94a3",
+        "fg_muted": "#555d6e",
+        "border": "#2b3240",
+        "border_card": "#232834",
+        "border_focus": "#6aa3ff",
+        "accent": "#3b82f6",
+        "accent_hover": "#60a5fa",
+        "accent_fg": "#ffffff",
+        "success": "#10b981",
+        "danger": "#ef4444",
+    }
+
+    def enable_high_dpi():
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                try:
+                    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+                except Exception:
+                    ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
+
+    def setup_app_theme(root: Any) -> Any:
+        enable_high_dpi()
+        try:
+            root.configure(bg=THEME["bg_base"])
+            style = ttk.Style(root)
+            try:
+                style.theme_use("clam")
+            except Exception:
+                pass
+            style.configure(".", background=THEME["bg_base"], foreground=THEME["fg_primary"])
+            style.configure("TFrame", background=THEME["bg_base"])
+            style.configure("TLabel", background=THEME["bg_base"], foreground=THEME["fg_primary"])
+            style.configure("TEntry", fieldbackground=THEME["bg_input"], foreground=THEME["fg_primary"])
+            return style
+        except Exception:
+            return None
+
+    def create_card_frame(parent: Any, **kwargs) -> Any:
+        opts = {
+            "bg": THEME["bg_surface"],
+            "bd": 1,
+            "relief": "solid",
+            "highlightthickness": 1,
+            "highlightbackground": THEME["border_card"],
+        }
+        opts.update(kwargs)
+        return tk.Frame(parent, **opts)
+
+    def create_styled_entry(parent: Any, textvariable: Any = None, **kwargs) -> Any:
+        opts = {
+            "font": ("Segoe UI", 9),
+            "bg": THEME["bg_input"],
+            "fg": THEME["fg_primary"],
+            "insertbackground": THEME["fg_primary"],
+            "relief": "solid",
+            "bd": 1,
+            "highlightthickness": 1,
+            "highlightbackground": THEME["border"],
+            "highlightcolor": THEME["border_focus"],
+        }
+        if textvariable is not None:
+            opts["textvariable"] = textvariable
+        opts.update(kwargs)
+        return tk.Entry(parent, **opts)
+
+    def create_primary_button(parent: Any, text: str, command: Optional[Callable] = None, **kwargs) -> Any:
+        opts = {
+            "text": text,
+            "command": command,
+            "font": ("Segoe UI", 9, "bold"),
+            "bg": THEME["accent"],
+            "fg": THEME["accent_fg"],
+            "activebackground": THEME["accent_hover"],
+            "activeforeground": THEME["accent_fg"],
+            "relief": "flat",
+            "padx": 16,
+            "pady": 6,
+            "cursor": "hand2",
+        }
+        opts.update(kwargs)
+        return tk.Button(parent, **opts)
+
+    def create_secondary_button(parent: Any, text: str, command: Optional[Callable] = None, **kwargs) -> Any:
+        opts = {
+            "text": text,
+            "command": command,
+            "font": ("Segoe UI", 9),
+            "bg": THEME["bg_surface"],
+            "fg": THEME["fg_primary"],
+            "activebackground": THEME["bg_hover"],
+            "activeforeground": THEME["fg_primary"],
+            "relief": "solid",
+            "bd": 1,
+            "highlightthickness": 1,
+            "highlightbackground": THEME["border"],
+            "padx": 12,
+            "pady": 4,
+            "cursor": "hand2",
+        }
+        opts.update(kwargs)
+        return tk.Button(parent, **opts)
 
 from domain import (
     sanitize_component,
@@ -243,7 +356,6 @@ class NovoTicketApp:
             highlightthickness=1,
             highlightbackground=THEME["border"],
         )
-        # Inicialmente não empacotado
 
         self.status_inner = tk.Frame(self.status_card, bg=THEME["bg_surface"], padx=14, pady=10)
         self.status_inner.pack(fill="both", expand=True)
@@ -339,7 +451,6 @@ class NovoTicketApp:
     def _show_status(self, is_success: bool, message: str, target_path: Optional[Path] = None):
         self.last_created_path = target_path if is_success else None
 
-        bg_color = THEME["bg_surface"]
         fg_color = THEME["success"] if is_success else THEME["danger"]
         border_color = THEME["success"] if is_success else THEME["danger"]
 
@@ -366,7 +477,6 @@ class NovoTicketApp:
 
         if success:
             save_last_base_dir(base_dir)
-            # Limpa ticket e cliente para o próximo se desejado
             self.ticket_var.set("")
             self.entry_cliente.focus()
 
