@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novo Ticket — Toolbox</title>
+  <link rel="stylesheet" href="../../shared/ui/toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Principal -->
+    <header class="header">
+      <div class="header-row">
+        <div>
+          <h1 class="header-title">Gestão de Tickets & Extrator de Logs</h1>
+          <p class="header-desc">Criação de pastas padronizadas e extração temporal inteligente</p>
+        </div>
+        <div id="activeTicketBadge" class="badge badge-muted">Nenhum ticket ativo</div>
+      </div>
+    </header>
+
+    <!-- Navegação de Abas -->
+    <nav class="tabs-nav">
+      <button id="tabBtn1" class="tab-btn active" onclick="switchTab('tabTicket')">
+        <span data-icon="folder-plus"></span> 1. Gestão de Ticket
+      </button>
+      <button id="tabBtn2" class="tab-btn" onclick="switchTab('tabLogs')">
+        <span data-icon="calendar"></span> 2. Filtragem de Logs
+      </button>
+    </nav>
+
+    <!-- ABA 1: Gestão de Ticket -->
+    <section id="tabTicket" class="tab-pane active">
+      <!-- Card: Criar Novo Ticket -->
+      <div class="card">
+        <div class="card-title">
+          <span data-icon="folder-plus"></span> Criar Novo Ticket
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="inputBaseDir">Diretório Base de Tickets</label>
+          <div class="form-row">
+            <input type="text" id="inputBaseDir" class="input input-mono" placeholder="Ex: C:\Atendimentos">
+            <button class="btn btn-secondary" onclick="handleSelectBaseDir()">
+              <span data-icon="folder"></span> Selecionar
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="inputClient">Cliente</label>
+            <input type="text" id="inputClient" class="input" placeholder="Ex: Senior Sistemas">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="inputTicket">Nº do Ticket / Chamado</label>
+            <input type="text" id="inputTicket" class="input" placeholder="Ex: 123456">
+          </div>
+        </div>
+
+        <!-- Preview do Caminho -->
+        <div class="preview-box">
+          <div class="preview-label">Caminho da Pasta de Destino:</div>
+          <div id="previewPath" class="preview-content">Informe o diretório, cliente e ticket...</div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="btn btn-primary" onclick="handleCreateTicket()">
+            <span data-icon="folder-plus"></span> Criar e Ativar Ticket
+          </button>
+        </div>
+      </div>
+
+      <!-- Card: Abrir Ticket Existente -->
+      <div class="card">
+        <div class="card-title">
+          <span data-icon="folder"></span> Abrir Ticket Existente
+        </div>
+        <p style="font-size: 12px; color: var(--fg-muted);">
+          Se você já possui uma pasta de ticket no disco (ex: <code>CLIENTE_123456</code>), selecione-a diretamente para filtrar seus logs:
+        </p>
+        <div style="display: flex; justify-content: flex-start;">
+          <button class="btn btn-secondary" onclick="handleSelectExistingTicket()">
+            <span data-icon="folder"></span> Selecionar Pasta de Ticket Existente...
+          </button>
+        </div>
+      </div>
+
+      <!-- Card: Ticket Ativo -->
+      <div id="cardActiveTicket" class="card" style="display: none;">
+        <div class="card-title" style="color: var(--success);">
+          <span data-icon="check"></span> Ticket Ativo no Momento
+        </div>
+        <div class="form-group">
+          <div id="activeTicketName" style="font-size: 14px; font-weight: 700; color: var(--fg);"></div>
+          <div id="activeTicketPath" style="font-size: 12px; font-family: var(--font-mono); color: var(--fg-muted);"></div>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-secondary btn-sm" onclick="handleCopyActivePath()">
+            <span data-icon="copy"></span> Copiar Caminho
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="handleOpenActiveInExplorer()">
+            <span data-icon="external"></span> Abrir no Explorer
+          </button>
+          <button class="btn btn-primary btn-sm" style="margin-left: auto;" onclick="switchTab('tabLogs')">
+            Avançar para Filtragem de Logs ➔
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: Filtragem de Logs -->
+    <section id="tabLogs" class="tab-pane">
+      <!-- Card: Subpastas e Busca -->
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title">
+            <span data-icon="folder"></span> Subpastas do Ticket
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-secondary btn-sm" onclick="toggleSelectAllSubfolders(true)">Marcar Todas</button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleSelectAllSubfolders(false)">Desmarcar</button>
+            <button class="btn btn-secondary btn-sm" onclick="reloadSubfolders()">
+              <span data-icon="refresh"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="search-row">
+          <div class="search-input-wrapper">
+            <span data-icon="search" class="search-icon"></span>
+            <input type="text" id="inputSearchSubfolders" class="input input-search" placeholder="Filtrar subpastas por nome..." oninput="handleSearchSubfolders()">
+          </div>
+        </div>
+
+        <!-- Árvore de Diretórios -->
+        <div id="subfoldersTree" class="tree-container">
+          <div style="padding: 16px; text-align: center; color: var(--fg-muted);">
+            Nenhum ticket ativo selecionado.
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Intervalo de Data e Hora -->
+      <div class="card">
+        <div class="card-header-flex">
+          <div class="card-title">
+            <span data-icon="clock"></span> Intervalo de Extração Temporal
+          </div>
+          <!-- Atalhos Rápidos -->
+          <div class="quick-dates-bar">
+            <button class="btn-quick" onclick="applyQuickDate('today')">Hoje</button>
+            <button class="btn-quick" onclick="applyQuickDate('yesterday')">Ontem</button>
+            <button class="btn-quick" onclick="applyQuickDate('week')">Últimos 7 dias</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="startDate">Data Inicial</label>
+            <input type="date" id="startDate" class="input">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="startTime">Hora Inicial</label>
+            <input type="time" id="startTime" step="1" class="input" value="00:00:00">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="endDate">Data Final</label>
+            <input type="date" id="endDate" class="input">
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label" for="endTime">Hora Final</label>
+            <input type="time" id="endTime" step="1" class="input" value="23:59:59">
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 4px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="checkOverwrite" class="tree-checkbox" checked>
+            <span>Sobrescrever arquivos já processados em <code>logs_filtrados</code></span>
+          </label>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+          <button id="btnExecuteFilter" class="btn btn-primary" onclick="handleExecuteFilter()">
+            <span data-icon="zap"></span> Extrair e Filtrar Logs
+          </button>
+        </div>
+      </div>
+
+      <!-- Card: Feedback / Resultado -->
+      <div id="cardFilterFeedback" class="feedback-box" style="display: none;">
+        <div id="feedbackMessage" style="font-weight: 600;"></div>
+        <div id="feedbackActions" class="form-row" style="margin-top: 4px; display: none;">
+          <button class="btn btn-secondary btn-sm" onclick="handleOpenFilteredFolder()">
+            <span data-icon="folder"></span> Abrir Pasta logs_filtrados
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="../../shared/ui/icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
