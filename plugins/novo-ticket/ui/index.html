@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Novo Ticket — Toolbox</title>
-  <link rel="stylesheet" href="../../shared/ui/toolbox-theme.css">
+  <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -41,7 +41,7 @@
         <div class="form-group">
           <label class="form-label" for="inputBaseDir">Diretório Base de Tickets</label>
           <div class="form-row">
-            <input type="text" id="inputBaseDir" class="input input-mono" placeholder="Ex: C:\Atendimentos">
+            <input type="text" id="inputBaseDir" class="input-mono" placeholder="Ex: C:\Atendimentos" style="flex: 1;">
             <button class="btn btn-secondary" onclick="handleSelectBaseDir()">
               <span data-icon="folder"></span> Selecionar
             </button>
@@ -51,11 +51,11 @@
         <div class="form-row">
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="inputClient">Cliente</label>
-            <input type="text" id="inputClient" class="input" placeholder="Ex: Senior Sistemas">
+            <input type="text" id="inputClient" placeholder="Ex: Senior Sistemas" style="width: 100%;">
           </div>
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="inputTicket">Nº do Ticket / Chamado</label>
-            <input type="text" id="inputTicket" class="input" placeholder="Ex: 123456">
+            <input type="text" id="inputTicket" placeholder="Ex: 123456" style="width: 100%;">
           </div>
         </div>
 
@@ -65,7 +65,7 @@
           <div id="previewPath" class="preview-content">Informe o diretório, cliente e ticket...</div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div style="display: flex; justify-content: flex-end;">
           <button class="btn btn-primary" onclick="handleCreateTicket()">
             <span data-icon="folder-plus"></span> Criar e Ativar Ticket
           </button>
@@ -78,7 +78,7 @@
           <span data-icon="folder"></span> Abrir Ticket Existente
         </div>
         <p style="font-size: 12px; color: var(--fg-muted);">
-          Se você já possui uma pasta de ticket no disco (ex: <code>CLIENTE_123456</code>), selecione-a diretamente para filtrar seus logs:
+          Selecione uma pasta de ticket existente no disco (ex: <code>CLIENTE_123456</code>) para filtrar seus logs:
         </p>
         <div style="display: flex; justify-content: flex-start;">
           <button class="btn btn-secondary" onclick="handleSelectExistingTicket()">
@@ -94,7 +94,7 @@
         </div>
         <div class="form-group">
           <div id="activeTicketName" style="font-size: 14px; font-weight: 700; color: var(--fg);"></div>
-          <div id="activeTicketPath" style="font-size: 12px; font-family: var(--font-mono); color: var(--fg-muted);"></div>
+          <div id="activeTicketPath" style="font-size: 12px; font-family: 'Consolas', monospace; color: var(--accent);"></div>
         </div>
         <div class="form-row">
           <button class="btn btn-secondary btn-sm" onclick="handleCopyActivePath()">
@@ -130,7 +130,7 @@
         <div class="search-row">
           <div class="search-input-wrapper">
             <span data-icon="search" class="search-icon"></span>
-            <input type="text" id="inputSearchSubfolders" class="input input-search" placeholder="Filtrar subpastas por nome..." oninput="handleSearchSubfolders()">
+            <input type="text" id="inputSearchSubfolders" class="input-search" placeholder="Filtrar subpastas por nome..." oninput="handleSearchSubfolders()">
           </div>
         </div>
 
@@ -159,19 +159,19 @@
         <div class="form-row">
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="startDate">Data Inicial</label>
-            <input type="date" id="startDate" class="input">
+            <input type="date" id="startDate">
           </div>
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="startTime">Hora Inicial</label>
-            <input type="time" id="startTime" step="1" class="input" value="00:00:00">
+            <input type="time" id="startTime" step="1" value="00:00:00">
           </div>
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="endDate">Data Final</label>
-            <input type="date" id="endDate" class="input">
+            <input type="date" id="endDate">
           </div>
           <div class="form-group" style="flex: 1;">
             <label class="form-label" for="endTime">Hora Final</label>
-            <input type="time" id="endTime" step="1" class="input" value="23:59:59">
+            <input type="time" id="endTime" step="1" value="23:59:59">
           </div>
         </div>
 
@@ -201,7 +201,7 @@
     </section>
   </div>
 
-  <script src="../../shared/ui/icons.js"></script>
+  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
