@@ -8,7 +8,7 @@
       "version": "1.1.0",
       "description": "Gera planos de consulta determinísticos no Elasticsearch/Kibana a partir de arquivos HAR 1.2.",
       "author": "Rodrigo Lessa",
-      "icon": "network",
+      "icon": "search-code",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/har-kibana-planner-1.1.0/har-kibana-planner.zip",
       "entry": "main.py",
       "updated_at": "2026-08-19",
@@ -29,7 +29,7 @@
         "afd",
         "rep"
       ],
-      "icon": "fingerprint",
+      "icon": "file-clock",
       "command": "gerador-afd",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.1.0/gerador-afd.zip",
       "min_toolbox_version": "1.0.0",
@@ -48,7 +48,7 @@
         "horas",
         "trabalho"
       ],
-      "icon": "calculator",
+      "icon": "clock-3",
       "command": "calc-jornadas",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.2.0/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
@@ -86,7 +86,7 @@
         "extração",
         "dados"
       ],
-      "icon": "braces",
+      "icon": "scan-search",
       "command": "stract-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.1.0/stract-json.zip",
       "min_toolbox_version": "1.0.0",
@@ -104,7 +104,7 @@
         "banco de dados",
         "insert"
       ],
-      "icon": "table-properties",
+      "icon": "database",
       "command": "gerador-marcacoes",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.3.0/gerador-marcacoes.zip",
       "min_toolbox_version": "1.0.0",
@@ -122,7 +122,7 @@
         "cpf",
         "validação"
       ],
-      "icon": "id-card",
+      "icon": "badge-check",
       "command": "cpf",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/cpf-1.1.0/cpf.zip",
       "min_toolbox_version": "1.0.0",
@@ -141,7 +141,7 @@
         "mock",
         "dados"
       ],
-      "icon": "box",
+      "icon": "file-json",
       "command": "gerador-json",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.1.0/gerador-json.zip",
       "min_toolbox_version": "1.0.0",
@@ -160,7 +160,7 @@
         "filtro",
         "análise"
       ],
-      "icon": "filter",
+      "icon": "file-search",
       "command": "stract-log",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.1.0/stract-log.zip",
       "min_toolbox_version": "1.0.0",
@@ -202,7 +202,7 @@
         "filtro",
         "utilidade"
       ],
-      "icon": "folder-plus",
+      "icon": "ticket",
       "command": "novo-ticket",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.3.1/novo-ticket.zip",
       "min_toolbox_version": "1.0.0",

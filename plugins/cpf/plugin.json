@@ -4,5 +4,5 @@
   "description": "Validação de dígitos verificadores e geração de CPFs válidos para testes.",
   "language": "python",
   "entry": "main.py",
-  "icon": "check"
+  "icon": "badge-check"
 }

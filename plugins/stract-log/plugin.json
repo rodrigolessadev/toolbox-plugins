@@ -4,5 +4,5 @@
   "description": "Extração e filtragem de logs por nível, regex e período.",
   "language": "python",
   "entry": "main.py",
-  "icon": "file-text"
+  "icon": "file-search"
 }
