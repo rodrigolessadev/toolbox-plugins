@@ -7,7 +7,7 @@
         "code-review-graph",
         "serve",
         "--repo",
-        "C:\\tools\\toolbox-plugins"
+        "C:\\tools\\toolbox-ecosystem\\toolbox-plugins"
       ]
     }
   }
