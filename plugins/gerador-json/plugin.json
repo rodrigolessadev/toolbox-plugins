@@ -4,5 +4,5 @@
   "description": "Formatação, validação e minificação de payloads JSON.",
   "language": "python",
   "entry": "main.py",
-  "icon": "code"
+  "icon": "file-json"
 }

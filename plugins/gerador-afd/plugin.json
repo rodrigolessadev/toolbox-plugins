@@ -4,5 +4,5 @@
   "description": "Geração de arquivos AFD padrão Portaria 1510/671 para testes.",
   "language": "python",
   "entry": "main.py",
-  "icon": "file-text"
+  "icon": "file-clock"
 }

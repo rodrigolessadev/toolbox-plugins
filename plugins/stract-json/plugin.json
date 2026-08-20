@@ -4,5 +4,5 @@
   "description": "Extração de estruturas JSON embutidas em logs e textos não estruturados.",
   "language": "python",
   "entry": "main.py",
-  "icon": "brackets"
+  "icon": "scan-search"
 }

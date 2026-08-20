@@ -4,5 +4,5 @@
   "description": "Parser de arquivos HAR e planejador de queries para Kibana.",
   "language": "python",
   "entry": "main.py",
-  "icon": "search"
+  "icon": "search-code"
 }
