@@ -49,20 +49,23 @@
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
-          <input type="checkbox" id="autoOpenBrowser" checked>
-          <span>Abrir link de autenticação SSO automaticamente no navegador</span>
+          <input type="checkbox" id="useInternalWebview" checked>
+          <span>Exibir autenticação AWS SSO em janela interna (WebView integrado)</span>
         </label>
       </div>
 
       <!-- Barra de Ações -->
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" id="btnCancelSso" style="display: none;" onclick="handleCancelSso()">
+          ✖ Cancelar Login
+        </button>
         <button class="btn btn-tonal" id="btnSsoLogin" onclick="handleSsoLogin()">
           🔑 Login AWS SSO
         </button>
         <button class="btn btn-primary" id="btnConnect" onclick="handleConnect()">
-          🔌 Conectar
+          ⚡ Conectar (One-Click)
         </button>
-        <button class="btn btn-danger" id="btnDisconnect" onclick="handleDisconnect()">
+        <button class="btn btn-danger" id="btnDisconnect" onclick="handleDisconnect()" disabled>
           🛑 Desconectar
         </button>
       </div>

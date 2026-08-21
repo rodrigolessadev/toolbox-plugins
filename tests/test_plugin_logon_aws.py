@@ -100,3 +100,91 @@ def test_aws_tunnel_manager_start_and_stop(mock_popen: MagicMock) -> None:
     assert res_stop["success"] is True
     assert mock_proc.terminate.called
     assert mgr.process is None
+
+
+@patch("subprocess.run")
+def test_check_sts_session(mock_run: MagicMock) -> None:
+    """Valida checagem de sessão AWS STS com sessão válida e expirada."""
+    # 1. Sessão ativa
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout='{"UserId": "AROA...", "Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/..."}',
+        stderr=""
+    )
+    ok, msg = domain.check_sts_session("rodrigo.lessa")
+    assert ok is True
+    assert "UserId" in msg
+
+    # 2. Sessão expirada / erro
+    mock_run.return_value = MagicMock(
+        returncode=254,
+        stdout="",
+        stderr="The SSO session associated with this profile has expired or is invalid."
+    )
+    ok, err = domain.check_sts_session("rodrigo.lessa")
+    assert ok is False
+    assert "expired" in err
+
+
+@patch("domain.check_sts_session")
+@patch.object(domain.AwsTunnelManager, "start_tunnel")
+def test_one_click_connect_with_active_session(
+    mock_start_tunnel: MagicMock,
+    mock_check_sts: MagicMock,
+) -> None:
+    """Valida que sessão ativa pula o SSO e inicia o túnel diretamente."""
+    mock_check_sts.return_value = (True, "Session Active")
+    mock_start_tunnel.return_value = {"success": True}
+
+    mgr = domain.AwsTunnelManager()
+    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1")
+    assert res["success"] is True
+
+    # Aguarda a thread do one_click executar
+    import time
+    time.sleep(0.1)
+
+    mock_check_sts.assert_called_once_with("rodrigo.lessa")
+    mock_start_tunnel.assert_called_once_with("rodrigo.lessa", 42586, "sa-east-1")
+
+
+@patch("domain.check_sts_session")
+@patch.object(domain.AwsTunnelManager, "run_sso_login")
+def test_one_click_connect_with_expired_session(
+    mock_sso_login: MagicMock,
+    mock_check_sts: MagicMock,
+) -> None:
+    """Valida que sessão expirada aciona o fluxo de login SSO com callback."""
+    mock_check_sts.return_value = (False, "Expired")
+    mock_sso_login.return_value = {"success": True}
+
+    mgr = domain.AwsTunnelManager()
+    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1", use_internal_webview=True)
+    assert res["success"] is True
+
+    import time
+    time.sleep(0.1)
+
+    mock_check_sts.assert_called_once_with("rodrigo.lessa")
+    mock_sso_login.assert_called_once()
+    assert mock_sso_login.call_args.kwargs["use_internal_webview"] is True
+
+
+def test_cancel_sso_login() -> None:
+    """Valida cancelamento do processo de login SSO e fechamento do WebView."""
+    mgr = domain.AwsTunnelManager()
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mgr.sso_process = mock_proc
+
+    mock_window = MagicMock()
+    mgr.sso_window = mock_window
+
+    res = mgr.cancel_sso_login()
+    assert res["success"] is True
+    assert mock_proc.terminate.called
+    assert mock_window.destroy.called
+    assert mgr.sso_process is None
+    assert mgr.sso_window is None
+    assert mgr.current_state == "idle"
+

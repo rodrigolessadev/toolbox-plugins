@@ -1,7 +1,7 @@
 {
   "name": "Logon AWS & Port Forwarding",
-  "version": "1.0.1",
-  "description": "Logon AWS SSO e gerenciamento de túneis SSM com port forwarding e status de conexão em tempo real.",
+  "version": "1.1.0",
+  "description": "Logon AWS SSO e túneis SSM com fluxo One-Click Connect, verificação STS e WebView integrado.",
   "language": "python",
   "entry": "main.py",
   "icon": "cloud-cog",

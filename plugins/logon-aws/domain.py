@@ -1,5 +1,5 @@
 """Módulo de domínio do plugin Logon AWS & Port Forwarding.
-Gerencia processos de autenticação AWS SSO, túneis SSM e monitoramento de portas via TCP sockets.
+Gerencia processos de autenticação AWS SSO, túneis SSM, verificação de sessão STS e monitoramento de portas via TCP sockets.
 """
 from __future__ import annotations
 
@@ -13,18 +13,23 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "profile": "rodrigo.lessa",
     "local_port": 42586,
-    "auto_open_browser": True,
+    "use_internal_webview": True,
 }
 
 # Flag para evitar abrir prompt no Windows
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
+try:
+    import webview
+except ImportError:
+    webview = None
 
 
 def load_config() -> Dict[str, Any]:
@@ -62,6 +67,29 @@ def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.6) -> bo
         return False
 
 
+def check_sts_session(profile: str, timeout: float = 8.0) -> Tuple[bool, str]:
+    """Executa 'aws sts get-caller-identity' para verificar se a sessão AWS está ativa."""
+    profile = profile.strip() or "rodrigo.lessa"
+    cmd = ["aws", "sts", "get-caller-identity", "--profile", profile]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=CREATE_NO_WINDOW,
+            timeout=timeout,
+        )
+        if res.returncode == 0:
+            return True, res.stdout.strip()
+        err = res.stderr.strip() or f"Código de saída {res.returncode}"
+        return False, err
+    except Exception as e:
+        return False, str(e)
+
+
 def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, str]:
     """Busca a instância EC2 com a tag Name='SSH Tunneling Instance' em estado running."""
     cmd = [
@@ -89,7 +117,7 @@ def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, 
 
         instance_id = res.stdout.strip()
         if not instance_id or instance_id == "None":
-            return False, "Nenhuma instância EC2 'SSH Tunneling Instance' em execução encontrada na região " + region
+            return False, f"Nenhuma instância EC2 'SSH Tunneling Instance' em execução encontrada na região {region}"
 
         # Se vier mais de uma instância, pega a primeira
         first_instance = instance_id.split()[0]
@@ -99,13 +127,16 @@ def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, 
 
 
 class AwsTunnelManager:
-    """Gerenciador singleton para túneis AWS e sessões de logon."""
+    """Gerenciador singleton para túneis AWS, sessões SSO integradas e fluxo One-Click."""
 
     def __init__(self) -> None:
         self.process: Optional[subprocess.Popen[str]] = None
+        self.sso_process: Optional[subprocess.Popen[str]] = None
+        self.sso_window: Optional[Any] = None
         self.logs: List[str] = []
         self.active_profile: str = ""
         self.active_port: int = 42586
+        self.current_state: str = "idle"  # idle, checking_sts, authenticating_sso, starting_tunnel, connected
         self._lock = threading.RLock()
 
     def append_log(self, text: str) -> None:
@@ -127,9 +158,79 @@ class AwsTunnelManager:
         with self._lock:
             self.logs.clear()
 
-    def run_sso_login(self, profile: str, auto_open_browser: bool = True) -> Dict[str, Any]:
-        """Executa login AWS SSO em background sem abrir janela de prompt."""
-        profile = profile.strip() or "rodrigo.lessa"
+    def open_sso_webview(self, url: str) -> None:
+        """Abre uma janela secundária do WebView para autenticação SSO in-app."""
+        with self._lock:
+            if self.sso_window:
+                try:
+                    self.sso_window.destroy()
+                except Exception:
+                    pass
+                self.sso_window = None
+
+            if webview:
+                try:
+                    self.append_log("Abrindo janela de autenticação SSO interna no aplicativo...")
+                    self.sso_window = webview.create_window(
+                        title="AWS SSO Authorization — Toolbox",
+                        url=url,
+                        width=560,
+                        height=700,
+                        on_top=True,
+                        resizable=True,
+                    )
+                    return
+                except Exception as e:
+                    self.append_log(f"Aviso ao abrir WebView interno: {e}. Abrindo no navegador padrão.")
+
+            # Fallback para navegador externo
+            webbrowser.open(url)
+
+    def close_sso_webview(self) -> None:
+        """Fecha a janela interna do WebView de autenticação SSO se estiver aberta."""
+        with self._lock:
+            if self.sso_window:
+                try:
+                    self.sso_window.destroy()
+                except Exception:
+                    pass
+                self.sso_window = None
+
+    def cancel_sso_login(self) -> Dict[str, Any]:
+        """Cancela o processo de login SSO em andamento e fecha o WebView."""
+        with self._lock:
+            if self.sso_process and self.sso_process.poll() is None:
+                self.append_log("Cancelando processo de login AWS SSO...")
+                try:
+                    self.sso_process.terminate()
+                    try:
+                        self.sso_process.wait(timeout=1.5)
+                    except subprocess.TimeoutExpired:
+                        self.sso_process.kill()
+                except Exception as e:
+                    self.append_log(f"Erro ao cancelar SSO: {e}")
+                self.sso_process = None
+
+            self.close_sso_webview()
+            self.current_state = "idle"
+            self.append_log("Autenticação SSO cancelada pelo usuário.")
+            return {"success": True, "message": "Login SSO cancelado."}
+
+    def run_sso_login(
+        self,
+        profile: str,
+        use_internal_webview: bool = True,
+        on_success_callback: Optional[Callable[[], None]] = None,
+    ) -> Dict[str, Any]:
+        """Executa login AWS SSO em background e gerencia a exibição da tela de login."""
+        with self._lock:
+            if self.sso_process and self.sso_process.poll() is None:
+                return {"success": False, "error": "Já existe uma autenticação SSO em andamento."}
+
+            profile = profile.strip() or "rodrigo.lessa"
+            self.active_profile = profile
+            self.current_state = "authenticating_sso"
+
         self.append_log(f"Iniciando AWS SSO Login para o profile '{profile}'...")
 
         cmd = ["aws", "sso", "login", "--profile", profile]
@@ -145,6 +246,8 @@ class AwsTunnelManager:
                     errors="replace",
                     creationflags=CREATE_NO_WINDOW,
                 )
+                with self._lock:
+                    self.sso_process = proc
 
                 opened_url = False
                 if proc.stdout:
@@ -156,20 +259,40 @@ class AwsTunnelManager:
 
                         # Detecta URLs de autenticação SSO
                         urls = re.findall(r"https?://[^\s]+", line_str)
-                        if urls and auto_open_browser and not opened_url:
+                        if urls and not opened_url:
                             for url in urls:
-                                if "awsapps.com" in url or "signin.aws" in url or "start.aws" in url or "device" in url:
-                                    self.append_log(f"Abrindo URL de autenticação no navegador: {url}")
-                                    webbrowser.open(url)
+                                if any(sub in url for sub in ("awsapps.com", "signin.aws", "start.aws", "device", "amazon.com")):
                                     opened_url = True
+                                    if use_internal_webview:
+                                        self.open_sso_webview(url)
+                                    else:
+                                        self.append_log(f"Abrindo URL de autenticação no navegador externo: {url}")
+                                        webbrowser.open(url)
 
                 proc.wait()
+                self.close_sso_webview()
+
                 if proc.returncode == 0:
                     self.append_log(f"✔ AWS SSO Login concluído com sucesso para '{profile}'!")
+                    if on_success_callback:
+                        on_success_callback()
+                    else:
+                        with self._lock:
+                            self.current_state = "idle"
                 else:
                     self.append_log(f"✖ AWS SSO Login finalizou com código {proc.returncode}.")
+                    with self._lock:
+                        self.current_state = "idle"
+
             except Exception as e:
                 self.append_log(f"Erro ao executar login AWS: {e}")
+                self.close_sso_webview()
+                with self._lock:
+                    self.current_state = "idle"
+            finally:
+                with self._lock:
+                    if self.sso_process == proc:
+                        self.sso_process = None
 
         threading.Thread(target=_login_worker, daemon=True).start()
         return {"success": True, "message": f"Login SSO iniciado para profile '{profile}'."}
@@ -188,6 +311,7 @@ class AwsTunnelManager:
                     "success": False,
                     "error": "Já existe um túnel ativo. Desconecte antes de iniciar outro.",
                 }
+            self.current_state = "starting_tunnel"
 
         profile = profile.strip() or "rodrigo.lessa"
         local_port = int(local_port) if local_port else 42586
@@ -208,6 +332,8 @@ class AwsTunnelManager:
             ok, inst_res = discover_ec2_target(profile, region)
             if not ok:
                 self.append_log(f"✖ {inst_res}")
+                with self._lock:
+                    self.current_state = "idle"
                 return {"success": False, "error": inst_res}
             instance_id = inst_res
             self.append_log(f"✔ Instância encontrada: {instance_id}")
@@ -240,6 +366,8 @@ class AwsTunnelManager:
                 self.process = proc
         except Exception as e:
             self.append_log(f"Erro ao iniciar processo do túnel: {e}")
+            with self._lock:
+                self.current_state = "idle"
             return {"success": False, "error": str(e)}
 
         def _reader_worker(p: subprocess.Popen[str]) -> None:
@@ -257,9 +385,71 @@ class AwsTunnelManager:
                 with self._lock:
                     if self.process == p:
                         self.process = None
+                        self.current_state = "idle"
 
         threading.Thread(target=_reader_worker, args=(proc,), daemon=True).start()
         return {"success": True, "message": f"Túnel iniciado na porta {local_port}.", "instance_id": instance_id}
+
+    def one_click_connect(
+        self,
+        profile: str,
+        local_port: int = 42586,
+        region: str = "sa-east-1",
+        use_internal_webview: bool = True,
+    ) -> Dict[str, Any]:
+        """Fluxo unificado One-Click Connect:
+
+        1. Verifica sessão STS prévia.
+        2. Se ativa, conecta o túnel SSM diretamente.
+        3. Se expirada, abre WebView SSO integrado e conecta automaticamente ao finalizar.
+        """
+        with self._lock:
+            if self.process and self.process.poll() is None:
+                return {
+                    "success": False,
+                    "error": "Já existe um túnel ativo. Desconecte antes de iniciar outro.",
+                }
+            if self.sso_process and self.sso_process.poll() is None:
+                return {
+                    "success": False,
+                    "error": "Já existe uma autenticação SSO em andamento.",
+                }
+
+        profile = profile.strip() or "rodrigo.lessa"
+        local_port = int(local_port) if local_port else 42586
+
+        save_config({
+            "profile": profile,
+            "local_port": local_port,
+            "use_internal_webview": use_internal_webview,
+        })
+
+        def _one_click_worker() -> None:
+            with self._lock:
+                self.current_state = "checking_sts"
+            self.append_log(f"Verificando sessão ativa para '{profile}' via AWS STS...")
+
+            is_active, sts_msg = check_sts_session(profile)
+
+            if is_active:
+                self.append_log(f"✔ Sessão AWS ativa para '{profile}'! Pulando autenticação SSO...")
+                self.start_tunnel(profile, local_port, region)
+            else:
+                self.append_log(f"⚠️ Sessão AWS não autenticada ou expirada para '{profile}'.")
+                self.append_log("Iniciando autenticação AWS SSO integrada...")
+
+                def _on_sso_success() -> None:
+                    self.append_log(f"🚀 Autenticação concluída! Conectando túnel SSM automaticamente na porta {local_port}...")
+                    self.start_tunnel(profile, local_port, region)
+
+                self.run_sso_login(
+                    profile=profile,
+                    use_internal_webview=use_internal_webview,
+                    on_success_callback=_on_sso_success,
+                )
+
+        threading.Thread(target=_one_click_worker, daemon=True).start()
+        return {"success": True, "message": "Fluxo One-Click Connect iniciado."}
 
     def stop_tunnel(self) -> Dict[str, Any]:
         """Interrompe o processo do túnel SSM ativo."""
@@ -276,6 +466,7 @@ class AwsTunnelManager:
                 except subprocess.TimeoutExpired:
                     self.process.kill()
                 self.process = None
+                self.current_state = "idle"
                 self.append_log("✔ Túnel desconectado com sucesso.")
                 return {"success": True, "message": "Túnel desconectado."}
             except Exception as e:
@@ -283,14 +474,27 @@ class AwsTunnelManager:
                 return {"success": False, "error": str(e)}
 
     def get_status(self, custom_port: Optional[int] = None) -> Dict[str, Any]:
-        """Retorna o estado da conexão. Só é considerado conectado se o processo do túnel foi iniciado."""
+        """Retorna o estado detalhado da conexão e dos subprocessos."""
         port = custom_port or self.active_port or 42586
-        has_process = self.process is not None and self.process.poll() is None
-        port_active = is_port_open(port) if has_process else False
+        has_tunnel = self.process is not None and self.process.poll() is None
+        port_active = is_port_open(port) if has_tunnel else False
+        has_sso = self.sso_process is not None and self.sso_process.poll() is None
+
+        state = self.current_state
+        if has_tunnel and port_active:
+            state = "connected"
+        elif has_tunnel and not port_active:
+            state = "starting_tunnel"
+        elif has_sso:
+            state = "authenticating_sso"
+        elif not has_tunnel and not has_sso and state not in ("checking_sts", "starting_tunnel"):
+            state = "disconnected"
 
         return {
-            "connected": has_process and port_active,
-            "process_running": has_process,
+            "connected": has_tunnel and port_active,
+            "process_running": has_tunnel,
+            "sso_running": has_sso,
+            "state": state,
             "port": port,
             "profile": self.active_profile,
         }
@@ -298,4 +502,5 @@ class AwsTunnelManager:
 
 # Instância global gerenciadora
 tunnel_manager = AwsTunnelManager()
+
 

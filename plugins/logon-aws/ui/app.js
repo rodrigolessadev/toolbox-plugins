@@ -1,9 +1,9 @@
 /* ============================================================
-   Logon AWS Plugin - Client Script
+   Logon AWS Plugin - Client Script (M3 + One-Click Connect)
    ============================================================ */
 
 let statusPollInterval = null;
-let currentStatus = { connected: false, process_running: false };
+let currentStatus = { connected: false, process_running: false, sso_running: false, state: "disconnected" };
 
 document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('pywebviewready', () => {
@@ -23,8 +23,8 @@ async function initApp() {
     if (data.config) {
       if (data.config.profile) document.getElementById('profileInput').value = data.config.profile;
       if (data.config.local_port) document.getElementById('localPortInput').value = data.config.local_port;
-      if (typeof data.config.auto_open_browser === 'boolean') {
-        document.getElementById('autoOpenBrowser').checked = data.config.auto_open_browser;
+      if (typeof data.config.use_internal_webview === 'boolean') {
+        document.getElementById('useInternalWebview').checked = data.config.use_internal_webview;
       }
     }
     if (data.logs) {
@@ -39,7 +39,7 @@ async function initApp() {
 
   // Inicia checagem contínua de status
   if (!statusPollInterval) {
-    statusPollInterval = setInterval(pollStatus, 2000);
+    statusPollInterval = setInterval(pollStatus, 1500);
   }
 }
 
@@ -63,6 +63,8 @@ function updateStatusUI(status) {
   const text = document.getElementById('statusText');
   const btnConnect = document.getElementById('btnConnect');
   const btnDisconnect = document.getElementById('btnDisconnect');
+  const btnSsoLogin = document.getElementById('btnSsoLogin');
+  const btnCancelSso = document.getElementById('btnCancelSso');
 
   pill.className = 'status-pill';
 
@@ -71,16 +73,36 @@ function updateStatusUI(status) {
     text.textContent = `Conectado (: ${status.port})`;
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = false;
-  } else if (status.process_running) {
+    if (btnSsoLogin) btnSsoLogin.disabled = true;
+    if (btnCancelSso) btnCancelSso.style.display = 'none';
+  } else if (status.state === 'checking_sts') {
     pill.classList.add('status-working');
-    text.textContent = 'Iniciando Túnel...';
+    text.textContent = 'Verificando Sessão AWS...';
+    if (btnConnect) btnConnect.disabled = true;
+    if (btnDisconnect) btnDisconnect.disabled = true;
+    if (btnSsoLogin) btnSsoLogin.disabled = true;
+    if (btnCancelSso) btnCancelSso.style.display = 'none';
+  } else if (status.sso_running || status.state === 'authenticating_sso') {
+    pill.classList.add('status-working');
+    text.textContent = 'Autenticando SSO...';
+    if (btnConnect) btnConnect.disabled = true;
+    if (btnDisconnect) btnDisconnect.disabled = true;
+    if (btnSsoLogin) btnSsoLogin.disabled = true;
+    if (btnCancelSso) btnCancelSso.style.display = 'inline-flex';
+  } else if (status.process_running || status.state === 'starting_tunnel') {
+    pill.classList.add('status-working');
+    text.textContent = 'Iniciando Túnel SSM...';
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = false;
+    if (btnSsoLogin) btnSsoLogin.disabled = true;
+    if (btnCancelSso) btnCancelSso.style.display = 'none';
   } else {
     pill.classList.add('status-disconnected');
     text.textContent = 'Desconectado';
     if (btnConnect) btnConnect.disabled = false;
     if (btnDisconnect) btnDisconnect.disabled = true;
+    if (btnSsoLogin) btnSsoLogin.disabled = false;
+    if (btnCancelSso) btnCancelSso.style.display = 'none';
   }
 }
 
@@ -92,9 +114,10 @@ function renderLogs(logs) {
 
   container.innerHTML = logs.map(l => {
     let colorStyle = '';
-    if (l.includes('✔') || l.includes('sucesso')) colorStyle = 'color: var(--md-sys-color-success);';
-    else if (l.includes('✖') || l.includes('Erro') || l.includes('error')) colorStyle = 'color: var(--md-sys-color-error);';
-    else if (l.includes('Iniciando') || l.includes('Comando:')) colorStyle = 'color: var(--md-sys-color-primary);';
+    if (l.includes('✔') || l.includes('sucesso') || l.includes('concluído')) colorStyle = 'color: var(--md-sys-color-success);';
+    else if (l.includes('✖') || l.includes('Erro') || l.includes('error') || l.includes('Falha')) colorStyle = 'color: var(--md-sys-color-error);';
+    else if (l.includes('⚠️') || l.includes('Aviso')) colorStyle = 'color: var(--md-sys-color-warning);';
+    else if (l.includes('Iniciando') || l.includes('Comando:') || l.includes('🚀')) colorStyle = 'color: var(--md-sys-color-primary);';
 
     return `<div class="console-line" style="${colorStyle}">${escapeHtml(l)}</div>`;
   }).join('');
@@ -104,41 +127,58 @@ function renderLogs(logs) {
   }
 }
 
+async function handleConnect() {
+  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
+  const localPort = document.getElementById('localPortInput').value.trim() || '42586';
+  const useInternal = document.getElementById('useInternalWebview').checked;
+
+  updateStatusUI({ connected: false, process_running: false, sso_running: false, state: 'checking_sts', port: localPort });
+  showToast(`Verificando credenciais e conectando (${profile})...`);
+
+  try {
+    const res = await window.pywebview.api.one_click_connect({
+      profile: profile,
+      local_port: localPort,
+      region: 'sa-east-1',
+      use_internal_webview: useInternal,
+    });
+    if (!res.success && res.error) {
+      alert(`Aviso: ${res.error}`);
+    }
+    setTimeout(pollStatus, 400);
+  } catch (e) {
+    alert(`Erro ao iniciar One-Click Connect: ${e}`);
+  }
+}
+
 async function handleSsoLogin() {
   const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
-  const autoOpen = document.getElementById('autoOpenBrowser').checked;
+  const useInternal = document.getElementById('useInternalWebview').checked;
 
+  updateStatusUI({ connected: false, process_running: false, sso_running: true, state: 'authenticating_sso' });
   showToast(`Iniciando Login AWS SSO (${profile})...`);
+
   try {
-    await window.pywebview.api.sso_login({
+    const res = await window.pywebview.api.sso_login({
       profile: profile,
-      auto_open_browser: autoOpen,
+      use_internal_webview: useInternal,
     });
-    setTimeout(pollStatus, 500);
+    if (!res.success && res.error) {
+      alert(`Aviso: ${res.error}`);
+    }
+    setTimeout(pollStatus, 400);
   } catch (e) {
     alert(`Erro ao iniciar SSO: ${e}`);
   }
 }
 
-async function handleConnect() {
-  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
-  const localPort = document.getElementById('localPortInput').value.trim() || '42586';
-
-  updateStatusUI({ connected: false, process_running: true, port: localPort });
-  showToast(`Buscando instância e iniciando túnel na porta ${localPort}...`);
-
+async function handleCancelSso() {
+  showToast('Cancelando autenticação SSO...');
   try {
-    const res = await window.pywebview.api.connect_tunnel({
-      profile: profile,
-      local_port: localPort,
-      region: 'sa-east-1',
-    });
-    if (!res.success && res.error) {
-      alert(`Aviso: ${res.error}`);
-    }
-    setTimeout(pollStatus, 600);
+    await window.pywebview.api.cancel_sso();
+    setTimeout(pollStatus, 400);
   } catch (e) {
-    alert(`Erro ao conectar: ${e}`);
+    console.error('Erro ao cancelar SSO:', e);
   }
 }
 
@@ -146,7 +186,7 @@ async function handleDisconnect() {
   showToast('Encerrando túnel SSM...');
   try {
     await window.pywebview.api.disconnect_tunnel();
-    setTimeout(pollStatus, 500);
+    setTimeout(pollStatus, 400);
   } catch (e) {
     alert(`Erro ao desconectar: ${e}`);
   }
@@ -194,3 +234,4 @@ function escapeHtml(text) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+

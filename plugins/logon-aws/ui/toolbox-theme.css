@@ -1,0 +1,36 @@
+/* ==========================================================================
+   Toolbox Official Theme & CSS Tokens (Dark Mode)
+   ========================================================================== */
+
+:root {
+  --bg:           #0e1014;
+  --bg-elev-1:    #161a21;
+  --bg-elev-2:    #1f242d;
+  --bg-elev-3:    #262c36;
+  --bg-elev-4:    #2d3440;
+  
+  --input-bg:     #12151c;
+  --input-border: #262c36;
+  --border:       #262c36;
+  --border-focus: #6aa3ff;
+
+  --fg:           #e8eaed;
+  --fg-muted:     #8b94a3;
+  --fg-disabled:  #5a6270;
+
+  --accent:       #6aa3ff;
+  --accent-hover: #7bb3ff;
+  --accent-active:#5a93ef;
+  --accent-soft:  rgba(106, 163, 255, 0.16);
+
+  --success:      #4cc38a;
+  --success-soft: rgba(76, 195, 138, 0.18);
+  --warning:      #f5a524;
+  --warning-soft: rgba(245, 165, 36, 0.18);
+  --danger:       #ff6369;
+  --danger-soft:  rgba(255, 99, 105, 0.18);
+
+  --radius:       10px;
+  --radius-sm:    6px;
+  --radius-lg:    14px;
+}
