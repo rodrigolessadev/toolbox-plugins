@@ -159,7 +159,7 @@ def test_one_click_connect_with_expired_session(
     mock_sso_login.return_value = {"success": True}
 
     mgr = domain.AwsTunnelManager()
-    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1", use_internal_webview=True)
+    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1")
     assert res["success"] is True
 
     import time
@@ -167,31 +167,25 @@ def test_one_click_connect_with_expired_session(
 
     mock_check_sts.assert_called_once_with("rodrigo.lessa")
     mock_sso_login.assert_called_once()
-    assert mock_sso_login.call_args.kwargs["use_internal_webview"] is True
 
 
 def test_cancel_sso_login() -> None:
-    """Valida cancelamento do processo de login SSO e fechamento do WebView."""
+    """Valida cancelamento do processo de login SSO."""
     mgr = domain.AwsTunnelManager()
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
     mgr.sso_process = mock_proc
 
-    mock_window = MagicMock()
-    mgr.sso_window = mock_window
-
     res = mgr.cancel_sso_login()
     assert res["success"] is True
     assert mock_proc.terminate.called
-    assert mock_window.destroy.called
     assert mgr.sso_process is None
-    assert mgr.sso_window is None
     assert mgr.current_state == "idle"
 
 
 @patch("subprocess.Popen")
-def test_run_sso_login_no_browser_flag(mock_popen: MagicMock) -> None:
-    """Valida que --no-browser é adicionado quando use_internal_webview=True e omitido quando False."""
+def test_run_sso_login_browser(mock_popen: MagicMock) -> None:
+    """Valida que aws sso login é invocado diretamente para abrir o navegador padrão."""
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
     mock_proc.stdout = None
@@ -199,22 +193,19 @@ def test_run_sso_login_no_browser_flag(mock_popen: MagicMock) -> None:
     mock_popen.return_value = mock_proc
 
     mgr = domain.AwsTunnelManager()
-
-    # 1. Com WebView interno: deve incluir --no-browser
-    mgr.run_sso_login("rodrigo.lessa", use_internal_webview=True)
+    mgr.run_sso_login("rodrigo.lessa")
     import time
     time.sleep(0.05)
     cmd_called = mock_popen.call_args[0][0]
-    assert "--no-browser" in cmd_called
-    assert "aws" in cmd_called
-    assert "sso" in cmd_called
-    assert "login" in cmd_called
+    assert cmd_called == ["aws", "sso", "login", "--profile", "rodrigo.lessa"]
 
-    # 2. Sem WebView interno: NÃO deve incluir --no-browser
-    mgr.sso_process = None
-    mgr.run_sso_login("rodrigo.lessa", use_internal_webview=False)
-    time.sleep(0.05)
-    cmd_called_external = mock_popen.call_args[0][0]
-    assert "--no-browser" not in cmd_called_external
+
+def test_status_icon_assets_exist() -> None:
+    """Valida que os arquivos .ico conectados e desconectados existem e têm tamanho válido."""
+    assert domain.ICON_CONNECTED_PATH.exists(), "icon-connected.ico deve existir"
+    assert domain.ICON_DISCONNECTED_PATH.exists(), "icon-disconnected.ico deve existir"
+    assert domain.ICON_CONNECTED_PATH.stat().st_size > 1000
+    assert domain.ICON_DISCONNECTED_PATH.stat().st_size > 1000
+
 
 

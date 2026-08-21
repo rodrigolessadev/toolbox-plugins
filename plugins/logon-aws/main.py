@@ -40,20 +40,16 @@ class LogonAwsApi(BasePluginApi):
         profile = data.get("profile", "rodrigo.lessa")
         local_port = data.get("local_port", 42586)
         region = data.get("region", "sa-east-1")
-        use_internal = data.get("use_internal_webview", True)
         return domain.tunnel_manager.one_click_connect(
             profile=profile,
             local_port=int(local_port),
             region=region,
-            use_internal_webview=use_internal,
         )
 
     def sso_login(self, data: dict) -> dict:
         profile = data.get("profile", "rodrigo.lessa")
-        use_internal = data.get("use_internal_webview", True)
         return domain.tunnel_manager.run_sso_login(
             profile=profile,
-            use_internal_webview=use_internal,
         )
 
     def cancel_sso(self, data: Optional[dict] = None) -> dict:
@@ -87,7 +83,7 @@ class LogonAwsApi(BasePluginApi):
 def main() -> None:
     api = LogonAwsApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
-    create_plugin_window(
+    window = create_plugin_window(
         title="Logon AWS & Port Forwarding",
         entry_html=ui_index,
         js_api=api,
@@ -96,7 +92,14 @@ def main() -> None:
         min_size=(680, 600),
     )
     if webview:
+        # Define ícone inicial desconectado assim que a janela estiver pronta
+        def on_shown():
+            domain.set_window_taskbar_icon(False)
+
+        if window:
+            window.events.shown += on_shown
         webview.start(debug=False)
+
 
 
 if __name__ == "__main__":

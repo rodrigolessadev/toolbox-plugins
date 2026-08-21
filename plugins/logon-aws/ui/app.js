@@ -23,9 +23,6 @@ async function initApp() {
     if (data.config) {
       if (data.config.profile) document.getElementById('profileInput').value = data.config.profile;
       if (data.config.local_port) document.getElementById('localPortInput').value = data.config.local_port;
-      if (typeof data.config.use_internal_webview === 'boolean') {
-        document.getElementById('useInternalWebview').checked = data.config.use_internal_webview;
-      }
     }
     if (data.logs) {
       renderLogs(data.logs);
@@ -81,7 +78,7 @@ function updateStatusUI(status) {
     if (btnCancelSso) btnCancelSso.style.display = 'none';
   } else if (status.sso_running || status.state === 'authenticating_sso') {
     pill.classList.add('status-working');
-    text.textContent = 'Autenticando SSO...';
+    text.textContent = 'Autenticando no Navegador...';
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = true;
     if (btnCancelSso) btnCancelSso.style.display = 'inline-flex';
@@ -111,7 +108,7 @@ function renderLogs(logs) {
     if (l.includes('✔') || l.includes('sucesso') || l.includes('concluído')) colorStyle = 'color: var(--md-sys-color-success);';
     else if (l.includes('✖') || l.includes('Erro') || l.includes('error') || l.includes('Falha')) colorStyle = 'color: var(--md-sys-color-error);';
     else if (l.includes('⚠️') || l.includes('Aviso')) colorStyle = 'color: var(--md-sys-color-warning);';
-    else if (l.includes('Iniciando') || l.includes('Comando:') || l.includes('🚀')) colorStyle = 'color: var(--md-sys-color-primary);';
+    else if (l.includes('Iniciando') || l.includes('Comando:') || l.includes('🚀') || l.includes('Navegador')) colorStyle = 'color: var(--md-sys-color-primary);';
 
     return `<div class="console-line" style="${colorStyle}">${escapeHtml(l)}</div>`;
   }).join('');
@@ -124,7 +121,6 @@ function renderLogs(logs) {
 async function handleConnect() {
   const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
   const localPort = document.getElementById('localPortInput').value.trim() || '42586';
-  const useInternal = document.getElementById('useInternalWebview').checked;
 
   updateStatusUI({ connected: false, process_running: false, sso_running: false, state: 'checking_sts', port: localPort });
   showToast(`Verificando credenciais e conectando (${profile})...`);
@@ -134,7 +130,6 @@ async function handleConnect() {
       profile: profile,
       local_port: localPort,
       region: 'sa-east-1',
-      use_internal_webview: useInternal,
     });
     if (!res.success && res.error) {
       alert(`Aviso: ${res.error}`);
@@ -147,7 +142,6 @@ async function handleConnect() {
 
 async function handleSsoLogin() {
   const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
-  const useInternal = document.getElementById('useInternalWebview').checked;
 
   updateStatusUI({ connected: false, process_running: false, sso_running: true, state: 'authenticating_sso' });
   showToast(`Iniciando Login AWS SSO (${profile})...`);
@@ -155,7 +149,6 @@ async function handleSsoLogin() {
   try {
     const res = await window.pywebview.api.sso_login({
       profile: profile,
-      use_internal_webview: useInternal,
     });
     if (!res.success && res.error) {
       alert(`Aviso: ${res.error}`);
