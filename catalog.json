@@ -212,7 +212,7 @@
       "id": "logon-aws",
       "name": "Logon AWS & Port Forwarding",
       "description": "Logon AWS SSO no navegador padrão e túneis SSM com fluxo One-Click Connect e ícone dinâmico na barra de tarefas.",
-      "version": "1.3.3",
+      "version": "1.3.4",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -226,7 +226,7 @@
       "icon": "cloud-cog",
       "command": "logon-aws",
       "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.3.3/logon-aws.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.3.4/logon-aws.zip",
       "min_toolbox_version": "1.16.11",
       "theme_version": "material-3",
       "updated_at": "2026-08-21"
