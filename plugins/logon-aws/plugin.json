@@ -4,5 +4,7 @@
   "description": "Logon AWS SSO e gerenciamento de túneis SSM com port forwarding e status de conexão em tempo real.",
   "language": "python",
   "entry": "main.py",
-  "icon": "cloud-cog"
+  "icon": "cloud-cog",
+  "min_toolbox_version": "1.0.0",
+  "theme_version": "material-3"
 }
