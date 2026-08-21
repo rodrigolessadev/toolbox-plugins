@@ -31,10 +31,33 @@ class LogonAwsApi(BasePluginApi):
             "logs": domain.tunnel_manager.get_logs(),
         }
 
+    def check_sts(self, data: dict) -> dict:
+        profile = data.get("profile", "rodrigo.lessa")
+        ok, msg = domain.check_sts_session(profile)
+        return {"active": ok, "message": msg}
+
+    def one_click_connect(self, data: dict) -> dict:
+        profile = data.get("profile", "rodrigo.lessa")
+        local_port = data.get("local_port", 42586)
+        region = data.get("region", "sa-east-1")
+        use_internal = data.get("use_internal_webview", True)
+        return domain.tunnel_manager.one_click_connect(
+            profile=profile,
+            local_port=int(local_port),
+            region=region,
+            use_internal_webview=use_internal,
+        )
+
     def sso_login(self, data: dict) -> dict:
         profile = data.get("profile", "rodrigo.lessa")
-        auto_open = data.get("auto_open_browser", True)
-        return domain.tunnel_manager.run_sso_login(profile, auto_open)
+        use_internal = data.get("use_internal_webview", True)
+        return domain.tunnel_manager.run_sso_login(
+            profile=profile,
+            use_internal_webview=use_internal,
+        )
+
+    def cancel_sso(self, data: Optional[dict] = None) -> dict:
+        return domain.tunnel_manager.cancel_sso_login()
 
     def connect_tunnel(self, data: dict) -> dict:
         profile = data.get("profile", "rodrigo.lessa")

@@ -1,6 +1,7 @@
 {
   "profile": "rodrigo.lessa",
   "local_port": 42586,
+  "use_internal_webview": true,
   "auto_open_browser": true,
   "remote_port": 5432,
   "target": ""
