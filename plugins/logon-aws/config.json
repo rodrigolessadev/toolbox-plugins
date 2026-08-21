@@ -1,0 +1,7 @@
+{
+  "profile": "staging",
+  "local_port": 5432,
+  "remote_port": 5432,
+  "target": "",
+  "auto_open_browser": true
+}
