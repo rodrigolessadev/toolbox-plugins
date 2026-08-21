@@ -18,10 +18,8 @@ from typing import Any, Dict, List, Optional, Tuple
 CONFIG_FILE = Path(__file__).parent / "config.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "profile": "default",
-    "local_port": 5432,
-    "remote_port": 5432,
-    "target": "",
+    "profile": "rodrigo.lessa",
+    "local_port": 42586,
     "auto_open_browser": True,
 }
 
@@ -64,6 +62,42 @@ def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.6) -> bo
         return False
 
 
+def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, str]:
+    """Busca a instância EC2 com a tag Name='SSH Tunneling Instance' em estado running."""
+    cmd = [
+        "aws", "ec2", "describe-instances",
+        "--filters", "Name=tag:Name,Values=SSH Tunneling Instance", "Name=instance-state-name,Values=running",
+        "--output", "text",
+        "--query", "Reservations[*].Instances[*].InstanceId",
+        "--region", region,
+        "--profile", profile,
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=CREATE_NO_WINDOW,
+            timeout=15.0,
+        )
+        if res.returncode != 0:
+            err_msg = res.stderr.strip() or f"Código de saída {res.returncode}"
+            return False, f"Falha ao consultar instâncias EC2: {err_msg}"
+
+        instance_id = res.stdout.strip()
+        if not instance_id or instance_id == "None":
+            return False, "Nenhuma instância EC2 'SSH Tunneling Instance' em execução encontrada na região " + region
+
+        # Se vier mais de uma instância, pega a primeira
+        first_instance = instance_id.split()[0]
+        return True, first_instance
+    except Exception as e:
+        return False, f"Erro ao executar consulta EC2: {e}"
+
+
 class AwsTunnelManager:
     """Gerenciador singleton para túneis AWS e sessões de logon."""
 
@@ -71,7 +105,7 @@ class AwsTunnelManager:
         self.process: Optional[subprocess.Popen[str]] = None
         self.logs: List[str] = []
         self.active_profile: str = ""
-        self.active_port: int = 5432
+        self.active_port: int = 42586
         self._lock = threading.RLock()
 
     def append_log(self, text: str) -> None:
@@ -95,7 +129,7 @@ class AwsTunnelManager:
 
     def run_sso_login(self, profile: str, auto_open_browser: bool = True) -> Dict[str, Any]:
         """Executa login AWS SSO em background sem abrir janela de prompt."""
-        profile = profile.strip() or "default"
+        profile = profile.strip() or "rodrigo.lessa"
         self.append_log(f"Iniciando AWS SSO Login para o profile '{profile}'...")
 
         cmd = ["aws", "sso", "login", "--profile", profile]
@@ -143,11 +177,11 @@ class AwsTunnelManager:
     def start_tunnel(
         self,
         profile: str,
-        local_port: int,
-        remote_port: int = 5432,
-        target: str = "",
+        local_port: int = 42586,
+        region: str = "sa-east-1",
+        target_instance_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Inicia túnel SSM Port Forwarding em background."""
+        """Inicia túnel SSM Port Forwarding com porta 22 fixa e target EC2 automático."""
         with self._lock:
             if self.process and self.process.poll() is None:
                 return {
@@ -155,37 +189,41 @@ class AwsTunnelManager:
                     "error": "Já existe um túnel ativo. Desconecte antes de iniciar outro.",
                 }
 
-        profile = profile.strip() or "default"
-        local_port = int(local_port) if local_port else 5432
-        remote_port = int(remote_port) if remote_port else local_port
+        profile = profile.strip() or "rodrigo.lessa"
+        local_port = int(local_port) if local_port else 42586
 
         self.active_profile = profile
         self.active_port = local_port
 
-        # Salva as configurações utilizadas
+        # Salva as preferências
         save_config({
             "profile": profile,
             "local_port": local_port,
-            "remote_port": remote_port,
-            "target": target,
         })
 
-        params_json = json.dumps({
-            "portNumber": [str(remote_port)],
-            "localPortNumber": [str(local_port)],
-        })
+        # 1. Descoberta de Target EC2 se não fornecido
+        instance_id = target_instance_id
+        if not instance_id:
+            self.append_log(f"Buscando instância 'SSH Tunneling Instance' em {region}...")
+            ok, inst_res = discover_ec2_target(profile, region)
+            if not ok:
+                self.append_log(f"✖ {inst_res}")
+                return {"success": False, "error": inst_res}
+            instance_id = inst_res
+            self.append_log(f"✔ Instância encontrada: {instance_id}")
+
+        params_val = f'portNumber="22",localPortNumber="{local_port}"'
 
         cmd = [
             "aws", "ssm", "start-session",
+            "--target", instance_id,
             "--document-name", "AWS-StartPortForwardingSession",
-            "--parameters", params_json,
+            "--parameters", params_val,
             "--profile", profile,
+            "--region", region,
         ]
 
-        if target.strip():
-            cmd.extend(["--target", target.strip()])
-
-        self.append_log(f"Iniciando túnel SSM (porta local: {local_port} ➔ remota: {remote_port})...")
+        self.append_log(f"Iniciando túnel SSM (Target: {instance_id}, LocalPort: {local_port}, RemotePort: 22, Região: {region})...")
         self.append_log(f"Comando: {' '.join(cmd)}")
 
         try:
@@ -221,7 +259,7 @@ class AwsTunnelManager:
                         self.process = None
 
         threading.Thread(target=_reader_worker, args=(proc,), daemon=True).start()
-        return {"success": True, "message": f"Túnel iniciado na porta {local_port}."}
+        return {"success": True, "message": f"Túnel iniciado na porta {local_port}.", "instance_id": instance_id}
 
     def stop_tunnel(self) -> Dict[str, Any]:
         """Interrompe o processo do túnel SSM ativo."""
@@ -245,13 +283,13 @@ class AwsTunnelManager:
                 return {"success": False, "error": str(e)}
 
     def get_status(self, custom_port: Optional[int] = None) -> Dict[str, Any]:
-        """Retorna o estado da conexão e da porta local."""
-        port = custom_port or self.active_port or 5432
-        port_active = is_port_open(port)
+        """Retorna o estado da conexão. Só é considerado conectado se o processo do túnel foi iniciado."""
+        port = custom_port or self.active_port or 42586
         has_process = self.process is not None and self.process.poll() is None
+        port_active = is_port_open(port) if has_process else False
 
         return {
-            "connected": port_active,
+            "connected": has_process and port_active,
             "process_running": has_process,
             "port": port,
             "profile": self.active_profile,
@@ -260,3 +298,4 @@ class AwsTunnelManager:
 
 # Instância global gerenciadora
 tunnel_manager = AwsTunnelManager()
+
