@@ -33,12 +33,12 @@
       <div class="grid-2">
         <div class="form-group">
           <label for="profileInput">Usuário / Profile AWS (<code>--profile</code>)</label>
-          <input type="text" id="profileInput" placeholder="ex: rodrigo.lessa" value="rodrigo.lessa">
+          <input type="text" id="profileInput" placeholder="ex: seu.usuario" autocomplete="off" onchange="handleSavePreferences()">
         </div>
 
         <div class="form-group">
           <label for="localPortInput">Porta Local (<code>localPortNumber</code>)</label>
-          <input type="number" id="localPortInput" placeholder="ex: 42586" value="42586" min="1" max="65535">
+          <input type="number" id="localPortInput" placeholder="ex: 42586" value="42586" min="1" max="65535" onchange="handleSavePreferences()">
         </div>
       </div>
 

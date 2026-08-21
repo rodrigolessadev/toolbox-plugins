@@ -17,13 +17,13 @@ import domain
 
 
 def test_logon_aws_config_load_and_save(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Testa leitura e gravação de configurações."""
+    """Testa leitura e gravação de configurações com profile vazio inicial."""
     temp_config = tmp_path / "config.json"
     monkeypatch.setattr(domain, "CONFIG_FILE", temp_config)
 
-    # Config padrão inicial com valores corporativos
+    # Config padrão inicial sem usuário fixo
     cfg = domain.load_config()
-    assert cfg["profile"] == "rodrigo.lessa"
+    assert cfg["profile"] == ""
     assert cfg["local_port"] == 42586
 
     # Salva customização
@@ -206,6 +206,24 @@ def test_status_icon_assets_exist() -> None:
     assert domain.ICON_DISCONNECTED_PATH.exists(), "icon-disconnected.ico deve existir"
     assert domain.ICON_CONNECTED_PATH.stat().st_size > 1000
     assert domain.ICON_DISCONNECTED_PATH.stat().st_size > 1000
+
+
+def test_empty_profile_validation_rejects_execution() -> None:
+    """Valida que chamadas com profile vazio são rejeitadas com erro amigável."""
+    mgr = domain.AwsTunnelManager()
+    
+    res_sso = mgr.run_sso_login("")
+    assert res_sso["success"] is False
+    assert "informe seu usuário/profile" in res_sso["error"]
+
+    res_tunnel = mgr.start_tunnel("")
+    assert res_tunnel["success"] is False
+    assert "informe seu usuário/profile" in res_tunnel["error"]
+
+    res_click = mgr.one_click_connect("")
+    assert res_click["success"] is False
+    assert "informe seu usuário/profile" in res_click["error"]
+
 
 
 

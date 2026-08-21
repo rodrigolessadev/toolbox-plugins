@@ -138,6 +138,14 @@ def create_plugin_window(
             "pywebview não está instalado. Execute: pip install pywebview>=5.0.0"
         )
 
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            app_id = f"toolbox.plugin.{title.lower().replace(' ', '').replace('&', '').replace('—', '')}"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except Exception:
+            pass
+
     html_path = Path(entry_html).resolve()
     if not html_path.exists():
         raise FileNotFoundError(f"Arquivo HTML de entrada não encontrado: {html_path}")
