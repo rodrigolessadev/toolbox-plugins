@@ -21,8 +21,12 @@ async function initApp() {
   try {
     const data = await window.pywebview.api.get_initial_data();
     if (data.config) {
-      if (data.config.profile) document.getElementById('profileInput').value = data.config.profile;
-      if (data.config.local_port) document.getElementById('localPortInput').value = data.config.local_port;
+      if (data.config.profile) {
+        document.getElementById('profileInput').value = data.config.profile;
+      }
+      if (data.config.local_port) {
+        document.getElementById('localPortInput').value = data.config.local_port;
+      }
     }
     if (data.logs) {
       renderLogs(data.logs);
@@ -37,6 +41,20 @@ async function initApp() {
   // Inicia checagem contínua de status
   if (!statusPollInterval) {
     statusPollInterval = setInterval(pollStatus, 1500);
+  }
+}
+
+async function handleSavePreferences() {
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_preferences) return;
+  const profile = document.getElementById('profileInput').value.trim();
+  const localPort = parseInt(document.getElementById('localPortInput').value.trim(), 10) || 42586;
+  try {
+    await window.pywebview.api.save_preferences({
+      profile: profile,
+      local_port: localPort
+    });
+  } catch (e) {
+    console.error('Erro ao salvar preferências:', e);
   }
 }
 
@@ -119,8 +137,15 @@ function renderLogs(logs) {
 }
 
 async function handleConnect() {
-  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
+  const profileInput = document.getElementById('profileInput');
+  const profile = profileInput.value.trim();
   const localPort = document.getElementById('localPortInput').value.trim() || '42586';
+
+  if (!profile) {
+    showToast('Por favor, informe seu usuário/profile AWS.');
+    profileInput.focus();
+    return;
+  }
 
   updateStatusUI({ connected: false, process_running: false, sso_running: false, state: 'checking_sts', port: localPort });
   showToast(`Verificando credenciais e conectando (${profile})...`);
@@ -141,7 +166,14 @@ async function handleConnect() {
 }
 
 async function handleSsoLogin() {
-  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
+  const profileInput = document.getElementById('profileInput');
+  const profile = profileInput.value.trim();
+
+  if (!profile) {
+    showToast('Por favor, informe seu usuário/profile AWS.');
+    profileInput.focus();
+    return;
+  }
 
   updateStatusUI({ connected: false, process_running: false, sso_running: true, state: 'authenticating_sso' });
   showToast(`Iniciando Login AWS SSO (${profile})...`);

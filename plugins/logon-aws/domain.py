@@ -22,7 +22,7 @@ ICON_CONNECTED_PATH = ASSETS_DIR / "icon-connected.ico"
 ICON_DISCONNECTED_PATH = ASSETS_DIR / "icon-disconnected.ico"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "profile": "rodrigo.lessa",
+    "profile": "",
     "local_port": 42586,
 }
 
@@ -135,7 +135,9 @@ def is_port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.6) -> bo
 
 def check_sts_session(profile: str, timeout: float = 8.0) -> Tuple[bool, str]:
     """Executa 'aws sts get-caller-identity' para verificar se a sessão AWS está ativa."""
-    profile = profile.strip() or "rodrigo.lessa"
+    profile = profile.strip()
+    if not profile:
+        return False, "Profile AWS não informado."
     cmd = ["aws", "sts", "get-caller-identity", "--profile", profile]
     try:
         res = subprocess.run(
@@ -158,6 +160,9 @@ def check_sts_session(profile: str, timeout: float = 8.0) -> Tuple[bool, str]:
 
 def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, str]:
     """Busca a instância EC2 com a tag Name='SSH Tunneling Instance' em estado running."""
+    profile = profile.strip()
+    if not profile:
+        return False, "Profile AWS não informado."
     cmd = [
         "aws", "ec2", "describe-instances",
         "--filters", "Name=tag:Name,Values=SSH Tunneling Instance", "Name=instance-state-name,Values=running",
@@ -248,11 +253,14 @@ class AwsTunnelManager:
         on_success_callback: Optional[Callable[[], None]] = None,
     ) -> Dict[str, Any]:
         """Executa login AWS SSO em background delegando a autorização ao navegador padrão."""
+        profile = profile.strip()
+        if not profile:
+            return {"success": False, "error": "Por favor, informe seu usuário/profile AWS."}
+
         with self._lock:
             if self.sso_process and self.sso_process.poll() is None:
                 return {"success": False, "error": "Já existe uma autenticação SSO em andamento."}
 
-            profile = profile.strip() or "rodrigo.lessa"
             self.active_profile = profile
             self.current_state = "authenticating_sso"
 
@@ -315,6 +323,10 @@ class AwsTunnelManager:
         target_instance_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Inicia túnel SSM Port Forwarding com porta 22 fixa e target EC2 automático."""
+        profile = profile.strip()
+        if not profile:
+            return {"success": False, "error": "Por favor, informe seu usuário/profile AWS."}
+
         with self._lock:
             if self.process and self.process.poll() is None:
                 return {
@@ -323,7 +335,6 @@ class AwsTunnelManager:
                 }
             self.current_state = "starting_tunnel"
 
-        profile = profile.strip() or "rodrigo.lessa"
         local_port = int(local_port) if local_port else 42586
 
         self.active_profile = profile
@@ -411,6 +422,10 @@ class AwsTunnelManager:
         2. Se ativa, conecta o túnel SSM diretamente.
         3. Se expirada, abre navegador padrão para autenticação SSO e conecta automaticamente ao finalizar.
         """
+        profile = profile.strip()
+        if not profile:
+            return {"success": False, "error": "Por favor, informe seu usuário/profile AWS."}
+
         with self._lock:
             if self.process and self.process.poll() is None:
                 return {
@@ -423,7 +438,6 @@ class AwsTunnelManager:
                     "error": "Já existe uma autenticação SSO em andamento.",
                 }
 
-        profile = profile.strip() or "rodrigo.lessa"
         local_port = int(local_port) if local_port else 42586
 
         save_config({

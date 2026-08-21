@@ -75,12 +75,25 @@ class LogonAwsApi(BasePluginApi):
     def get_logs(self) -> list:
         return domain.tunnel_manager.get_logs()
 
+    def save_preferences(self, data: dict) -> dict:
+        profile = data.get("profile", "").strip()
+        local_port = int(data.get("local_port", 42586)) if data.get("local_port") else 42586
+        ok = domain.save_config({"profile": profile, "local_port": local_port})
+        return {"success": ok}
+
     def clear_logs(self) -> dict:
         domain.tunnel_manager.clear_logs()
         return {"success": True}
 
 
 def main() -> None:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.logonaws")
+        except Exception:
+            pass
+
     api = LogonAwsApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
     window = create_plugin_window(
