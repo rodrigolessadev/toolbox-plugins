@@ -212,7 +212,7 @@
       "id": "logon-aws",
       "name": "Logon AWS & Port Forwarding",
       "description": "Logon AWS SSO e gerenciamento de túneis SSM com port forwarding e status de conexão em tempo real.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -226,8 +226,8 @@
       "icon": "cloud-cog",
       "command": "logon-aws",
       "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.0.0/logon-aws.zip",
-      "min_toolbox_version": "1.0.0",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.0.1/logon-aws.zip",
+      "min_toolbox_version": "1.16.11",
       "theme_version": "material-3",
       "updated_at": "2026-08-21"
     }
