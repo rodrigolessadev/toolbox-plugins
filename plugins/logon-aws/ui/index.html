@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logon AWS & Port Forwarding</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Bar M3 -->
+  <header class="header">
+    <div class="brand">
+      <span class="brand-icon">☁️</span>
+      <span>Logon AWS & Port Forwarding</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div id="statusPill" class="status-pill status-disconnected">
+        <span class="status-dot"></span>
+        <span id="statusText">Desconectado</span>
+      </div>
+      <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="toggleTheme()" id="themeBtn">☀️ Tema</button>
+    </div>
+  </header>
+
+  <!-- Conteúdo Principal -->
+  <main class="main-container">
+
+    <!-- Card: Configurações de Conexão -->
+    <div class="card">
+      <div class="card-title">⚙️ Parâmetros de Conexão</div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="profileInput">Usuário / Profile AWS (<code>--profile</code>)</label>
+          <input type="text" id="profileInput" placeholder="ex: default, dev, prod..." value="default">
+        </div>
+
+        <div class="form-group">
+          <label for="localPortInput">Porta Local (<code>localPortNumber</code>)</label>
+          <input type="number" id="localPortInput" placeholder="ex: 5432" value="5432" min="1" max="65535">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label for="remotePortInput">Porta Remota do Banco (<code>portNumber</code>)</label>
+          <input type="number" id="remotePortInput" placeholder="ex: 5432" value="5432" min="1" max="65535">
+        </div>
+
+        <div class="form-group">
+          <label for="targetInput">Target / Instância SSM (Opcional - <code>--target</code>)</label>
+          <input type="text" id="targetInput" placeholder="ex: i-0123456789abcdef0 (opcional)">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 11px;">
+          <input type="checkbox" id="autoOpenBrowser" checked>
+          <span>Abrir link de autenticação SSO automaticamente no navegador padrão</span>
+        </label>
+        <span style="font-size: 11px; color: var(--md-sys-color-outline);" id="portCheckHint">Checando porta local a cada 2s...</span>
+      </div>
+
+      <!-- Barra de Ações -->
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+        <button class="btn btn-tonal" id="btnSsoLogin" onclick="handleSsoLogin()">
+          🔑 Login AWS SSO
+        </button>
+        <button class="btn btn-primary" id="btnConnect" onclick="handleConnect()">
+          🔌 Conectar
+        </button>
+        <button class="btn btn-danger" id="btnDisconnect" onclick="handleDisconnect()">
+          🛑 Desconectar
+        </button>
+      </div>
+    </div>
+
+    <!-- Card: Console de Logs & Saída -->
+    <div class="card" style="flex: 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title">📜 Console & Histórico de Logs</div>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="handleCopyLogs()">📋 Copiar Logs</button>
+          <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="handleClearLogs()">🗑 Limpar</button>
+        </div>
+      </div>
+
+      <div id="consoleLog" class="console-container">
+        <div class="console-line">[Pronto] Configure o profile e clique em Conectar ou Login SSO.</div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

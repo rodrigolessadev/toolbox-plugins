@@ -18,6 +18,7 @@ OFFICIAL_LUCIDE_ICONS = {
     "stract-log": "file-search",
     "cpf": "badge-check",
     "novo-ticket": "ticket",
+    "logon-aws": "cloud-cog",
 }
 
 def test_catalog_exists_and_valid():
