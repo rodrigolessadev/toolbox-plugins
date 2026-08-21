@@ -86,14 +86,15 @@ class LogonAwsApi(BasePluginApi):
         return {"success": True}
 
 
-def main() -> None:
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.logonaws")
-        except Exception:
-            pass
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.logonaws")
+    except Exception:
+        pass
 
+
+def main() -> None:
     api = LogonAwsApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
     window = create_plugin_window(
@@ -108,6 +109,8 @@ def main() -> None:
         # Define ícone inicial desconectado assim que a janela estiver pronta
         def on_shown():
             domain.set_window_taskbar_icon(False)
+            import threading
+            threading.Timer(0.6, lambda: domain.set_window_taskbar_icon(False)).start()
 
         if window:
             window.events.shown += on_shown

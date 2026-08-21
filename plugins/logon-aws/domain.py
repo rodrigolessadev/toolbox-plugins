@@ -70,29 +70,31 @@ def set_window_taskbar_icon(is_connected: bool, hwnd: Optional[int] = None) -> b
         if not h_icon_big and not h_icon_small:
             return False
 
-        target_hwnd = hwnd
-        if not target_hwnd:
+        if hwnd:
+            target_hwnds = [hwnd]
+        else:
+            current_pid = os.getpid()
+            target_hwnds = []
+
             def _enum_windows_cb(handle: int, _: Any) -> bool:
-                nonlocal target_hwnd
-                length = user32.GetWindowTextLengthW(handle)
-                if length > 0:
-                    buff = ctypes.create_unicode_buffer(length + 1)
-                    user32.GetWindowTextW(handle, buff, length + 1)
-                    title = buff.value
-                    if "Logon AWS" in title or "AWS SSO" in title:
-                        target_hwnd = handle
-                        return False
+                lpdw_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(handle, ctypes.byref(lpdw_pid))
+                if lpdw_pid.value == current_pid:
+                    if user32.IsWindowVisible(handle):
+                        target_hwnds.append(handle)
                 return True
 
             WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
             user32.EnumWindows(WNDENUMPROC(_enum_windows_cb), 0)
 
-        if target_hwnd:
+        success = False
+        for target in target_hwnds:
             if h_icon_big:
-                user32.SendMessageW(target_hwnd, WM_SETICON, ICON_BIG, h_icon_big)
+                user32.SendMessageW(target, WM_SETICON, ICON_BIG, h_icon_big)
             if h_icon_small:
-                user32.SendMessageW(target_hwnd, WM_SETICON, ICON_SMALL, h_icon_small)
-            return True
+                user32.SendMessageW(target, WM_SETICON, ICON_SMALL, h_icon_small)
+            success = True
+        return success
     except Exception:
         pass
     return False

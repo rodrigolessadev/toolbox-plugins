@@ -225,5 +225,17 @@ def test_empty_profile_validation_rejects_execution() -> None:
     assert "informe seu usuário/profile" in res_click["error"]
 
 
+def test_set_window_taskbar_icon_win32_execution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Valida a rotina de set_window_taskbar_icon com HWND explícito."""
+    if sys.platform == "win32":
+        # Chama com hwnd mockado/nulo sem lançar exceções
+        res = domain.set_window_taskbar_icon(True, hwnd=12345)
+        # Pode retornar False se o HWND não for válido no OS real, mas não deve quebrar
+        assert isinstance(res, bool)
+    else:
+        assert domain.set_window_taskbar_icon(True) is False
+
+
+
 
 
