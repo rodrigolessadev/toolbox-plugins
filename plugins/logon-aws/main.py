@@ -38,11 +38,11 @@ class LogonAwsApi(BasePluginApi):
 
     def one_click_connect(self, data: dict) -> dict:
         profile = data.get("profile", "").strip()
-        local_port = data.get("local_port", 42586)
+        local_port = data.get("local_port", "")
         region = data.get("region", "sa-east-1")
         return domain.tunnel_manager.one_click_connect(
             profile=profile,
-            local_port=int(local_port),
+            local_port=local_port,
             region=region,
         )
 
@@ -57,11 +57,11 @@ class LogonAwsApi(BasePluginApi):
 
     def connect_tunnel(self, data: dict) -> dict:
         profile = data.get("profile", "").strip()
-        local_port = data.get("local_port", 42586)
+        local_port = data.get("local_port", "")
         region = data.get("region", "sa-east-1")
         return domain.tunnel_manager.start_tunnel(
             profile=profile,
-            local_port=int(local_port),
+            local_port=local_port,
             region=region,
         )
 
@@ -69,7 +69,7 @@ class LogonAwsApi(BasePluginApi):
         return domain.tunnel_manager.stop_tunnel()
 
     def check_status(self, data: dict) -> dict:
-        port = int(data.get("local_port", 42586)) if data.get("local_port") else 42586
+        port = data.get("local_port", "")
         return domain.tunnel_manager.get_status(port)
 
     def get_logs(self) -> list:

@@ -23,7 +23,7 @@ ICON_DISCONNECTED_PATH = ASSETS_DIR / "icon-disconnected.ico"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "profile": "",
-    "local_port": 42586,
+    "local_port": "",
 }
 
 # Flag para evitar abrir prompt no Windows
@@ -349,7 +349,7 @@ class AwsTunnelManager:
     def start_tunnel(
         self,
         profile: str,
-        local_port: int = 42586,
+        local_port: Any = "",
         region: str = "sa-east-1",
         target_instance_id: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -358,6 +358,16 @@ class AwsTunnelManager:
         if not profile:
             return {"success": False, "error": "Por favor, informe seu usuário/profile AWS."}
 
+        try:
+            port_num = int(local_port) if local_port else 0
+        except (ValueError, TypeError):
+            port_num = 0
+
+        if port_num <= 0:
+            return {"success": False, "error": "Por favor, informe uma porta local válida para abrir o túnel."}
+
+        local_port = port_num
+
         with self._lock:
             if self.process and self.process.poll() is None:
                 return {
@@ -365,8 +375,6 @@ class AwsTunnelManager:
                     "error": "Já existe um túnel ativo. Desconecte antes de iniciar outro.",
                 }
             self.current_state = "starting_tunnel"
-
-        local_port = int(local_port) if local_port else 42586
 
         self.active_profile = profile
         self.active_port = local_port
@@ -444,7 +452,7 @@ class AwsTunnelManager:
     def one_click_connect(
         self,
         profile: str,
-        local_port: int = 42586,
+        local_port: Any = "",
         region: str = "sa-east-1",
     ) -> Dict[str, Any]:
         """Fluxo unificado One-Click Connect:
@@ -457,6 +465,16 @@ class AwsTunnelManager:
         if not profile:
             return {"success": False, "error": "Por favor, informe seu usuário/profile AWS."}
 
+        try:
+            port_num = int(local_port) if local_port else 0
+        except (ValueError, TypeError):
+            port_num = 0
+
+        if port_num <= 0:
+            return {"success": False, "error": "Por favor, informe uma porta local válida para abrir o túnel."}
+
+        local_port = port_num
+
         with self._lock:
             if self.process and self.process.poll() is None:
                 return {
@@ -468,8 +486,6 @@ class AwsTunnelManager:
                     "success": False,
                     "error": "Já existe uma autenticação SSO em andamento.",
                 }
-
-        local_port = int(local_port) if local_port else 42586
 
         save_config({
             "profile": profile,
@@ -537,11 +553,15 @@ class AwsTunnelManager:
             self.current_state = "idle"
         set_window_taskbar_icon(False)
 
-    def get_status(self, custom_port: Optional[int] = None) -> Dict[str, Any]:
+    def get_status(self, custom_port: Any = None) -> Dict[str, Any]:
         """Retorna o estado detalhado da conexão e dos subprocessos, sincronizando o ícone da barra de tarefas."""
-        port = custom_port or self.active_port or 42586
+        try:
+            port = int(custom_port) if custom_port else (int(self.active_port) if self.active_port else 0)
+        except (ValueError, TypeError):
+            port = 0
+
         has_tunnel = self.process is not None and self.process.poll() is None
-        port_active = is_port_open(port) if has_tunnel else False
+        port_active = is_port_open(port) if (has_tunnel and port > 0) else False
         has_sso = self.sso_process is not None and self.sso_process.poll() is None
 
         state = self.current_state

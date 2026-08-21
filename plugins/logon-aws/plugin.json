@@ -1,6 +1,6 @@
 {
   "name": "Logon AWS & Port Forwarding",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "Logon AWS SSO no navegador padrão e túneis SSM com fluxo One-Click Connect e ícone dinâmico na barra de tarefas.",
   "language": "python",
   "entry": "main.py",
