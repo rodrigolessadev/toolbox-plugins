@@ -32,12 +32,12 @@ class LogonAwsApi(BasePluginApi):
         }
 
     def check_sts(self, data: dict) -> dict:
-        profile = data.get("profile", "rodrigo.lessa")
+        profile = data.get("profile", "").strip()
         ok, msg = domain.check_sts_session(profile)
         return {"active": ok, "message": msg}
 
     def one_click_connect(self, data: dict) -> dict:
-        profile = data.get("profile", "rodrigo.lessa")
+        profile = data.get("profile", "").strip()
         local_port = data.get("local_port", 42586)
         region = data.get("region", "sa-east-1")
         return domain.tunnel_manager.one_click_connect(
@@ -47,7 +47,7 @@ class LogonAwsApi(BasePluginApi):
         )
 
     def sso_login(self, data: dict) -> dict:
-        profile = data.get("profile", "rodrigo.lessa")
+        profile = data.get("profile", "").strip()
         return domain.tunnel_manager.run_sso_login(
             profile=profile,
         )
@@ -56,7 +56,7 @@ class LogonAwsApi(BasePluginApi):
         return domain.tunnel_manager.cancel_sso_login()
 
     def connect_tunnel(self, data: dict) -> dict:
-        profile = data.get("profile", "rodrigo.lessa")
+        profile = data.get("profile", "").strip()
         local_port = data.get("local_port", 42586)
         region = data.get("region", "sa-east-1")
         return domain.tunnel_manager.start_tunnel(

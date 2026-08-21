@@ -281,6 +281,48 @@ def test_stop_all_cleans_active_processes() -> None:
         mock_icon.assert_called_once_with(False)
 
 
+def test_api_methods_handle_empty_payload_without_hardcoded_fallback() -> None:
+    """Valida que todos os métodos da LogonAwsApi em main.py tratam payloads vazios sem fallback hardcoded."""
+    import main
+
+    api = main.LogonAwsApi()
+
+    # check_sts com {}
+    res_sts = api.check_sts({})
+    assert res_sts["active"] is False
+    assert "não informado" in res_sts["message"]
+
+    # one_click_connect com {}
+    res_occ = api.one_click_connect({})
+    assert res_occ["success"] is False
+    assert "informe seu usuário/profile" in res_occ["error"]
+
+    # sso_login com {}
+    res_sso = api.sso_login({})
+    assert res_sso["success"] is False
+    assert "informe seu usuário/profile" in res_sso["error"]
+
+    # connect_tunnel com {}
+    res_tunnel = api.connect_tunnel({})
+    assert res_tunnel["success"] is False
+    assert "informe seu usuário/profile" in res_tunnel["error"]
+
+
+def test_no_hardcoded_user_in_codebase() -> None:
+    """Audita os arquivos de código-fonte do plugin para garantir que 'rodrigo.lessa' não está hardcoded."""
+    target_files = [
+        PLUGIN_DIR / "main.py",
+        PLUGIN_DIR / "domain.py",
+        PLUGIN_DIR / "ui" / "index.html",
+        PLUGIN_DIR / "ui" / "app.js",
+    ]
+    for file_path in target_files:
+        assert file_path.exists()
+        content = file_path.read_text(encoding="utf-8")
+        assert "rodrigo.lessa" not in content, f"Encontrada referência hardcoded em {file_path.name}"
+
+
+
 
 
 
