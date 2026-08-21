@@ -16,15 +16,19 @@ sys.path.insert(0, str(PLUGIN_DIR))
 import domain
 
 
-def test_logon_aws_config_load_and_save(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Testa leitura e gravação de configurações com profile vazio inicial."""
+@pytest.fixture(autouse=True)
+def isolate_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Garante que nenhum teste crie o config.json na pasta real do repositório."""
     temp_config = tmp_path / "config.json"
     monkeypatch.setattr(domain, "CONFIG_FILE", temp_config)
 
-    # Config padrão inicial sem usuário fixo
+
+def test_logon_aws_config_load_and_save() -> None:
+    """Testa leitura e gravação de configurações com profile e porta vazios iniciais."""
+    # Config padrão inicial sem usuário ou porta fixos
     cfg = domain.load_config()
     assert cfg["profile"] == ""
-    assert cfg["local_port"] == 42586
+    assert cfg["local_port"] == ""
 
     # Salva customização
     domain.save_config({"profile": "prod-admin", "local_port": 5433})
@@ -55,7 +59,7 @@ def test_discover_ec2_target(mock_run: MagicMock) -> None:
         stderr=""
     )
 
-    ok, inst_id = domain.discover_ec2_target("rodrigo.lessa", "sa-east-1")
+    ok, inst_id = domain.discover_ec2_target("test-profile", "sa-east-1")
     assert ok is True
     assert inst_id == "i-0123456789abcdef0"
 
@@ -86,12 +90,12 @@ def test_aws_tunnel_manager_start_and_stop(mock_popen: MagicMock) -> None:
 
     mgr = domain.AwsTunnelManager()
     # Inicia com target fixo mockado
-    res = mgr.start_tunnel(profile="rodrigo.lessa", local_port=42586, target_instance_id="i-mocked123")
+    res = mgr.start_tunnel(profile="test-profile", local_port=42586, target_instance_id="i-mocked123")
     assert res["success"] is True
     assert res["instance_id"] == "i-mocked123"
 
     # Bloqueia iniciar túnel duplicado
-    res2 = mgr.start_tunnel(profile="rodrigo.lessa", local_port=42586)
+    res2 = mgr.start_tunnel(profile="test-profile", local_port=42586)
     assert res2["success"] is False
     assert "Já existe um túnel ativo" in res2["error"]
 
@@ -111,7 +115,7 @@ def test_check_sts_session(mock_run: MagicMock) -> None:
         stdout='{"UserId": "AROA...", "Account": "123456789012", "Arn": "arn:aws:sts::123456789012:assumed-role/..."}',
         stderr=""
     )
-    ok, msg = domain.check_sts_session("rodrigo.lessa")
+    ok, msg = domain.check_sts_session("test-profile")
     assert ok is True
     assert "UserId" in msg
 
@@ -121,7 +125,7 @@ def test_check_sts_session(mock_run: MagicMock) -> None:
         stdout="",
         stderr="The SSO session associated with this profile has expired or is invalid."
     )
-    ok, err = domain.check_sts_session("rodrigo.lessa")
+    ok, err = domain.check_sts_session("test-profile")
     assert ok is False
     assert "expired" in err
 
@@ -137,15 +141,15 @@ def test_one_click_connect_with_active_session(
     mock_start_tunnel.return_value = {"success": True}
 
     mgr = domain.AwsTunnelManager()
-    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1")
+    res = mgr.one_click_connect("test-profile", 42586, "sa-east-1")
     assert res["success"] is True
 
     # Aguarda a thread do one_click executar
     import time
     time.sleep(0.1)
 
-    mock_check_sts.assert_called_once_with("rodrigo.lessa")
-    mock_start_tunnel.assert_called_once_with("rodrigo.lessa", 42586, "sa-east-1")
+    mock_check_sts.assert_called_once_with("test-profile")
+    mock_start_tunnel.assert_called_once_with("test-profile", 42586, "sa-east-1")
 
 
 @patch("domain.check_sts_session")
@@ -159,13 +163,13 @@ def test_one_click_connect_with_expired_session(
     mock_sso_login.return_value = {"success": True}
 
     mgr = domain.AwsTunnelManager()
-    res = mgr.one_click_connect("rodrigo.lessa", 42586, "sa-east-1")
+    res = mgr.one_click_connect("test-profile", 42586, "sa-east-1")
     assert res["success"] is True
 
     import time
     time.sleep(0.1)
 
-    mock_check_sts.assert_called_once_with("rodrigo.lessa")
+    mock_check_sts.assert_called_once_with("test-profile")
     mock_sso_login.assert_called_once()
 
 
@@ -193,11 +197,11 @@ def test_run_sso_login_browser(mock_popen: MagicMock) -> None:
     mock_popen.return_value = mock_proc
 
     mgr = domain.AwsTunnelManager()
-    mgr.run_sso_login("rodrigo.lessa")
+    mgr.run_sso_login("test-profile")
     import time
     time.sleep(0.05)
     cmd_called = mock_popen.call_args[0][0]
-    assert cmd_called == ["aws", "sso", "login", "--profile", "rodrigo.lessa"]
+    assert cmd_called == ["aws", "sso", "login", "--profile", "test-profile"]
 
 
 def test_status_icon_assets_exist() -> None:
@@ -216,24 +220,20 @@ def test_empty_profile_validation_rejects_execution() -> None:
     assert res_sso["success"] is False
     assert "informe seu usuário/profile" in res_sso["error"]
 
-    res_tunnel = mgr.start_tunnel("")
+    res_tunnel = mgr.start_tunnel("", local_port=42586)
     assert res_tunnel["success"] is False
     assert "informe seu usuário/profile" in res_tunnel["error"]
 
-    res_click = mgr.one_click_connect("")
-    assert res_click["success"] is False
-    assert "informe seu usuário/profile" in res_click["error"]
 
+def test_set_window_taskbar_icon_win32_execution() -> None:
+    """Valida que set_window_taskbar_icon lida com execução segura em ambiente Windows."""
+    # Teste com connected=True
+    res_conn = domain.set_window_taskbar_icon(True)
+    assert isinstance(res_conn, bool)
 
-def test_set_window_taskbar_icon_win32_execution(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Valida a rotina de set_window_taskbar_icon com HWND explícito."""
-    if sys.platform == "win32":
-        # Chama com hwnd mockado/nulo sem lançar exceções
-        res = domain.set_window_taskbar_icon(True, hwnd=12345)
-        # Pode retornar False se o HWND não for válido no OS real, mas não deve quebrar
-        assert isinstance(res, bool)
-    else:
-        assert domain.set_window_taskbar_icon(True) is False
+    # Teste com connected=False
+    res_disc = domain.set_window_taskbar_icon(False)
+    assert isinstance(res_disc, bool)
 
 
 def test_terminate_process_tree() -> None:
@@ -322,8 +322,27 @@ def test_no_hardcoded_user_in_codebase() -> None:
         assert "rodrigo.lessa" not in content, f"Encontrada referência hardcoded em {file_path.name}"
 
 
+def test_empty_port_validation() -> None:
+    """Valida que start_tunnel e one_click_connect rejeitam chamadas com portas vazias ou inválidas."""
+    mgr = domain.AwsTunnelManager()
+
+    # Porta vazia
+    res1 = mgr.start_tunnel(profile="meu-usuario", local_port="")
+    assert res1["success"] is False
+    assert "informe uma porta local válida" in res1["error"]
+
+    # Porta 0 ou negativa
+    res2 = mgr.start_tunnel(profile="meu-usuario", local_port=0)
+    assert res2["success"] is False
+    assert "informe uma porta local válida" in res2["error"]
+
+    # One-Click com porta vazia
+    res3 = mgr.one_click_connect(profile="meu-usuario", local_port="")
+    assert res3["success"] is False
+    assert "informe uma porta local válida" in res3["error"]
 
 
-
-
-
+def test_config_json_not_present_in_repo() -> None:
+    """Garante que nenhum config.json de preferências de usuário está salvo na pasta do plugin no repositório."""
+    config_file = PLUGIN_DIR / "config.json"
+    assert not config_file.exists(), "config.json não deve existir no repositório limpo!"

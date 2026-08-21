@@ -47,7 +47,8 @@ async function initApp() {
 async function handleSavePreferences() {
   if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_preferences) return;
   const profile = document.getElementById('profileInput').value.trim();
-  const localPort = parseInt(document.getElementById('localPortInput').value.trim(), 10) || 42586;
+  const localPortStr = document.getElementById('localPortInput').value.trim();
+  const localPort = localPortStr ? parseInt(localPortStr, 10) : "";
   try {
     await window.pywebview.api.save_preferences({
       profile: profile,
@@ -60,7 +61,7 @@ async function handleSavePreferences() {
 
 async function pollStatus() {
   if (!window.pywebview || !window.pywebview.api) return;
-  const localPort = document.getElementById('localPortInput').value || '42586';
+  const localPort = document.getElementById('localPortInput').value.trim();
   try {
     const status = await window.pywebview.api.check_status({ local_port: localPort });
     updateStatusUI(status);
@@ -139,11 +140,18 @@ function renderLogs(logs) {
 async function handleConnect() {
   const profileInput = document.getElementById('profileInput');
   const profile = profileInput.value.trim();
-  const localPort = document.getElementById('localPortInput').value.trim() || '42586';
+  const localPortInput = document.getElementById('localPortInput');
+  const localPort = localPortInput.value.trim();
 
   if (!profile) {
     showToast('Por favor, informe seu usuário/profile AWS.');
     profileInput.focus();
+    return;
+  }
+
+  if (!localPort || isNaN(parseInt(localPort, 10)) || parseInt(localPort, 10) <= 0) {
+    showToast('Por favor, informe uma porta local válida (ex: 42586).');
+    localPortInput.focus();
     return;
   }
 
