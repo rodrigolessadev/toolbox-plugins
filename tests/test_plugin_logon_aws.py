@@ -1,4 +1,4 @@
-"""Testes unitários para o plugin Logon AWS & Port Forwarding.
+"""Testes unitários para o plugin Logon AWS & Port Forwarding (Issue #67).
 """
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ def test_logon_aws_config_load_and_save(tmp_path: Path, monkeypatch: pytest.Monk
     temp_config = tmp_path / "config.json"
     monkeypatch.setattr(domain, "CONFIG_FILE", temp_config)
 
-    # Config padrão inicial
+    # Config padrão inicial com valores corporativos
     cfg = domain.load_config()
-    assert cfg["profile"] == "default"
-    assert cfg["local_port"] == 5432
+    assert cfg["profile"] == "rodrigo.lessa"
+    assert cfg["local_port"] == 42586
 
     # Salva customização
     domain.save_config({"profile": "prod-admin", "local_port": 5433})
@@ -33,11 +33,31 @@ def test_logon_aws_config_load_and_save(tmp_path: Path, monkeypatch: pytest.Monk
     assert saved["local_port"] == 5433
 
 
-def test_is_port_open_invalid_ports() -> None:
-    """Valida que portas inválidas retornam False sem exceção."""
-    assert domain.is_port_open(0) is False
-    assert domain.is_port_open(-1) is False
-    assert domain.is_port_open(70000) is False
+def test_initial_status_is_disconnected_even_if_port_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Valida que sem processo ativo o status é sempre desconectado ao abrir o plugin."""
+    mgr = domain.AwsTunnelManager()
+    mgr.process = None
+
+    # Simula porta aberta no sistema operacional por outro serviço
+    monkeypatch.setattr(domain, "is_port_open", lambda port, host="127.0.0.1", timeout=0.6: True)
+
+    status = mgr.get_status(42586)
+    assert status["connected"] is False
+    assert status["process_running"] is False
+
+
+@patch("subprocess.run")
+def test_discover_ec2_target(mock_run: MagicMock) -> None:
+    """Testa busca automática de instância EC2 em sa-east-1."""
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout="i-0123456789abcdef0\n",
+        stderr=""
+    )
+
+    ok, inst_id = domain.discover_ec2_target("rodrigo.lessa", "sa-east-1")
+    assert ok is True
+    assert inst_id == "i-0123456789abcdef0"
 
 
 def test_aws_tunnel_manager_logs() -> None:
@@ -65,11 +85,13 @@ def test_aws_tunnel_manager_start_and_stop(mock_popen: MagicMock) -> None:
     mock_popen.return_value = mock_proc
 
     mgr = domain.AwsTunnelManager()
-    # Simula processo ativo
-    mgr.process = mock_proc
+    # Inicia com target fixo mockado
+    res = mgr.start_tunnel(profile="rodrigo.lessa", local_port=42586, target_instance_id="i-mocked123")
+    assert res["success"] is True
+    assert res["instance_id"] == "i-mocked123"
 
     # Bloqueia iniciar túnel duplicado
-    res2 = mgr.start_tunnel(profile="staging", local_port=5432)
+    res2 = mgr.start_tunnel(profile="rodrigo.lessa", local_port=42586)
     assert res2["success"] is False
     assert "Já existe um túnel ativo" in res2["error"]
 

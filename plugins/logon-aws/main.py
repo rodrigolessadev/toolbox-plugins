@@ -24,7 +24,7 @@ class LogonAwsApi(BasePluginApi):
 
     def get_initial_data(self) -> dict:
         config = domain.load_config()
-        status = domain.tunnel_manager.get_status(config.get("local_port", 5432))
+        status = domain.tunnel_manager.get_status(config.get("local_port", 42586))
         return {
             "config": config,
             "status": status,
@@ -32,27 +32,25 @@ class LogonAwsApi(BasePluginApi):
         }
 
     def sso_login(self, data: dict) -> dict:
-        profile = data.get("profile", "default")
+        profile = data.get("profile", "rodrigo.lessa")
         auto_open = data.get("auto_open_browser", True)
         return domain.tunnel_manager.run_sso_login(profile, auto_open)
 
     def connect_tunnel(self, data: dict) -> dict:
-        profile = data.get("profile", "default")
-        local_port = data.get("local_port", 5432)
-        remote_port = data.get("remote_port", local_port)
-        target = data.get("target", "")
+        profile = data.get("profile", "rodrigo.lessa")
+        local_port = data.get("local_port", 42586)
+        region = data.get("region", "sa-east-1")
         return domain.tunnel_manager.start_tunnel(
             profile=profile,
             local_port=int(local_port),
-            remote_port=int(remote_port),
-            target=target,
+            region=region,
         )
 
     def disconnect_tunnel(self) -> dict:
         return domain.tunnel_manager.stop_tunnel()
 
     def check_status(self, data: dict) -> dict:
-        port = int(data.get("local_port", 5432)) if data.get("local_port") else 5432
+        port = int(data.get("local_port", 42586)) if data.get("local_port") else 42586
         return domain.tunnel_manager.get_status(port)
 
     def get_logs(self) -> list:

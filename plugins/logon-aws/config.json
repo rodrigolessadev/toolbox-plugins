@@ -1,7 +1,7 @@
 {
-  "profile": "staging",
-  "local_port": 5432,
+  "profile": "rodrigo.lessa",
+  "local_port": 42586,
+  "auto_open_browser": true,
   "remote_port": 5432,
-  "target": "",
-  "auto_open_browser": true
+  "target": ""
 }

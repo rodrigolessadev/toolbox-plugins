@@ -23,8 +23,6 @@ async function initApp() {
     if (data.config) {
       if (data.config.profile) document.getElementById('profileInput').value = data.config.profile;
       if (data.config.local_port) document.getElementById('localPortInput').value = data.config.local_port;
-      if (data.config.remote_port) document.getElementById('remotePortInput').value = data.config.remote_port;
-      if (data.config.target) document.getElementById('targetInput').value = data.config.target;
       if (typeof data.config.auto_open_browser === 'boolean') {
         document.getElementById('autoOpenBrowser').checked = data.config.auto_open_browser;
       }
@@ -47,7 +45,7 @@ async function initApp() {
 
 async function pollStatus() {
   if (!window.pywebview || !window.pywebview.api) return;
-  const localPort = document.getElementById('localPortInput').value;
+  const localPort = document.getElementById('localPortInput').value || '42586';
   try {
     const status = await window.pywebview.api.check_status({ local_port: localPort });
     updateStatusUI(status);
@@ -107,7 +105,7 @@ function renderLogs(logs) {
 }
 
 async function handleSsoLogin() {
-  const profile = document.getElementById('profileInput').value.trim() || 'default';
+  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
   const autoOpen = document.getElementById('autoOpenBrowser').checked;
 
   showToast(`Iniciando Login AWS SSO (${profile})...`);
@@ -123,20 +121,17 @@ async function handleSsoLogin() {
 }
 
 async function handleConnect() {
-  const profile = document.getElementById('profileInput').value.trim() || 'default';
-  const localPort = document.getElementById('localPortInput').value.trim() || '5432';
-  const remotePort = document.getElementById('remotePortInput').value.trim() || localPort;
-  const target = document.getElementById('targetInput').value.trim();
+  const profile = document.getElementById('profileInput').value.trim() || 'rodrigo.lessa';
+  const localPort = document.getElementById('localPortInput').value.trim() || '42586';
 
   updateStatusUI({ connected: false, process_running: true, port: localPort });
-  showToast(`Iniciando túnel na porta local ${localPort}...`);
+  showToast(`Buscando instância e iniciando túnel na porta ${localPort}...`);
 
   try {
     const res = await window.pywebview.api.connect_tunnel({
       profile: profile,
       local_port: localPort,
-      remote_port: remotePort,
-      target: target,
+      region: 'sa-east-1',
     });
     if (!res.success && res.error) {
       alert(`Aviso: ${res.error}`);
