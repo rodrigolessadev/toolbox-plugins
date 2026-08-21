@@ -236,6 +236,52 @@ def test_set_window_taskbar_icon_win32_execution(monkeypatch: pytest.MonkeyPatch
         assert domain.set_window_taskbar_icon(True) is False
 
 
+def test_terminate_process_tree() -> None:
+    """Valida que terminate_process_tree lida com processos None ou ativos com segurança."""
+    # Com None
+    domain.terminate_process_tree(None)
+
+    # Com processo mock
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.pid = 99999
+    
+    with patch("subprocess.run") as mock_run:
+        domain.terminate_process_tree(mock_proc)
+        mock_proc.terminate.assert_called_once()
+        if sys.platform == "win32":
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "taskkill" in args
+            assert "99999" in args
+
+
+def test_stop_all_cleans_active_processes() -> None:
+    """Valida que stop_all encerra tanto o processo de túnel quanto o processo de SSO."""
+    mgr = domain.AwsTunnelManager()
+    mock_t_proc = MagicMock()
+    mock_t_proc.poll.return_value = None
+    mock_t_proc.pid = 11111
+
+    mock_s_proc = MagicMock()
+    mock_s_proc.poll.return_value = None
+    mock_s_proc.pid = 22222
+
+    mgr.process = mock_t_proc
+    mgr.sso_process = mock_s_proc
+    mgr.current_state = "connected"
+
+    with patch("domain.terminate_process_tree") as mock_term, \
+         patch("domain.set_window_taskbar_icon") as mock_icon:
+        mgr.stop_all()
+        assert mock_term.call_count == 2
+        assert mgr.process is None
+        assert mgr.sso_process is None
+        assert mgr.current_state == "idle"
+        mock_icon.assert_called_once_with(False)
+
+
+
 
 
 

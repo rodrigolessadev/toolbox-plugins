@@ -94,7 +94,29 @@ if sys.platform == "win32":
         pass
 
 
+import atexit
+import signal
+
+
+def _setup_lifecycle_cleanup() -> None:
+    """Registra rotinas de limpeza para encerramento de processos em atexit e sinais."""
+    atexit.register(domain.tunnel_manager.stop_all)
+
+    def _sig_handler(sig: int, frame: Any) -> None:
+        domain.tunnel_manager.stop_all()
+        sys.exit(0)
+
+    for sig_name in ("SIGINT", "SIGTERM", "SIGBREAK"):
+        if hasattr(signal, sig_name):
+            try:
+                signal.signal(getattr(signal, sig_name), _sig_handler)
+            except Exception:
+                pass
+
+
 def main() -> None:
+    _setup_lifecycle_cleanup()
+
     api = LogonAwsApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
     window = create_plugin_window(
@@ -105,17 +127,24 @@ def main() -> None:
         height=720,
         min_size=(680, 600),
     )
-    if webview:
+    if webview and window:
         # Define ícone inicial desconectado assim que a janela estiver pronta
         def on_shown():
             domain.set_window_taskbar_icon(False)
             import threading
             threading.Timer(0.6, lambda: domain.set_window_taskbar_icon(False)).start()
 
-        if window:
-            window.events.shown += on_shown
-        webview.start(debug=False)
+        def on_closing():
+            domain.tunnel_manager.stop_all()
+            return True
 
+        def on_closed():
+            domain.tunnel_manager.stop_all()
+
+        window.events.shown += on_shown
+        window.events.closing += on_closing
+        window.events.closed += on_closed
+        webview.start(debug=False)
 
 
 if __name__ == "__main__":

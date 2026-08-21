@@ -199,6 +199,42 @@ def discover_ec2_target(profile: str, region: str = "sa-east-1") -> Tuple[bool, 
         return False, f"Erro ao executar consulta EC2: {e}"
 
 
+def terminate_process_tree(proc: Optional[subprocess.Popen[str]]) -> None:
+    """Encerra um processo e toda a sua árvore de subprocessos filhos recursivamente."""
+    if proc is None:
+        return
+    try:
+        if proc.poll() is not None:
+            return
+    except Exception:
+        pass
+
+    pid = proc.pid
+    if sys.platform == "win32":
+        try:
+            # /F força o término, /T mata a árvore inteira de processos filhos (como session-manager-plugin.exe)
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW,
+                timeout=3.0,
+            )
+        except Exception:
+            pass
+
+    # Fallback / garantia de encerramento via interface Python
+    try:
+        proc.terminate()
+        try:
+            proc.wait(timeout=1.0)
+        except Exception:
+            proc.kill()
+    except Exception:
+        pass
+
+
 class AwsTunnelManager:
     """Gerenciador singleton para túneis AWS, sessões SSO no navegador e fluxo One-Click."""
 
@@ -231,18 +267,11 @@ class AwsTunnelManager:
             self.logs.clear()
 
     def cancel_sso_login(self) -> Dict[str, Any]:
-        """Cancela o processo de login SSO em andamento."""
+        """Cancela o processo de login SSO em andamento e seus processos filhos."""
         with self._lock:
-            if self.sso_process and self.sso_process.poll() is None:
+            if self.sso_process:
                 self.append_log("Cancelando processo de login AWS SSO...")
-                try:
-                    self.sso_process.terminate()
-                    try:
-                        self.sso_process.wait(timeout=1.5)
-                    except subprocess.TimeoutExpired:
-                        self.sso_process.kill()
-                except Exception as e:
-                    self.append_log(f"Erro ao cancelar SSO: {e}")
+                terminate_process_tree(self.sso_process)
                 self.sso_process = None
 
             self.current_state = "idle"
@@ -474,20 +503,16 @@ class AwsTunnelManager:
         return {"success": True, "message": "Fluxo One-Click Connect iniciado."}
 
     def stop_tunnel(self) -> Dict[str, Any]:
-        """Interrompe o processo do túnel SSM ativo."""
+        """Interrompe o processo do túnel SSM ativo e toda a sua árvore de subprocessos."""
         with self._lock:
-            if not self.process or self.process.poll() is not None:
+            if not self.process:
                 self.append_log("Nenhum processo de túnel em execução.")
                 set_window_taskbar_icon(False)
                 return {"success": True, "message": "Nenhum túnel ativo."}
 
             try:
-                self.append_log("Encerrando processo do túnel SSM...")
-                self.process.terminate()
-                try:
-                    self.process.wait(timeout=2.0)
-                except subprocess.TimeoutExpired:
-                    self.process.kill()
+                self.append_log("Encerrando processo do túnel SSM e processos filhos...")
+                terminate_process_tree(self.process)
                 self.process = None
                 self.current_state = "idle"
                 self.append_log("✔ Túnel desconectado com sucesso.")
@@ -495,8 +520,22 @@ class AwsTunnelManager:
                 return {"success": True, "message": "Túnel desconectado."}
             except Exception as e:
                 self.append_log(f"Erro ao interromper túnel: {e}")
+                self.process = None
+                self.current_state = "idle"
                 set_window_taskbar_icon(False)
                 return {"success": False, "error": str(e)}
+
+    def stop_all(self) -> None:
+        """Encerra imediatamente todos os subprocessos ativos (túnel SSM e login SSO) e libera recursos."""
+        with self._lock:
+            if self.process:
+                terminate_process_tree(self.process)
+                self.process = None
+            if self.sso_process:
+                terminate_process_tree(self.sso_process)
+                self.sso_process = None
+            self.current_state = "idle"
+        set_window_taskbar_icon(False)
 
     def get_status(self, custom_port: Optional[int] = None) -> Dict[str, Any]:
         """Retorna o estado detalhado da conexão e dos subprocessos, sincronizando o ícone da barra de tarefas."""
