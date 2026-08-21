@@ -63,7 +63,6 @@ function updateStatusUI(status) {
   const text = document.getElementById('statusText');
   const btnConnect = document.getElementById('btnConnect');
   const btnDisconnect = document.getElementById('btnDisconnect');
-  const btnSsoLogin = document.getElementById('btnSsoLogin');
   const btnCancelSso = document.getElementById('btnCancelSso');
 
   pill.className = 'status-pill';
@@ -73,35 +72,30 @@ function updateStatusUI(status) {
     text.textContent = `Conectado (: ${status.port})`;
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = false;
-    if (btnSsoLogin) btnSsoLogin.disabled = true;
     if (btnCancelSso) btnCancelSso.style.display = 'none';
   } else if (status.state === 'checking_sts') {
     pill.classList.add('status-working');
     text.textContent = 'Verificando Sessão AWS...';
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = true;
-    if (btnSsoLogin) btnSsoLogin.disabled = true;
     if (btnCancelSso) btnCancelSso.style.display = 'none';
   } else if (status.sso_running || status.state === 'authenticating_sso') {
     pill.classList.add('status-working');
     text.textContent = 'Autenticando SSO...';
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = true;
-    if (btnSsoLogin) btnSsoLogin.disabled = true;
     if (btnCancelSso) btnCancelSso.style.display = 'inline-flex';
   } else if (status.process_running || status.state === 'starting_tunnel') {
     pill.classList.add('status-working');
     text.textContent = 'Iniciando Túnel SSM...';
     if (btnConnect) btnConnect.disabled = true;
     if (btnDisconnect) btnDisconnect.disabled = false;
-    if (btnSsoLogin) btnSsoLogin.disabled = true;
     if (btnCancelSso) btnCancelSso.style.display = 'none';
   } else {
     pill.classList.add('status-disconnected');
     text.textContent = 'Desconectado';
     if (btnConnect) btnConnect.disabled = false;
     if (btnDisconnect) btnDisconnect.disabled = true;
-    if (btnSsoLogin) btnSsoLogin.disabled = false;
     if (btnCancelSso) btnCancelSso.style.display = 'none';
   }
 }

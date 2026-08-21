@@ -188,3 +188,33 @@ def test_cancel_sso_login() -> None:
     assert mgr.sso_window is None
     assert mgr.current_state == "idle"
 
+
+@patch("subprocess.Popen")
+def test_run_sso_login_no_browser_flag(mock_popen: MagicMock) -> None:
+    """Valida que --no-browser é adicionado quando use_internal_webview=True e omitido quando False."""
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.stdout = None
+    mock_proc.wait.return_value = 0
+    mock_popen.return_value = mock_proc
+
+    mgr = domain.AwsTunnelManager()
+
+    # 1. Com WebView interno: deve incluir --no-browser
+    mgr.run_sso_login("rodrigo.lessa", use_internal_webview=True)
+    import time
+    time.sleep(0.05)
+    cmd_called = mock_popen.call_args[0][0]
+    assert "--no-browser" in cmd_called
+    assert "aws" in cmd_called
+    assert "sso" in cmd_called
+    assert "login" in cmd_called
+
+    # 2. Sem WebView interno: NÃO deve incluir --no-browser
+    mgr.sso_process = None
+    mgr.run_sso_login("rodrigo.lessa", use_internal_webview=False)
+    time.sleep(0.05)
+    cmd_called_external = mock_popen.call_args[0][0]
+    assert "--no-browser" not in cmd_called_external
+
+

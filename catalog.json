@@ -212,7 +212,7 @@
       "id": "logon-aws",
       "name": "Logon AWS & Port Forwarding",
       "description": "Logon AWS SSO e túneis SSM com fluxo One-Click Connect, verificação STS e WebView integrado.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -226,7 +226,7 @@
       "icon": "cloud-cog",
       "command": "logon-aws",
       "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.1.0/logon-aws.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/logon-aws-1.2.0/logon-aws.zip",
       "min_toolbox_version": "1.16.11",
       "theme_version": "material-3",
       "updated_at": "2026-08-21"

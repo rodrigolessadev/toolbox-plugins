@@ -234,6 +234,8 @@ class AwsTunnelManager:
         self.append_log(f"Iniciando AWS SSO Login para o profile '{profile}'...")
 
         cmd = ["aws", "sso", "login", "--profile", profile]
+        if use_internal_webview:
+            cmd.append("--no-browser")
 
         def _login_worker() -> None:
             try:
