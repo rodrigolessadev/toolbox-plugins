@@ -80,3 +80,69 @@ def test_optional_fields_override():
     assert res["success"] is True
     line = res["inserts"][0]
     assert "'S'" in line
+
+
+def test_gerar_sql_marcacoes_validations():
+    # Sem data
+    res_no_date = gm_domain.gerar_sql_marcacoes(
+        banco="sqlserver",
+        numcra="123",
+        start_date="",
+        horarios=["08:00"]
+    )
+    assert res_no_date["success"] is False
+    assert "Data" in res_no_date["message"]
+
+    # Sem horários
+    res_no_horarios = gm_domain.gerar_sql_marcacoes(
+        banco="sqlserver",
+        numcra="123",
+        start_date="2026-08-17",
+        horarios=[]
+    )
+    assert res_no_horarios["success"] is False
+    assert "horário" in res_no_horarios["message"]
+
+    # Data final anterior à data inicial
+    res_invalid_range = gm_domain.gerar_sql_marcacoes(
+        banco="sqlserver",
+        numcra="123",
+        start_date="2026-08-20",
+        end_date="2026-08-10",
+        horarios=["08:00"]
+    )
+    assert res_invalid_range["success"] is False
+    assert "anterior" in res_invalid_range["message"]
+
+
+def test_gerar_sql_marcacoes_empty_and_custom_numcra_numcad():
+    # NumCra e NumCad vazios iniciam com "0" na instrução SQL
+    res_empty = gm_domain.gerar_sql_marcacoes(
+        banco="sqlserver",
+        numcra="",
+        start_date="2026-08-17",
+        horarios=["08:00"],
+        week_days=[1],
+        main_fields={"NUMCAD": ""}
+    )
+    assert res_empty["success"] is True
+    line = res_empty["inserts"][0]
+    # INSERT INTO R070ACC(...) VALUES(0,'17-08-2026 00:00:00.000',480,1,1,1,1,0,'E',1,'E',2,1,1,0,...)
+    assert line.startswith("INSERT INTO R070ACC(")
+    assert "VALUES(0,'17-08-2026 00:00:00.000'" in line
+
+    # NumCra e NumCad customizados
+    res_custom = gm_domain.gerar_sql_marcacoes(
+        banco="sqlserver",
+        numcra="987654",
+        start_date="2026-08-17",
+        horarios=["09:30"],
+        week_days=[1],
+        main_fields={"NUMCAD": "4321", "USOMAR": "2", "NUMEMP": "5", "TIPCOL": "2"}
+    )
+    assert res_custom["success"] is True
+    line_custom = res_custom["inserts"][0]
+    assert "VALUES(987654,'17-08-2026 00:00:00.000',570" in line_custom
+    assert ",4321," in line_custom
+    assert ",5,2," in line_custom
+

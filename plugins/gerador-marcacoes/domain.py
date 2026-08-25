@@ -8,9 +8,9 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
 DEFAULT_VALUES: Dict[str, str] = {
-    "NUMCRA": "600000010",
-    "DATACC": "03-04-2025 00:00:00.000",
-    "HORACC": "720",
+    "NUMCRA": "0",
+    "DATACC": "31-12-1900 00:00:00.000",
+    "HORACC": "0",
     "USOMAR": "2",
     "NUMEMP": "1",
     "TIPCOL": "1",
@@ -38,16 +38,16 @@ DEFAULT_VALUES: Dict[str, str] = {
 }
 
 FIXED_FIELDS = [
-    {"name": "NUMCRA", "label": "NumCra - Número do Crachá", "defaultValue": "600000010"},
-    {"name": "DATACC", "label": "DatAcc - Data do Acesso", "defaultValue": "03-04-2025 00:00:00.000"},
-    {"name": "HORACC", "label": "HorAcc - Hora do Acesso", "defaultValue": "720"},
+    {"name": "NUMCRA", "label": "NumCra - Número do Crachá", "defaultValue": ""},
+    {"name": "DATACC", "label": "DatAcc - Data do Acesso", "defaultValue": ""},
+    {"name": "HORACC", "label": "HorAcc - Hora do Acesso", "defaultValue": ""},
 ]
 
 MAIN_FIELDS = [
     {"name": "USOMAR", "label": "UsoMar - Uso da Marcação", "defaultValue": "2"},
     {"name": "NUMEMP", "label": "NumEmp - Código da Empresa", "defaultValue": "1"},
     {"name": "TIPCOL", "label": "TipCol - Tipo de Colaborador", "defaultValue": "1"},
-    {"name": "NUMCAD", "label": "NumCad - Cadastro do Colaborador", "defaultValue": "0"},
+    {"name": "NUMCAD", "label": "NumCad - Cadastro do Colaborador", "defaultValue": ""},
 ]
 
 OPTIONAL_FIELDS = [
@@ -130,7 +130,7 @@ def format_date_value(value: str, banco: str) -> str:
 def format_value(field_name: str, value: str, banco: str) -> str:
     """Formata um valor de campo específico conforme regras de tipo e dialeto."""
     if field_name in NUMERIC_FIELDS:
-        val = str(value).strip()
+        val = str(value).strip() if value is not None else ""
         return val if val else DEFAULT_VALUES.get(field_name, "0")
 
     if field_name in DATE_FIELDS:
@@ -154,9 +154,22 @@ def gerar_insert_sql(
 
     active_horarios = [h.strip() for h in horacc_list if h and h.strip()]
     if not active_horarios:
-        active_horarios = ["08:00"]
+        return {
+            "success": False,
+            "count": 0,
+            "sql": "",
+            "inserts": [],
+            "message": "Nenhum horário informado. Por favor, adicione ao menos um horário."
+        }
 
-    active_dates = dates if dates else [None]
+    if not dates:
+        return {
+            "success": False,
+            "count": 0,
+            "sql": "",
+            "inserts": [],
+            "message": "Nenhuma data informada."
+        }
 
     # Lookups rápidos para defaults
     fixed_map = {f["name"]: f["defaultValue"] for f in FIXED_FIELDS}
@@ -164,7 +177,7 @@ def gerar_insert_sql(
     optional_map = {f["name"]: f["defaultValue"] for f in OPTIONAL_FIELDS}
 
     for horacc in active_horarios:
-        for cur_date in active_dates:
+        for cur_date in dates:
             values_map: Dict[str, str] = {}
 
             for field_name in INSERT_ORDER:
@@ -177,16 +190,22 @@ def gerar_insert_sql(
                     elif field_name == "DATACC" and cur_date:
                         raw_value = f"{cur_date.strftime('%d-%m-%Y')} 00:00:00.000"
                     else:
-                        raw_value = form_data.get(field_name) or fixed_map[field_name]
+                        raw_value = form_data.get(field_name, fixed_map[field_name])
+                        if raw_value is None:
+                            raw_value = fixed_map[field_name]
 
                 # Campos principais
                 elif field_name in main_map:
-                    raw_value = form_data.get(field_name) or main_map[field_name]
+                    raw_value = form_data.get(field_name, main_map[field_name])
+                    if raw_value is None:
+                        raw_value = main_map[field_name]
 
                 # Campos opcionais
                 elif field_name in optional_map:
                     if field_name in selected_optional:
-                        raw_value = form_data.get(field_name) or optional_map[field_name]
+                        raw_value = form_data.get(field_name, optional_map[field_name])
+                        if raw_value is None:
+                            raw_value = optional_map[field_name]
                     else:
                         raw_value = optional_map[field_name]
 
@@ -207,7 +226,7 @@ def gerar_insert_sql(
 
 def gerar_sql_marcacoes(
     banco: str = "sqlserver",
-    numcra: str = "600000010",
+    numcra: str = "",
     start_date: str = "",
     end_date: str = "",
     horarios: Optional[List[str]] = None,
@@ -219,9 +238,27 @@ def gerar_sql_marcacoes(
 ) -> Dict[str, Any]:
     """Ponto de entrada unificado para a API JavaScript do pywebview."""
     banco_clean = (banco or "sqlserver").lower()
-    horarios = [h for h in (horarios or ["08:00", "12:00", "13:00", "18:00"]) if h]
+    horarios_clean = [h.strip() for h in (horarios or []) if h and h.strip()]
+    if not horarios_clean:
+        return {
+            "success": False,
+            "message": "Nenhum horário informado. Por favor, adicione ao menos um horário.",
+            "sql": "",
+            "count": 0,
+            "inserts": [],
+        }
+
     week_days = week_days if week_days is not None else [1, 2, 3, 4, 5]
     selected_optional = selected_optional or []
+
+    if not start_date:
+        return {
+            "success": False,
+            "message": "Por favor, informe ao menos a Data de Início.",
+            "sql": "",
+            "count": 0,
+            "inserts": [],
+        }
 
     # Processamento de intervalo de datas
     dates: List[date] = []
@@ -229,6 +266,14 @@ def gerar_sql_marcacoes(
         try:
             d_ini = datetime.strptime(start_date, "%Y-%m-%d").date()
             d_fim = datetime.strptime(end_date, "%Y-%m-%d").date()
+            if d_fim < d_ini:
+                return {
+                    "success": False,
+                    "message": "A data final não pode ser anterior à data inicial.",
+                    "sql": "",
+                    "count": 0,
+                    "inserts": [],
+                }
             cur = d_ini
             while cur <= d_fim:
                 # 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
@@ -237,15 +282,29 @@ def gerar_sql_marcacoes(
                     dates.append(cur)
                 cur += timedelta(days=1)
         except Exception as e:
-            return {"success": False, "message": f"Data inválida: {e}", "sql": "", "count": 0}
+            return {"success": False, "message": f"Data inválida: {e}", "sql": "", "count": 0, "inserts": []}
     elif start_date:
         try:
-            dates = [datetime.strptime(start_date, "%Y-%m-%d").date()]
+            d_ini = datetime.strptime(start_date, "%Y-%m-%d").date()
+            js_day = (d_ini.weekday() + 1) % 7
+            if js_day in week_days:
+                dates.append(d_ini)
+            else:
+                dates = [d_ini]
         except Exception as e:
-            return {"success": False, "message": f"Data inválida: {e}", "sql": "", "count": 0}
+            return {"success": False, "message": f"Data inválida: {e}", "sql": "", "count": 0, "inserts": []}
+
+    if not dates:
+        return {
+            "success": False,
+            "message": "Nenhuma data válida encontrada no período para os dias da semana selecionados.",
+            "sql": "",
+            "count": 0,
+            "inserts": [],
+        }
 
     form_data: Dict[str, Any] = {
-        "NUMCRA": numcra,
+        "NUMCRA": str(numcra).strip() if numcra is not None else "",
     }
     if main_fields:
         form_data.update(main_fields)
@@ -254,7 +313,7 @@ def gerar_sql_marcacoes(
 
     return gerar_insert_sql(
         form_data=form_data,
-        horacc_list=horarios,
+        horacc_list=horarios_clean,
         dates=dates,
         selected_optional=selected_optional,
         banco=banco_clean,
