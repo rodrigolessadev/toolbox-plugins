@@ -1,7 +1,9 @@
-from domain import calcular_crc16, limpar_numero, format_dh, gerar_afd
 import sys
 from pathlib import Path
-PLUGINS_ROOT = Path(__file__).parent.parent
+PLUGIN_DIR = Path(__file__).resolve().parent
+if str(PLUGIN_DIR) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_DIR))
+PLUGINS_ROOT = PLUGIN_DIR.parent
 if str(PLUGINS_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGINS_ROOT))
 
