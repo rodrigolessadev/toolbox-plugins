@@ -283,9 +283,12 @@ def test_stop_all_cleans_active_processes() -> None:
 
 def test_api_methods_handle_empty_payload_without_hardcoded_fallback() -> None:
     """Valida que todos os métodos da LogonAwsApi em main.py tratam payloads vazios sem fallback hardcoded."""
-    import main
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("logon_aws_main", PLUGIN_DIR / "main.py")
+    logon_main = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(logon_main)
 
-    api = main.LogonAwsApi()
+    api = logon_main.LogonAwsApi()
 
     # check_sts com {}
     res_sts = api.check_sts({})
