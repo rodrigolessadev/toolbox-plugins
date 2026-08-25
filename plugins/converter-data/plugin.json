@@ -4,5 +4,7 @@
   "description": "Conversão bidirecional de datas, timestamps Epoch Unix, ISO 8601 e Excel Serial.",
   "language": "python",
   "entry": "main.py",
-  "icon": "calendar-sync"
+  "icon": "calendar-sync",
+  "min_toolbox_version": "1.0.0",
+  "theme_version": "material-3"
 }
