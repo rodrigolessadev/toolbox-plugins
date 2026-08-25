@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadQuickDates();
 });
 
+window.addEventListener('pywebviewready', () => {
+  refreshExistingTicketsList();
+});
+
 function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -23,17 +27,69 @@ function switchTab(tabId) {
 }
 
 function setupInputListeners() {
-  const updatePreview = () => handlePreviewUpdate();
-  document.getElementById('inputBaseDir').addEventListener('input', updatePreview);
-  document.getElementById('inputClient').addEventListener('input', updatePreview);
-  document.getElementById('inputTicket').addEventListener('input', updatePreview);
+  const updatePreviewAndList = () => {
+    handlePreviewUpdate();
+    const baseDir = document.getElementById('inputBaseDir').value.trim();
+    if (baseDir) {
+      localStorage.setItem('toolbox_novo_ticket_base_dir', baseDir);
+      refreshExistingTicketsList();
+    } else {
+      const select = document.getElementById('selectExistingTicket');
+      if (select) {
+        select.innerHTML = '<option value="">Informe o diretório base acima para listar os tickets...</option>';
+      }
+    }
+  };
+
+  document.getElementById('inputBaseDir').addEventListener('input', updatePreviewAndList);
+  document.getElementById('inputBaseDir').addEventListener('change', updatePreviewAndList);
+  document.getElementById('inputClient').addEventListener('input', () => handlePreviewUpdate());
+  document.getElementById('inputTicket').addEventListener('input', () => handlePreviewUpdate());
 }
 
 function loadSavedBaseDir() {
   const saved = localStorage.getItem('toolbox_novo_ticket_base_dir');
-  if (saved) {
-    document.getElementById('inputBaseDir').value = saved;
+  if (saved && saved.trim()) {
+    document.getElementById('inputBaseDir').value = saved.trim();
     handlePreviewUpdate();
+    refreshExistingTicketsList();
+  } else {
+    document.getElementById('inputBaseDir').value = '';
+    const select = document.getElementById('selectExistingTicket');
+    if (select) {
+      select.innerHTML = '<option value="">Informe o diretório base acima para listar os tickets...</option>';
+    }
+  }
+}
+
+async function refreshExistingTicketsList() {
+  const select = document.getElementById('selectExistingTicket');
+  if (!select) return;
+  const baseDir = document.getElementById('inputBaseDir').value.trim();
+  if (!baseDir) {
+    select.innerHTML = '<option value="">Informe o diretório base acima para listar os tickets...</option>';
+    return;
+  }
+
+  if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.list_tickets) {
+    return;
+  }
+
+  try {
+    const res = await window.pywebview.api.list_tickets(baseDir);
+    if (res.success && Array.isArray(res.tickets) && res.tickets.length > 0) {
+      select.innerHTML = res.tickets.map(t => {
+        const mod = t.modified_at ? ` (${t.modified_at})` : '';
+        return `<option value="${t.path}">${t.name}${mod}</option>`;
+      }).join('');
+    } else if (res.success) {
+      select.innerHTML = '<option value="">Nenhuma pasta de ticket encontrada no diretório base</option>';
+    } else {
+      select.innerHTML = `<option value="">${res.message || 'Diretório não encontrado'}</option>`;
+    }
+  } catch (err) {
+    console.error('Erro ao listar tickets:', err);
+    select.innerHTML = '<option value="">Erro ao carregar lista de tickets</option>';
   }
 }
 
@@ -73,6 +129,7 @@ async function handleSelectBaseDir() {
       document.getElementById('inputBaseDir').value = res;
       localStorage.setItem('toolbox_novo_ticket_base_dir', res);
       handlePreviewUpdate();
+      refreshExistingTicketsList();
     }
   } catch (err) {
     console.error('select_base_folder erro:', err);
@@ -115,12 +172,33 @@ async function handleCreateTicket() {
     if (res.success && res.ticket) {
       setActiveTicket(res.ticket);
       localStorage.setItem('toolbox_novo_ticket_base_dir', baseDir);
+      refreshExistingTicketsList();
       switchTab('tabLogs');
     } else {
       alert(res.message || 'Erro ao criar ticket.');
     }
   } catch (err) {
     alert('Erro: ' + err);
+  }
+}
+
+async function handleOpenSelectedTicket() {
+  const select = document.getElementById('selectExistingTicket');
+  if (!select || !select.value) {
+    alert('Selecione uma pasta de ticket válida na lista.');
+    return;
+  }
+
+  try {
+    const res = await window.pywebview.api.select_existing_ticket_by_path(select.value);
+    if (res.success && res.ticket) {
+      setActiveTicket(res.ticket);
+      switchTab('tabLogs');
+    } else {
+      alert(res.message || 'Erro ao carregar detalhes do ticket.');
+    }
+  } catch (err) {
+    alert('Erro ao abrir ticket: ' + err);
   }
 }
 

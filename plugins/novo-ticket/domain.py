@@ -154,6 +154,50 @@ def create_ticket_directory(
         return False, f"Erro ao criar o diretório: {ex}", None
 
 
+def list_existing_tickets(base_dir_str: str) -> Dict[str, Any]:
+    """
+    Lista todos os subdiretórios de primeiro nível do diretório base que representam tickets.
+    Retorna uma lista ordenada com os tickets mais recentes primeiro.
+    """
+    if not base_dir_str or not str(base_dir_str).strip():
+        return {"success": False, "message": "Diretório base não especificado.", "tickets": []}
+
+    base_path = Path(str(base_dir_str).strip()).resolve()
+    if not base_path.exists() or not base_path.is_dir():
+        return {"success": False, "message": f"Diretório base não encontrado: {base_path}", "tickets": []}
+
+    try:
+        tickets = []
+        for entry in base_path.iterdir():
+            if entry.is_dir() and not entry.name.startswith("."):
+                try:
+                    stat = entry.stat()
+                    mtime = stat.st_mtime
+                    mtime_dt = datetime.fromtimestamp(mtime)
+                    mtime_str = mtime_dt.strftime("%d/%m/%Y %H:%M")
+                except Exception:
+                    mtime = 0
+                    mtime_str = ""
+
+                tickets.append({
+                    "name": entry.name,
+                    "path": str(entry.resolve()),
+                    "mtime": mtime,
+                    "modified_at": mtime_str,
+                })
+
+        # Ordena pelos mais recentes primeiro
+        tickets.sort(key=lambda t: t["mtime"], reverse=True)
+        return {
+            "success": True,
+            "count": len(tickets),
+            "tickets": tickets,
+            "base_dir": str(base_path),
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao listar tickets: {e}", "tickets": []}
+
+
 def get_ticket_subdirectories(ticket_dir: Path, output_folder_name: str = "logs_filtrados") -> List[str]:
     """
     Retorna recursivamente a lista de caminhos relativos de TODOS os níveis de subdiretórios
