@@ -1,7 +1,352 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-y: auto;
+  user-select: none;
+}
+
+.app-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg);
+  letter-spacing: -0.2px;
+}
+
+.header-desc {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+/* Seletor de Banco (Pills) */
+.banco-selector {
+  display: flex;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
+}
+
+.banco-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.banco-btn:hover {
+  color: var(--fg);
+}
+
+.banco-btn.active {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* Cards */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: 4px 0;
+}
+
+/* Formulários */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.form-grid.grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.label-desc {
+  font-size: 10px;
+  color: var(--fg-muted);
+  opacity: 0.8;
+}
+
+.form-input {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  padding: 7px 10px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus {
+  border-color: var(--border-focus);
+}
+
+/* Seletor de Dias da Semana */
+.weekdays-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weekdays-group {
+  display: flex;
+  gap: 6px;
+}
+
+.day-btn {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.day-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--fg);
+}
+
+.day-btn.active {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Horários Section */
+.horarios-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.horarios-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hora-input {
+  width: 120px;
+}
+
+.horarios-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.hora-chip {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.chip-remove:hover {
+  color: var(--danger);
+}
+
+/* Campos Opcionais */
+.optional-add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.optional-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-remove-opt {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  border-radius: 6px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.btn-remove-opt:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Botões */
+.btn {
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  padding: 8px 16px;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 12px;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-hover);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.btn-large {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Resultado */
+.flex-between {
+  justify-content: space-between;
+  width: 100%;
+}
 
 .sql-textarea {
   width: 100%;
-  height: 220px;
-  font-family: Consolas, monospace !important;
-  font-size: 11px !important;
+  height: 240px;
+  background-color: #0b0d11;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #a5d6ff;
+  font-family: "Cascadia Code", Consolas, Monaco, monospace !important;
+  font-size: 11.5px !important;
+  line-height: 1.5;
+  padding: 10px;
+  resize: vertical;
+  outline: none;
+  white-space: pre;
+}
+
+.sql-textarea:focus {
+  border-color: var(--border-focus);
 }

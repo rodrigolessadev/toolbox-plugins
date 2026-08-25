@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerador de Marcações SQL — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
@@ -9,96 +10,306 @@
 <body>
   <div class="app-container">
     <header class="header">
-      <h1 class="header-title">Gerador de Marcações SQL (Ponto)</h1>
-      <p class="header-desc">Geração de scripts INSERT para tabelas de ponto (R070ACC, R070CON) com suporte a Oracle e SQL Server</p>
+      <div class="header-left">
+        <h1 class="header-title">Gerador de Marcações SQL</h1>
+        <p class="header-desc">Geração de comandos INSERT oficiais para a tabela R070ACC com suporte a SQL Server e Oracle</p>
+      </div>
+      <!-- Seletor de Banco de Dados (Pills) -->
+      <div class="banco-selector">
+        <button type="button" class="banco-btn active" id="btnSqlServer" onclick="setBanco('sqlserver')">SQL Server</button>
+        <button type="button" class="banco-btn" id="btnOracle" onclick="setBanco('oracle')">Oracle</button>
+      </div>
     </header>
 
-    <div class="card">
-      <div class="card-title"><span data-icon="zap"></span> Parâmetros da Geração</div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Tabela</label>
-          <input type="text" id="tabela" value="R070ACC" style="width: 100%;">
+    <main class="main-content">
+      <!-- Seção: Parâmetros Principais -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span data-icon="database"></span> Configuração Principal</span>
         </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Banco de Dados</label>
-          <select id="banco" style="width: 100%;">
-            <option value="ORACLE">Oracle (TO_DATE)</option>
-            <option value="SQLSERVER">SQL Server</option>
+
+        <div class="form-grid">
+          <!-- NumCra -->
+          <div class="form-group">
+            <label class="form-label" for="numcra">NumCra <span class="label-desc">(Número do Crachá)</span></label>
+            <input type="text" id="numcra" class="form-input" value="600000010">
+          </div>
+
+          <!-- Data Inicial -->
+          <div class="form-group">
+            <label class="form-label" for="startDate">Data Início</label>
+            <input type="date" id="startDate" class="form-input">
+          </div>
+
+          <!-- Data Final -->
+          <div class="form-group">
+            <label class="form-label" for="endDate">Data Fim</label>
+            <input type="date" id="endDate" class="form-input">
+          </div>
+        </div>
+
+        <!-- Seletor de Dias da Semana -->
+        <div class="weekdays-container">
+          <label class="form-label">Dias da Semana:</label>
+          <div class="weekdays-group">
+            <button type="button" class="day-btn" data-day="0" onclick="toggleWeekDay(0)">Dom</button>
+            <button type="button" class="day-btn active" data-day="1" onclick="toggleWeekDay(1)">Seg</button>
+            <button type="button" class="day-btn active" data-day="2" onclick="toggleWeekDay(2)">Ter</button>
+            <button type="button" class="day-btn active" data-day="3" onclick="toggleWeekDay(3)">Qua</button>
+            <button type="button" class="day-btn active" data-day="4" onclick="toggleWeekDay(4)">Qui</button>
+            <button type="button" class="day-btn active" data-day="5" onclick="toggleWeekDay(5)">Sex</button>
+            <button type="button" class="day-btn" data-day="6" onclick="toggleWeekDay(6)">Sáb</button>
+          </div>
+        </div>
+
+        <!-- Lista Dinâmica de Horários (HORACC) -->
+        <div class="horarios-section">
+          <label class="form-label">Horários (HORACC):</label>
+          <div class="horarios-input-row">
+            <input type="time" id="newHoraInput" class="form-input hora-input" value="08:00">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addHorario()">
+              <span data-icon="plus"></span> + Adicionar Horário
+            </button>
+          </div>
+          <div class="horarios-chips" id="horariosChips"></div>
+        </div>
+
+        <!-- Campos Principais da Tabela -->
+        <div class="section-divider"></div>
+        <div class="form-grid grid-4">
+          <div class="form-group">
+            <label class="form-label" for="field_USOMAR">UsoMar <span class="label-desc">(Uso Marcação)</span></label>
+            <input type="text" id="field_USOMAR" class="form-input" value="2">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field_NUMEMP">NumEmp <span class="label-desc">(Empresa)</span></label>
+            <input type="text" id="field_NUMEMP" class="form-input" value="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field_TIPCOL">TipCol <span class="label-desc">(Tipo Colab)</span></label>
+            <input type="text" id="field_TIPCOL" class="form-input" value="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="field_NUMCAD">NumCad <span class="label-desc">(Cadastro)</span></label>
+            <input type="text" id="field_NUMCAD" class="form-input" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção: Campos Opcionais -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><span data-icon="settings"></span> Campos Opcionais</span>
+        </div>
+        <div class="optional-add-row">
+          <select id="optionalSelect" class="form-input flex-1">
+            <option value="">Selecione um campo opcional para adicionar...</option>
           </select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="addOptionalField()">
+            <span data-icon="plus"></span> + Adicionar Campo
+          </button>
         </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">NumEmp / CodFil</label>
-          <input type="text" id="numEmp" value="1" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">NumCad (Crachá)</label>
-          <input type="text" id="numCad" value="1001" style="width: 100%;">
-        </div>
+        <div id="optionalFieldsContainer" class="optional-fields-grid"></div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Data Inicial</label>
-          <input type="date" id="dtIni" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Data Final</label>
-          <input type="date" id="dtFim" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Horários Padrão</label>
-          <input type="text" id="horarios" value="08:00, 12:00, 13:00, 18:00" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Variação (min)</label>
-          <input type="number" id="variacao" value="2" style="width: 100%;">
-        </div>
+      <!-- Ação de Geração -->
+      <div class="action-row">
+        <button type="button" class="btn btn-primary btn-large" onclick="handleGerar()">
+          <span data-icon="play"></span> Gerar Comandos SQL
+        </button>
       </div>
-      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
-        <button class="btn btn-primary" onclick="handleGerar()"><span data-icon="zap"></span> Gerar Comandos SQL</button>
-      </div>
-    </div>
 
-    <div class="card" style="flex: 1;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title" id="resTitle"><span data-icon="check"></span> Script SQL Gerado</div>
-        <button class="btn btn-secondary btn-sm" onclick="handleCopy()"><span data-icon="copy"></span> Copiar SQL</button>
+      <!-- Resultado SQL -->
+      <div class="card result-card">
+        <div class="card-header flex-between">
+          <span class="card-title" id="resultTitle"><span data-icon="check"></span> Script SQL Gerado</span>
+          <div class="result-actions">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handleCopy()">
+              <span data-icon="copy"></span> Copiar SQL
+            </button>
+          </div>
+        </div>
+        <textarea id="sqlOutput" class="sql-textarea" placeholder="Clique em 'Gerar Comandos SQL' para visualizar os scripts..." readonly></textarea>
       </div>
-      <textarea id="sqlOutput" class="sql-textarea" style="flex: 1; height: auto;" readonly></textarea>
-    </div>
+    </main>
   </div>
+
   <script src="icons.js"></script>
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+    let currentBanco = 'sqlserver';
+    let selectedWeekDays = [1, 2, 3, 4, 5];
+    let horaccList = ['08:00', '12:00', '13:00', '18:00'];
+    let selectedOptional = [];
+    let optionalMetadata = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
       const today = new Date().toISOString().split('T')[0];
-      document.getElementById('dtIni').value = today;
-      document.getElementById('dtFim').value = today;
+      document.getElementById('startDate').value = today;
+      document.getElementById('endDate').value = today;
+      renderHorarios();
+
+      // Carrega metadados de campos opcionais se a API estiver disponível
+      if (window.pywebview && window.pywebview.api) {
+        try {
+          const meta = await window.pywebview.api.get_metadata();
+          optionalMetadata = meta.optional_fields || [];
+          populateOptionalSelect();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
     });
-    async function handleGerar() {
-      const params = {
-        tabela: document.getElementById('tabela').value,
-        banco: document.getElementById('banco').value,
-        campos_fixos: {
-          NUMEMP: document.getElementById('numEmp').value,
-          TIPCOL: 1,
-          NUMCAD: document.getElementById('numCad').value
-        },
-        start_date: document.getElementById('dtIni').value,
-        end_date: document.getElementById('dtFim').value,
-        horarios: document.getElementById('horarios').value.split(',').map(s => s.trim()),
-        variacao_minutos: parseInt(document.getElementById('variacao').value) || 0
-      };
-      const res = await window.pywebview.api.gerar_inserts(params);
-      if (res.success) {
-        document.getElementById('sqlOutput').value = res.sql;
-        document.getElementById('resTitle').innerHTML = `<span data-icon="check"></span> ${res.count} INSERTs gerados`;
-        if (window.renderIcons) window.renderIcons();
+
+    window.addEventListener('pywebviewready', async () => {
+      try {
+        const meta = await window.pywebview.api.get_metadata();
+        optionalMetadata = meta.optional_fields || [];
+        populateOptionalSelect();
+      } catch (e) {
+        console.warn(e);
+      }
+    });
+
+    function setBanco(banco) {
+      currentBanco = banco;
+      document.getElementById('btnSqlServer').classList.toggle('active', banco === 'sqlserver');
+      document.getElementById('btnOracle').classList.toggle('active', banco === 'oracle');
+    }
+
+    function toggleWeekDay(day) {
+      const idx = selectedWeekDays.indexOf(day);
+      if (idx >= 0) {
+        selectedWeekDays.splice(idx, 1);
+      } else {
+        selectedWeekDays.push(day);
+      }
+      document.querySelectorAll('.day-btn').forEach(btn => {
+        const d = parseInt(btn.getAttribute('data-day'));
+        btn.classList.toggle('active', selectedWeekDays.includes(d));
+      });
+    }
+
+    function renderHorarios() {
+      const container = document.getElementById('horariosChips');
+      container.innerHTML = '';
+      horaccList.forEach((h, index) => {
+        const chip = document.createElement('div');
+        chip.className = 'hora-chip';
+        chip.innerHTML = `
+          <span>${h}</span>
+          <button type="button" class="chip-remove" onclick="removeHorario(${index})">✕</button>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    function addHorario() {
+      const val = document.getElementById('newHoraInput').value;
+      if (val && !horaccList.includes(val)) {
+        horaccList.push(val);
+        horaccList.sort();
+        renderHorarios();
       }
     }
+
+    function removeHorario(index) {
+      horaccList.splice(index, 1);
+      renderHorarios();
+    }
+
+    function populateOptionalSelect() {
+      const select = document.getElementById('optionalSelect');
+      select.innerHTML = '<option value="">Selecione um campo opcional para adicionar...</option>';
+      optionalMetadata.forEach(f => {
+        if (!selectedOptional.includes(f.name)) {
+          const opt = document.createElement('option');
+          opt.value = f.name;
+          opt.textContent = `${f.label} (Default: ${f.defaultValue})`;
+          select.appendChild(opt);
+        }
+      });
+    }
+
+    function addOptionalField() {
+      const select = document.getElementById('optionalSelect');
+      const fieldName = select.value;
+      if (fieldName && !selectedOptional.includes(fieldName)) {
+        selectedOptional.push(fieldName);
+        renderOptionalFields();
+        populateOptionalSelect();
+      }
+    }
+
+    function removeOptionalField(fieldName) {
+      selectedOptional = selectedOptional.filter(f => f !== fieldName);
+      renderOptionalFields();
+      populateOptionalSelect();
+    }
+
+    function renderOptionalFields() {
+      const container = document.getElementById('optionalFieldsContainer');
+      container.innerHTML = '';
+      selectedOptional.forEach(name => {
+        const meta = optionalMetadata.find(m => m.name === name) || { name, label: name, defaultValue: '' };
+        const row = document.createElement('div');
+        row.className = 'form-group optional-row';
+        row.innerHTML = `
+          <label class="form-label" for="opt_${name}">${meta.label}</label>
+          <div class="input-with-action">
+            <input type="text" id="opt_${name}" class="form-input" value="${meta.defaultValue}">
+            <button type="button" class="btn-remove-opt" onclick="removeOptionalField('${name}')">✕</button>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    async function handleGerar() {
+      const mainFields = {
+        USOMAR: document.getElementById('field_USOMAR').value,
+        NUMEMP: document.getElementById('field_NUMEMP').value,
+        TIPCOL: document.getElementById('field_TIPCOL').value,
+        NUMCAD: document.getElementById('field_NUMCAD').value,
+      };
+
+      const optionalValues = {};
+      selectedOptional.forEach(name => {
+        const el = document.getElementById(`opt_${name}`);
+        if (el) optionalValues[name] = el.value;
+      });
+
+      const params = {
+        banco: currentBanco,
+        numcra: document.getElementById('numcra').value,
+        start_date: document.getElementById('startDate').value,
+        end_date: document.getElementById('endDate').value,
+        horarios: horaccList,
+        week_days: selectedWeekDays,
+        main_fields: mainFields,
+        optional_values: optionalValues,
+        selected_optional: selectedOptional,
+      };
+
+      if (window.pywebview && window.pywebview.api) {
+        const res = await window.pywebview.api.gerar_inserts(params);
+        if (res.success) {
+          document.getElementById('sqlOutput').value = res.sql;
+          document.getElementById('resultTitle').innerHTML = `<span data-icon="check"></span> ${res.count} INSERTs gerados com sucesso`;
+          if (window.renderIcons) window.renderIcons();
+        } else {
+          alert('Erro ao gerar marcações: ' + res.message);
+        }
+      }
+    }
+
     async function handleCopy() {
       const txt = document.getElementById('sqlOutput').value;
-      if (txt) await window.pywebview.api.copy_text(txt);
+      if (!txt) return;
+      if (window.pywebview && window.pywebview.api) {
+        await window.pywebview.api.copy_text(txt);
+      } else {
+        await navigator.clipboard.writeText(txt);
+      }
     }
   </script>
 </body>
