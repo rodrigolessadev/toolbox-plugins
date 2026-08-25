@@ -12,7 +12,7 @@ def test_manifest_structure():
         data = json.load(f)
 
     assert data.get("name") == "Novo Ticket"
-    assert data.get("version") == "1.3.1"
+    assert data.get("version") == "1.3.2"
     assert data.get("language") == "python"
     assert data.get("entry") == "main.py"
     assert (plugin_dir / data["entry"]).exists()
@@ -24,6 +24,7 @@ def test_manifest_structure():
     assert (ui_dir / "icons.js").exists()
     assert (ui_dir / "style.css").exists()
     assert (ui_dir / "app.js").exists()
+    assert (ui_dir / "assets" / "ticket.ico").exists()
 
     # Valida que index.html NÃO possui referências relativas externas quebradas
     html_content = (ui_dir / "index.html").read_text(encoding="utf-8")

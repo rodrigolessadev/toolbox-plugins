@@ -22,6 +22,13 @@ from shared.web_utils import BasePluginApi, create_plugin_window, open_in_explor
 import domain
 import webview
 
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.novoticket")
+    except Exception:
+        pass
+
 
 class NovoTicketApi(BasePluginApi):
     def __init__(self):
@@ -145,7 +152,7 @@ class NovoTicketApi(BasePluginApi):
 def main():
     api = NovoTicketApi()
     ui_index = PLUGIN_DIR / "ui" / "index.html"
-    create_plugin_window(
+    window = create_plugin_window(
         title="Novo Ticket",
         entry_html=ui_index,
         js_api=api,
@@ -153,7 +160,15 @@ def main():
         height=760,
         min_size=(660, 620),
     )
-    webview.start(debug=False)
+    if webview and window:
+        def on_shown():
+            domain.set_window_taskbar_icon()
+            import threading
+            threading.Timer(0.6, domain.set_window_taskbar_icon).start()
+
+        window.events.shown += on_shown
+    if webview:
+        webview.start(debug=False)
 
 
 if __name__ == "__main__":
