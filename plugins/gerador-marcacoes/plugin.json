@@ -1,6 +1,6 @@
 {
   "name": "Gerador de Marcações SQL",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Geração de comandos INSERT SQL para tabelas de ponto com variações e horários.",
   "language": "python",
   "entry": "main.py",
