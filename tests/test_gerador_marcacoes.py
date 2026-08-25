@@ -146,3 +146,12 @@ def test_gerar_sql_marcacoes_empty_and_custom_numcra_numcad():
     assert ",4321," in line_custom
     assert ",5,2," in line_custom
 
+
+def test_database_icon_and_taskbar_icon_helper():
+    assert gm_domain.DATABASE_ICON_PATH.exists()
+    assert gm_domain.DATABASE_ICON_PATH.is_file()
+    # Execução segura em Windows / non-Windows
+    res = gm_domain.set_window_taskbar_icon()
+    assert isinstance(res, bool)
+
+

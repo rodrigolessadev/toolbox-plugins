@@ -67,7 +67,12 @@ def main():
         min_size=(740, 640),
     )
     if webview and window:
-        pass
+        def on_shown():
+            domain.set_window_taskbar_icon()
+            import threading
+            threading.Timer(0.6, domain.set_window_taskbar_icon).start()
+
+        window.events.shown += on_shown
     if webview:
         webview.start(debug=False)
 

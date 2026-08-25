@@ -1,18 +1,6 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg);
-  color: var(--fg);
-  font-size: 13px;
-  line-height: 1.4;
-  overflow-y: auto;
-  user-select: none;
-}
+/* ==========================================================================
+   Gerador de Marcações SQL — Material 3 Theme Style
+   ========================================================================== */
 
 .app-container {
   max-width: 900px;
@@ -21,38 +9,45 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
 }
 
+/* Header */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .header-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--fg);
-  letter-spacing: -0.2px;
+  letter-spacing: -0.01em;
 }
 
 .header-desc {
   font-size: 12px;
   color: var(--fg-muted);
-  margin-top: 2px;
 }
 
-/* Seletor de Banco (Pills) */
+/* Seletor de Banco (M3 Segmented Button) */
 .banco-selector {
-  display: flex;
+  display: inline-flex;
   background-color: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  padding: 2px;
-  gap: 2px;
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
 }
 
 .banco-btn {
@@ -60,43 +55,49 @@ body {
   border: none;
   color: var(--fg-muted);
   padding: 6px 14px;
+  font-family: inherit;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s ease;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .banco-btn:hover {
   color: var(--fg);
+  background-color: var(--bg-hover);
 }
 
 .banco-btn.active {
   background-color: var(--accent);
   color: var(--accent-fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-/* Cards */
+/* Cards M3 */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  transition: border-color var(--transition-fast);
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
 .card-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-hover);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -104,7 +105,7 @@ body {
 
 .section-divider {
   height: 1px;
-  background-color: var(--border);
+  background-color: var(--border-subtle);
   margin: 4px 0;
 }
 
@@ -112,7 +113,7 @@ body {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 12px;
 }
 
 .form-grid.grid-4 {
@@ -127,40 +128,46 @@ body {
 
 .form-label {
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .label-desc {
   font-size: 10px;
-  color: var(--fg-muted);
-  opacity: 0.8;
+  color: var(--fg-subtle);
+  font-weight: 400;
+  text-transform: none;
 }
 
 .form-input {
   background-color: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 6px;
   color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 7px 10px;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: 13px;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .form-input:focus {
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
 }
 
-/* Seletor de Dias da Semana */
+/* Seletor de Dias da Semana (M3 Filter Chips) */
 .weekdays-container {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .weekdays-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -168,27 +175,30 @@ body {
   background-color: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--fg-muted);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 500;
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--transition-fast);
+  user-select: none;
 }
 
 .day-btn:hover {
   background-color: var(--bg-hover);
   color: var(--fg);
+  border-color: var(--fg-muted);
 }
 
 .day-btn.active {
-  background-color: rgba(59, 130, 246, 0.2);
+  background-color: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--accent-hover);
+  font-weight: 700;
 }
 
-/* Horários Section */
+/* Seção de Horários */
 .horarios-section {
   display: flex;
   flex-direction: column;
@@ -202,7 +212,7 @@ body {
 }
 
 .hora-input {
-  width: 120px;
+  width: 130px;
 }
 
 .horarios-chips {
@@ -215,14 +225,19 @@ body {
 .hora-chip {
   background-color: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 3px 10px;
+  border-radius: 16px;
+  padding: 4px 10px;
   font-size: 12px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: var(--fg);
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.hora-chip:hover {
+  border-color: var(--accent);
 }
 
 .chip-remove {
@@ -230,10 +245,12 @@ body {
   border: none;
   color: var(--fg-muted);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   padding: 0;
   display: flex;
   align-items: center;
+  line-height: 1;
+  transition: color var(--transition-fast);
 }
 
 .chip-remove:hover {
@@ -265,48 +282,55 @@ body {
   background-color: var(--bg-input);
   border: 1px solid var(--border);
   color: var(--fg-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0 10px;
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .btn-remove-opt:hover {
   border-color: var(--danger);
   color: var(--danger);
+  background-color: var(--danger-soft);
 }
 
-/* Botões */
+/* Botões M3 */
 .btn {
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  transition: all 0.15s ease;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
 }
 
 .btn-primary {
   background-color: var(--accent);
   color: var(--accent-fg);
-  padding: 8px 16px;
 }
 
 .btn-primary:hover {
   background-color: var(--accent-hover);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
 }
 
 .btn-secondary {
   background-color: var(--bg-input);
-  border: 1px solid var(--border);
   color: var(--fg);
-  padding: 6px 12px;
+  border-color: var(--border);
 }
 
 .btn-secondary:hover {
   background-color: var(--bg-hover);
+  border-color: var(--fg-muted);
 }
 
 .btn-sm {
@@ -315,9 +339,10 @@ body {
 }
 
 .btn-large {
-  padding: 10px 20px;
+  padding: 10px 22px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  border-radius: var(--radius-md);
 }
 
 .action-row {
@@ -325,10 +350,16 @@ body {
   justify-content: flex-end;
 }
 
-/* Resultado */
+/* Card de Resultados */
 .flex-between {
   justify-content: space-between;
   width: 100%;
+}
+
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sql-textarea {
@@ -336,15 +367,16 @@ body {
   height: 240px;
   background-color: #0b0d11;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #a5d6ff;
-  font-family: "Cascadia Code", Consolas, Monaco, monospace !important;
-  font-size: 11.5px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12px !important;
   line-height: 1.5;
-  padding: 10px;
+  padding: 12px;
   resize: vertical;
   outline: none;
   white-space: pre;
+  transition: border-color var(--transition-fast);
 }
 
 .sql-textarea:focus {

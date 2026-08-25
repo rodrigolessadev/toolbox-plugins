@@ -110,7 +110,7 @@
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-marcacoes-2.4.0/gerador-marcacoes.zip",
       "min_toolbox_version": "1.22.3",
       "updated_at": "2026-08-25",
-      "theme_version": "classic"
+      "theme_version": "material-3"
     },
     {
       "id": "cpf",

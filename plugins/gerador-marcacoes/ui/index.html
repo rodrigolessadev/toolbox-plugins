@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,12 +9,13 @@
 </head>
 <body>
   <div class="app-container">
+    <!-- Header Principal -->
     <header class="header">
       <div class="header-left">
         <h1 class="header-title">Gerador de Marcações SQL</h1>
         <p class="header-desc">Geração de comandos INSERT oficiais para a tabela R070ACC com suporte a SQL Server e Oracle</p>
       </div>
-      <!-- Seletor de Banco de Dados (Pills) -->
+      <!-- Seletor de Banco de Dados (Segmented Button M3) -->
       <div class="banco-selector">
         <button type="button" class="banco-btn active" id="btnSqlServer" onclick="setBanco('sqlserver')">SQL Server</button>
         <button type="button" class="banco-btn" id="btnOracle" onclick="setBanco('oracle')">Oracle</button>
@@ -48,7 +49,7 @@
           </div>
         </div>
 
-        <!-- Seletor de Dias da Semana -->
+        <!-- Seletor de Dias da Semana (Filter Chips M3) -->
         <div class="weekdays-container">
           <label class="form-label">Dias da Semana:</label>
           <div class="weekdays-group">
@@ -124,6 +125,7 @@
         <div class="card-header flex-between">
           <span class="card-title" id="resultTitle"><span data-icon="check"></span> Script SQL Gerado</span>
           <div class="result-actions">
+            <span id="resultBadge" class="badge badge-muted">0 INSERTs</span>
             <button type="button" class="btn btn-secondary btn-sm" onclick="handleCopy()">
               <span data-icon="copy"></span> Copiar SQL
             </button>
@@ -194,7 +196,7 @@
         chip.className = 'hora-chip';
         chip.innerHTML = `
           <span>${h}</span>
-          <button type="button" class="chip-remove" onclick="removeHorario(${index})">✕</button>
+          <button type="button" class="chip-remove" onclick="removeHorario(${index})" title="Remover horário">✕</button>
         `;
         container.appendChild(chip);
       });
@@ -301,7 +303,10 @@
         const res = await window.pywebview.api.gerar_inserts(params);
         if (res.success) {
           document.getElementById('sqlOutput').value = res.sql;
-          document.getElementById('resultTitle').innerHTML = `<span data-icon="check"></span> ${res.count} INSERTs gerados com sucesso`;
+          document.getElementById('resultTitle').innerHTML = `<span data-icon="check"></span> Script SQL Gerado`;
+          const badge = document.getElementById('resultBadge');
+          badge.textContent = `${res.count} INSERT${res.count > 1 ? 's' : ''}`;
+          badge.className = 'badge badge-success';
           if (window.renderIcons) window.renderIcons();
         } else {
           alert('Erro ao gerar marcações: ' + res.message);
