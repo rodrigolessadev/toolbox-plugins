@@ -4,5 +4,7 @@
   "description": "Geração de comandos INSERT SQL para tabelas de ponto com variações e horários.",
   "language": "python",
   "entry": "main.py",
-  "icon": "database"
+  "icon": "database",
+  "min_toolbox_version": "1.22.3",
+  "theme_version": "classic"
 }
