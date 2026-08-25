@@ -1,58 +1,207 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Analysis Orchestrator — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Orquestrador de Análise (Analysis Orchestrator)</h1>
-      <p class="header-desc">Execução encadeada de pipelines de análise, extração de evidências e linha do tempo de incidentes</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="workflow"></span>
+        <h1 class="header-title">Analysis Orchestrator</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Pipeline integrado para higienização de logs, filtragem temporal, timeline de incidentes e extração de evidências.
+      </p>
     </header>
 
+    <!-- Card: Seleção de Diretório -->
     <div class="card">
-      <div class="card-title"><span data-icon="folder"></span> Diretório de Atendimento / Logs</div>
-      <div style="display: flex; gap: 8px;">
-        <input type="text" id="inputDir" placeholder="Selecione ou cole o caminho da pasta..." style="flex: 1;">
-        <button class="btn btn-secondary" onclick="handlePickDir()"><span data-icon="folder"></span> Navegar...</button>
-        <button class="btn btn-primary" onclick="handleRun()"><span data-icon="play"></span> Iniciar Orquestração</button>
+      <div class="card-title">
+        <span data-icon="folder"></span> Diretório de Atendimento / Logs
+      </div>
+      <p style="font-size: 12px; color: var(--fg-muted);">
+        Selecione a pasta do ticket contendo os arquivos brutos (logs, evidências, dumps, HARs):
+      </p>
+      <div class="form-row">
+        <input type="text" id="inputDir" class="input-mono" placeholder="Ex: C:\Atendimentos\CLIENTE_123456" style="flex: 1;">
+        <button class="btn btn-secondary" onclick="handlePickDir()">
+          <span data-icon="folder"></span> Navegar...
+        </button>
+        <button id="btnRun" class="btn btn-primary" onclick="handleRun()">
+          <span data-icon="play"></span> Iniciar Orquestração
+        </button>
       </div>
     </div>
 
-    <div class="card" style="flex: 1; overflow-y: auto;">
-      <div class="card-title" id="statusTitle"><span data-icon="check"></span> Status da Execução</div>
-      <div id="execSteps">
-        <div style="color: var(--fg-muted); text-align: center; padding: 16px;">Selecione um diretório para rodar a orquestração.</div>
+    <!-- Pipeline Steps Card -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="card-title" style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span data-icon="workflow"></span>
+          <span id="statusTitle">Etapas da Pipeline de Análise</span>
+        </div>
+        <div id="pipelineStatusBadge" class="badge badge-muted">Aguardando início</div>
+      </div>
+
+      <div id="pipelineContainer" class="pipeline-list">
+        <div class="pipeline-step-card">
+          <div class="step-icon"><span data-icon="file-text"></span></div>
+          <div class="step-info">
+            <div class="step-name">1. Log Sanitizer</div>
+            <div class="step-desc">Mascaramento de CPFs, senhas, tokens e credenciais confidenciais</div>
+          </div>
+          <span class="badge badge-muted">Pendente</span>
+        </div>
+
+        <div class="pipeline-step-card">
+          <div class="step-icon"><span data-icon="search"></span></div>
+          <div class="step-info">
+            <div class="step-name">2. Incident Filter</div>
+            <div class="step-desc">Filtro temporal por janela do incidente e isolamento de exceções críticas</div>
+          </div>
+          <span class="badge badge-muted">Pendente</span>
+        </div>
+
+        <div class="pipeline-step-card">
+          <div class="step-icon"><span data-icon="zap"></span></div>
+          <div class="step-info">
+            <div class="step-name">3. Log Optimizer & Clustering</div>
+            <div class="step-desc">Deduplicação de stacktraces, agrupamento por padrões e correlação de rotas</div>
+          </div>
+          <span class="badge badge-muted">Pendente</span>
+        </div>
+
+        <div class="pipeline-step-card">
+          <div class="step-icon"><span data-icon="clock"></span></div>
+          <div class="step-info">
+            <div class="step-name">4. Timeline & HAR Processing</div>
+            <div class="step-desc">Cronologia consolidada de eventos e análise de tráfego HTTP/Kibana</div>
+          </div>
+          <span class="badge badge-muted">Pendente</span>
+        </div>
+
+        <div class="pipeline-step-card">
+          <div class="step-icon"><span data-icon="check"></span></div>
+          <div class="step-info">
+            <div class="step-name">5. Evidence Package & Summary</div>
+            <div class="step-desc">Compilação final dos pacotes de evidências e geração de manifesto validado</div>
+          </div>
+          <span class="badge badge-muted">Pendente</span>
+        </div>
+      </div>
+
+      <!-- Execution Feedback / Results -->
+      <div id="resultsFeedback" class="feedback-box" style="display: none; margin-top: 12px;">
+        <div id="feedbackText"></div>
+        <div id="feedbackActions" class="form-row" style="margin-top: 8px; display: none;">
+          <button class="btn btn-secondary btn-sm" onclick="handleOpenResultsFolder()">
+            <span data-icon="folder"></span> Abrir Pasta de Resultados
+          </button>
+        </div>
       </div>
     </div>
   </div>
+
   <script src="icons.js"></script>
   <script>
+    let currentResultsDir = null;
+
     async function handlePickDir() {
-      const res = await window.pywebview.api.pick_analysis_dir();
-      if (res.success) {
-        document.getElementById('inputDir').value = res.path;
+      try {
+        const res = await window.pywebview.api.pick_analysis_dir();
+        if (res && res.success && res.path) {
+          document.getElementById('inputDir').value = res.path;
+        }
+      } catch (err) {
+        console.error(err);
       }
     }
+
     async function handleRun() {
-      const dir = document.getElementById('inputDir').value;
-      if (!dir) return;
-      document.getElementById('execSteps').innerHTML = `<div style="padding: 12px; color: var(--accent);">Executando orquestração em ${dir}...</div>`;
-      const res = await window.pywebview.api.run_orchestration(dir, {});
-      if (res.success) {
-        document.getElementById('statusTitle').innerHTML = `<span data-icon="check"></span> Orquestração Concluída`;
-        document.getElementById('execSteps').innerHTML = `
-          <div class="exec-step">
-            <span>Resultados salvos em: <code>${res.results_dir || res.output_dir || 'concluído'}</code></span>
-            <span class="badge badge-success">OK</span>
-          </div>
-        `;
+      const dir = document.getElementById('inputDir').value.trim();
+      if (!dir) {
+        alert('Selecione ou informe um diretório de atendimento válido.');
+        return;
+      }
+
+      const btn = document.getElementById('btnRun');
+      const statusBadge = document.getElementById('pipelineStatusBadge');
+      const statusTitle = document.getElementById('statusTitle');
+      const feedbackBox = document.getElementById('resultsFeedback');
+      const feedbackText = document.getElementById('feedbackText');
+      const feedbackActions = document.getElementById('feedbackActions');
+
+      btn.disabled = true;
+      btn.innerHTML = `<span data-icon="refresh"></span> Executando...`;
+      statusBadge.className = 'badge badge-accent';
+      statusBadge.textContent = 'Processando Pipeline';
+      statusTitle.textContent = 'Executando Orquestração...';
+      feedbackBox.style.display = 'none';
+
+      // Atualiza badges das etapas para processando
+      const stepCards = document.querySelectorAll('.pipeline-step-card .badge');
+      stepCards.forEach(b => {
+        b.className = 'badge badge-accent';
+        b.textContent = 'Processando...';
+      });
+      if (window.renderIcons) window.renderIcons();
+
+      try {
+        const res = await window.pywebview.api.run_orchestration(dir, {});
+        feedbackBox.style.display = 'flex';
+
+        if (res.success || res.status === 'success') {
+          currentResultsDir = res.results_dir || res.output_dir || '';
+          statusBadge.className = 'badge badge-success';
+          statusBadge.textContent = 'Concluído com Sucesso';
+          statusTitle.textContent = 'Orquestração Finalizada';
+
+          stepCards.forEach(b => {
+            b.className = 'badge badge-success';
+            b.textContent = 'OK';
+          });
+
+          feedbackBox.className = 'feedback-box feedback-success';
+          feedbackText.innerHTML = `<strong>Pipeline concluído com êxito!</strong><br><span style="font-size:12px; color: var(--fg-muted); font-family: var(--font-mono);">${currentResultsDir || 'Resultados gerados com sucesso.'}</span>`;
+          feedbackActions.style.display = currentResultsDir ? 'flex' : 'none';
+        } else {
+          statusBadge.className = 'badge badge-danger';
+          statusBadge.textContent = 'Falha';
+          stepCards.forEach(b => {
+            b.className = 'badge badge-danger';
+            b.textContent = 'Erro';
+          });
+          feedbackBox.className = 'feedback-box feedback-danger';
+          feedbackText.textContent = res.message || res.error || 'Erro durante a execução do pipeline de análise.';
+          feedbackActions.style.display = 'none';
+        }
+      } catch (err) {
+        feedbackBox.style.display = 'flex';
+        feedbackBox.className = 'feedback-box feedback-danger';
+        feedbackText.textContent = 'Erro inesperado: ' + err;
+        feedbackActions.style.display = 'none';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<span data-icon="play"></span> Iniciar Orquestração`;
         if (window.renderIcons) window.renderIcons();
-      } else {
-        document.getElementById('execSteps').innerHTML = `<div style="color: var(--danger); padding: 12px;">${res.message || 'Erro na orquestração.'}</div>`;
+      }
+    }
+
+    async function handleOpenResultsFolder() {
+      if (!currentResultsDir) return;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.open_path) {
+          await window.pywebview.api.open_path(currentResultsDir);
+        }
+      } catch (err) {
+        console.error(err);
       }
     }
   </script>
