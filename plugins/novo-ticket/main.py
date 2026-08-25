@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Adiciona diretório plugins ao path para importar shared
-PLUGIN_DIR = Path(__file__).parent
+PLUGIN_DIR = Path(__file__).resolve().parent
+if str(PLUGIN_DIR) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_DIR))
 PLUGINS_ROOT = PLUGIN_DIR.parent
 if str(PLUGINS_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGINS_ROOT))
