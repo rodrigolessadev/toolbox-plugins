@@ -32,7 +32,7 @@
           <!-- NumCra -->
           <div class="form-group">
             <label class="form-label" for="numcra">NumCra <span class="label-desc">(Número do Crachá)</span></label>
-            <input type="text" id="numcra" class="form-input" value="600000010">
+            <input type="text" id="numcra" class="form-input" placeholder="600000010">
           </div>
 
           <!-- Data Inicial -->
@@ -91,7 +91,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="field_NUMCAD">NumCad <span class="label-desc">(Cadastro)</span></label>
-            <input type="text" id="field_NUMCAD" class="form-input" value="0">
+            <input type="text" id="field_NUMCAD" class="form-input" placeholder="0">
           </div>
         </div>
       </div>
@@ -138,14 +138,11 @@
   <script>
     let currentBanco = 'sqlserver';
     let selectedWeekDays = [1, 2, 3, 4, 5];
-    let horaccList = ['08:00', '12:00', '13:00', '18:00'];
+    let horaccList = [];
     let selectedOptional = [];
     let optionalMetadata = [];
 
     document.addEventListener('DOMContentLoaded', async () => {
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('startDate').value = today;
-      document.getElementById('endDate').value = today;
       renderHorarios();
 
       // Carrega metadados de campos opcionais se a API estiver disponível
@@ -265,6 +262,16 @@
     }
 
     async function handleGerar() {
+      const startDate = document.getElementById('startDate').value;
+      if (!startDate) {
+        alert('Por favor, informe ao menos a Data de Início.');
+        return;
+      }
+      if (horaccList.length === 0) {
+        alert('Por favor, adicione ao menos um horário.');
+        return;
+      }
+
       const mainFields = {
         USOMAR: document.getElementById('field_USOMAR').value,
         NUMEMP: document.getElementById('field_NUMEMP').value,

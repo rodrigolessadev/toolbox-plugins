@@ -44,10 +44,10 @@ class GeradorMarcacoesApi(BasePluginApi):
         """Gera instruções SQL a partir dos dados do formulário."""
         return domain.gerar_sql_marcacoes(
             banco=params.get("banco", "sqlserver"),
-            numcra=params.get("numcra", "600000010"),
+            numcra=params.get("numcra", ""),
             start_date=params.get("start_date", ""),
             end_date=params.get("end_date", ""),
-            horarios=params.get("horarios", ["08:00", "12:00", "13:00", "18:00"]),
+            horarios=params.get("horarios", []),
             week_days=params.get("week_days", [1, 2, 3, 4, 5]),
             main_fields=params.get("main_fields", {}),
             optional_values=params.get("optional_values", {}),
