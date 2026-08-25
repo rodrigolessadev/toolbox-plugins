@@ -38,3 +38,14 @@ def test_calcular_totais_jornada_extra():
     assert res["total_trabalhado_str"] == "09:00"
     assert res["saldo_min"] == 60
     assert res["saldo_str"] == "01:00"
+
+
+def test_clock_icon_and_taskbar_helper():
+    icon_path = calc_domain.CLOCK_ICON_PATH
+    assert icon_path.exists()
+    assert icon_path.suffix == ".ico"
+    assert icon_path.stat().st_size > 0
+
+    res = calc_domain.set_window_taskbar_icon(icon_path=icon_path, hwnd=None)
+    assert isinstance(res, bool)
+

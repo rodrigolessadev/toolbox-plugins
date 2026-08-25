@@ -6,5 +6,5 @@
   "entry": "main.py",
   "icon": "clock-3",
   "min_toolbox_version": "1.0.0",
-  "theme_version": "classic"
+  "theme_version": "material-3"
 }

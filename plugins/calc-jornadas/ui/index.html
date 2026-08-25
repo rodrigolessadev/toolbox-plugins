@@ -1,77 +1,189 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Calculadora de Jornadas — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Calculadora de Jornadas & Horas</h1>
-      <p class="header-desc">Apuração de horas trabalhadas, intervalos, saldo e horas extras</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="clock-3"></span>
+        <h1 class="header-title">Calculadora de Jornadas & Horas</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Apuração de horas trabalhadas, intervalos intrajornada, saldo de banco de horas e horas extras.
+      </p>
     </header>
 
+    <!-- Card: Parâmetros e Marcações -->
     <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title"><span data-icon="clock"></span> Marcações do Dia</div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <label style="font-size: 11px; color: var(--fg-muted);">Jornada Prevista:</label>
-          <input type="text" id="jornadaPrevista" value="08:00" style="width: 70px; text-align: center;" oninput="handleCalcular()">
+      <div class="card-header-row">
+        <div class="card-title">
+          <span data-icon="clock"></span> Marcações de Turnos
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 11px; color: var(--fg-muted);" for="jornadaPrevista">Jornada Prevista:</label>
+            <input type="text" id="jornadaPrevista" class="input-mono" value="08:00" style="width: 72px; text-align: center;" placeholder="HH:MM" oninput="handleCalcular()">
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleAddTurno()">
+            <span data-icon="plus"></span> Adicionar Turno
+          </button>
         </div>
       </div>
 
-      <div id="timesContainer">
-        <div class="time-row">
-          <span style="color: var(--fg-muted); font-weight: 600;">1º Turno:</span>
-          <input type="text" class="t-in" value="08:00" placeholder="Entrada" oninput="handleCalcular()">
-          <input type="text" class="t-out" value="12:00" placeholder="Saída" oninput="handleCalcular()">
-          <div></div>
-        </div>
-        <div class="time-row">
-          <span style="color: var(--fg-muted); font-weight: 600;">2º Turno:</span>
-          <input type="text" class="t-in" value="13:00" placeholder="Entrada" oninput="handleCalcular()">
-          <input type="text" class="t-out" value="18:00" placeholder="Saída" oninput="handleCalcular()">
-          <div></div>
-        </div>
+      <div id="timesContainer" class="times-container">
+        <!-- Linhas dinâmicas de turnos -->
       </div>
     </div>
 
-    <div class="card" style="flex: 1;">
-      <div class="card-title"><span data-icon="check"></span> Resumo da Apuração</div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 8px;">
-        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
-          <div style="font-size: 11px; color: var(--fg-muted);">HORAS TRABALHADAS</div>
-          <div id="totTrab" style="font-size: 22px; font-weight: 700; color: var(--fg);">09:00</div>
+    <!-- Card: Resumo da Apuração -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+      <div class="card-title">
+        <span data-icon="calculator"></span> Resumo da Apuração
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">HORAS TRABALHADAS</div>
+          <div id="totTrab" class="metric-value">00:00</div>
+          <div class="metric-sub" id="subTrab">0 minutos apurados</div>
         </div>
-        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
-          <div style="font-size: 11px; color: var(--fg-muted);">JORNADA PREVISTA</div>
-          <div id="totPrev" style="font-size: 22px; font-weight: 700; color: var(--fg);">08:00</div>
+
+        <div class="metric-card">
+          <div class="metric-label">JORNADA PREVISTA</div>
+          <div id="totPrev" class="metric-value">08:00</div>
+          <div class="metric-sub" id="subPrev">480 minutos de meta</div>
         </div>
-        <div class="card" style="background: var(--bg-elev-2); text-align: center;">
-          <div style="font-size: 11px; color: var(--fg-muted);">SALDO / EXTRAS</div>
-          <div id="totSaldo" style="font-size: 22px; font-weight: 700; color: var(--success);">+01:00</div>
+
+        <div class="metric-card" id="cardSaldo">
+          <div class="metric-label">SALDO / EXTRAS</div>
+          <div id="totSaldo" class="metric-value" style="color: var(--success);">00:00</div>
+          <div class="metric-sub" id="subSaldo">Jornada cumprida</div>
+        </div>
+      </div>
+
+      <!-- Detalhamento por Turno -->
+      <div style="margin-top: 12px; flex: 1; overflow-y: auto;">
+        <div style="font-size: 11px; font-weight: 600; color: var(--fg-muted); margin-bottom: 6px; text-transform: uppercase;">
+          Detalhamento dos Períodos
+        </div>
+        <div id="detalhesContainer" class="detalhes-list">
+          <!-- Linhas de detalhe -->
         </div>
       </div>
     </div>
   </div>
+
   <script src="icons.js"></script>
   <script>
+    let turnos = [
+      { in: "08:00", out: "12:00" },
+      { in: "13:00", out: "18:00" }
+    ];
+
+    function renderTurnos() {
+      const container = document.getElementById('timesContainer');
+      container.innerHTML = turnos.map((t, idx) => `
+        <div class="time-row" data-idx="${idx}">
+          <span class="turn-label">${idx + 1}º Turno</span>
+          <div class="time-input-group">
+            <label class="sub-label">Entrada</label>
+            <input type="text" class="t-in input-mono" value="${t.in}" placeholder="08:00" oninput="updateTurno(${idx}, 'in', this.value)">
+          </div>
+          <div class="time-input-group">
+            <label class="sub-label">Saída</label>
+            <input type="text" class="t-out input-mono" value="${t.out}" placeholder="12:00" oninput="updateTurno(${idx}, 'out', this.value)">
+          </div>
+          <button type="button" class="btn-icon-danger" onclick="handleRemoveTurno(${idx})" title="Remover Turno" ${turnos.length <= 1 ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}>
+            <span data-icon="trash-2"></span>
+          </button>
+        </div>
+      `).join('');
+      if (window.renderIcons) window.renderIcons();
+    }
+
+    function updateTurno(idx, field, val) {
+      if (turnos[idx]) {
+        turnos[idx][field] = val;
+      }
+      handleCalcular();
+    }
+
+    function handleAddTurno() {
+      turnos.push({ in: "", out: "" });
+      renderTurnos();
+      handleCalcular();
+    }
+
+    function handleRemoveTurno(idx) {
+      if (turnos.length <= 1) return;
+      turnos.splice(idx, 1);
+      renderTurnos();
+      handleCalcular();
+    }
+
     async function handleCalcular() {
-      const ins = Array.from(document.querySelectorAll('.t-in')).map(e => e.value);
-      const outs = Array.from(document.querySelectorAll('.t-out')).map(e => e.value);
-      const prev = document.getElementById('jornadaPrevista').value;
-      const res = await window.pywebview.api.calcular(ins, outs, prev);
-      if (res.success) {
-        document.getElementById('totTrab').textContent = res.total_trabalhado_str;
-        document.getElementById('totPrev').textContent = res.jornada_prevista_str;
-        const saldoEl = document.getElementById('totSaldo');
-        saldoEl.textContent = (res.saldo_min > 0 ? '+' : '') + res.saldo_str;
-        saldoEl.style.color = res.saldo_min >= 0 ? 'var(--success)' : 'var(--danger)';
+      const ins = turnos.map(t => t.in.trim());
+      const outs = turnos.map(t => t.out.trim());
+      const prev = document.getElementById('jornadaPrevista').value.trim();
+
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.calcular) {
+          return;
+        }
+        const res = await window.pywebview.api.calcular(ins, outs, prev);
+        if (res.success) {
+          document.getElementById('totTrab').textContent = res.total_trabalhado_str;
+          document.getElementById('subTrab').textContent = `${res.total_trabalhado_min} minutos apurados`;
+
+          document.getElementById('totPrev').textContent = res.jornada_prevista_str;
+
+          const saldoEl = document.getElementById('totSaldo');
+          const subSaldo = document.getElementById('subSaldo');
+          const isPos = res.saldo_min > 0;
+          const isNeg = res.saldo_min < 0;
+
+          saldoEl.textContent = (isPos ? '+' : '') + res.saldo_str;
+          saldoEl.style.color = isPos ? 'var(--success)' : (isNeg ? 'var(--danger)' : 'var(--fg)');
+
+          if (isPos) {
+            subSaldo.textContent = `+${res.saldo_min} min de horas extras`;
+          } else if (isNeg) {
+            subSaldo.textContent = `${res.saldo_min} min de déficit de jornada`;
+          } else {
+            subSaldo.textContent = 'Jornada exata cumprida';
+          }
+
+          // Renderiza detalhes
+          const detContainer = document.getElementById('detalhesContainer');
+          if (res.detalhes && res.detalhes.length > 0) {
+            detContainer.innerHTML = res.detalhes.map(d => `
+              <div class="detalhe-row">
+                <span style="font-weight:600;">Período ${d.periodo}:</span>
+                <span class="badge badge-muted">${d.entrada} às ${d.saida}</span>
+                <span class="badge badge-accent" style="margin-left: auto;">Duração: ${d.duracao}</span>
+              </div>
+            `).join('');
+          } else {
+            detContainer.innerHTML = '<div style="color:var(--fg-muted); font-size:12px;">Nenhum período calculado ainda.</div>';
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao calcular jornada:', err);
       }
     }
-    document.addEventListener('DOMContentLoaded', handleCalcular);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderTurnos();
+      handleCalcular();
+    });
   </script>
 </body>
 </html>
