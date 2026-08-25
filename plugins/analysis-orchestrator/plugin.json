@@ -4,5 +4,6 @@
   "description": "Pipeline automatizado para orquestração de análises e extração de evidências.",
   "language": "python",
   "entry": "main.py",
-  "icon": "workflow"
+  "icon": "workflow",
+  "theme_version": "material-3"
 }

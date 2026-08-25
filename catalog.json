@@ -186,7 +186,8 @@
       "command": "analysis-orchestrator",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/analysis-orchestrator-1.1.0/analysis-orchestrator.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "theme_version": "material-3",
+      "updated_at": "2026-08-25"
     },
     {
       "id": "novo-ticket",

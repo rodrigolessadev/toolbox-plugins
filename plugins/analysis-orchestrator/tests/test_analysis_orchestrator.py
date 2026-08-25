@@ -94,3 +94,14 @@ def test_7_protocolo_ipc_v1_todas_acoes(tmp_path):
     resp3 = handle_ipc({"action": "validate_results", "input": {"results_directory": str(tmp_path / res_dir_rel)}})
     assert resp3["status"] == "success"
     assert resp3["result"]["is_valid"] is True
+
+
+def test_8_workflow_icon_and_taskbar_helper():
+    icon_path = domain_mod.WORKFLOW_ICON_PATH
+    assert icon_path.exists()
+    assert icon_path.suffix == ".ico"
+    assert icon_path.stat().st_size > 0
+
+    res = domain_mod.set_window_taskbar_icon(icon_path=icon_path, hwnd=None)
+    assert isinstance(res, bool)
+

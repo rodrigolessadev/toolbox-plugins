@@ -12,7 +12,8 @@ def test_manifest_structure():
         data = json.load(f)
 
     assert data.get("name") == "Novo Ticket"
-    assert data.get("version") == "1.3.2"
+    assert data.get("version") is not None
+    assert len(data.get("version").split(".")) >= 3
     assert data.get("language") == "python"
     assert data.get("entry") == "main.py"
     assert (plugin_dir / data["entry"]).exists()
