@@ -53,7 +53,7 @@ def test_create_plugin_window_validations(tmp_path: Path):
 
 
 def test_theme_css_exists():
-    css_path = Path(__file__).parent.parent / "ui" / "toolbox-theme.css"
+    css_path = Path(__file__).parent.parent / "plugins" / "shared" / "ui" / "toolbox-theme.css"
     assert css_path.exists()
     content = css_path.read_text(encoding="utf-8")
     assert "--bg: #0e1014;" in content

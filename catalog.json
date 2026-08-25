@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "updated_at": "2026-08-21",
+  "updated_at": "2026-08-25",
   "plugins": [
     {
       "id": "har-kibana-planner",
@@ -39,7 +39,7 @@
       "id": "calc-jornadas",
       "name": "Calculadora de Jornadas",
       "description": "Calcula horas normais, noturnas e noturnas reduzidas por jornada de trabalho.",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -50,9 +50,9 @@
       ],
       "icon": "clock-3",
       "command": "calc-jornadas",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.2.0/calc-jornadas.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.2.1/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "updated_at": "2026-08-25"
     },
     {
       "id": "converter-data",

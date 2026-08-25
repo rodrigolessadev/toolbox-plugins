@@ -1,6 +1,6 @@
 {
   "name": "Calculadora de Jornadas",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Cálculo de horas trabalhadas, horas extras e saldos de jornada.",
   "language": "python",
   "entry": "main.py",
