@@ -207,8 +207,9 @@
       "icon": "ticket",
       "command": "novo-ticket",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.3.2/novo-ticket.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-25"
+      "min_toolbox_version": "1.22.3",
+      "updated_at": "2026-08-25",
+      "theme_version": "material-3"
     },
     {
       "id": "logon-aws",
