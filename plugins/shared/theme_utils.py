@@ -1,33 +1,28 @@
 """
-Módulo Centralizado de Design System e Tema Dark Suave (Soft Dark / Slate Navy).
-Projetado para interfaces gráficas Tkinter de plugins do ecossistema Toolbox.
+Utilitário de temas e design system para plugins Desktop (Tkinter).
+Suporta temas Claro e Escuro dinamicamente com tokens alinhados ao Toolbox.
 """
+
+import os
 import sys
 from typing import Any, Callable, Dict, Optional
 
-# Tokens do Design System Soft Dark (Slate/Navy)
-THEME: Dict[str, str] = {
-    # Superfícies
-    "bg_base": "#0f1117",         # Fundo principal da janela
-    "bg_surface": "#171b24",      # Fundo de cards, contêineres e abas
-    "bg_input": "#1c222e",        # Fundo de campos de texto, combobox e áreas de código
-    "bg_hover": "#242c3b",        # Hover de botões secundários e itens
-    "bg_card_highlight": "#1e2634",# Card com destaque visual
-    
-    # Bordas e separadores
-    "border": "#232a38",          # Borda sutil de cards e separadores (1px)
-    "border_focus": "#4f8df9",    # Borda ativa de campos em foco
-    "border_card": "#262f3f",     # Contorno refinado de cards
-    
-    # Tipografia
-    "fg_primary": "#e2e8f0",      # Texto principal (Slate-200, nítido e suave)
-    "fg_secondary": "#94a3b8",    # Labels secundárias, dicas e legendas (Slate-400)
-    "fg_muted": "#64748b",        # Placeholders e elementos inativos (Slate-500)
-    
-    # Cores de Ação e Feedback
-    "accent": "#3b82f6",          # Botões primários e destaque (Blue-500)
-    "accent_hover": "#2563eb",    # Hover do botão primário
-    "accent_fg": "#ffffff",       # Texto sobre o accent
+# Design Tokens: Modo Escuro (Dark Theme)
+THEME_DARK: Dict[str, str] = {
+    "bg_base": "#0e1014",         # Fundo principal da janela
+    "bg_surface": "#161a21",      # Fundo elevado / container de cards
+    "bg_elev": "#1f242d",         # Superfície secundária de elevação
+    "bg_input": "#12151c",        # Fundo de campos de texto e inputs
+    "bg_hover": "#262c36",        # Hover e estados ativos
+    "border": "#2b3240",          # Bordas padrão de componentes
+    "border_card": "#232936",     # Bordas de cards e separadores
+    "border_focus": "#6aa3ff",    # Borda em foco (accent)
+    "fg_primary": "#e8eaed",      # Texto principal de alto contraste
+    "fg_secondary": "#8b94a3",    # Texto atenuado / legendas
+    "fg_muted": "#606979",        # Texto desabilitado
+    "accent": "#6aa3ff",          # Acento primário do Toolbox
+    "accent_hover": "#5493f0",    # Acento em hover
+    "accent_fg": "#ffffff",       # Texto sobre o acento primário
     "success": "#10b981",         # Indicadores de sucesso (Emerald-500)
     "success_bg": "#064e3b",      # Fundo de badge de sucesso
     "warning": "#f59e0b",         # Alertas e avisos (Amber-500)
@@ -36,13 +31,70 @@ THEME: Dict[str, str] = {
     "danger_bg": "#7f1d1d",       # Fundo de badge de erro
 }
 
+# Design Tokens: Modo Claro (Light Theme)
+THEME_LIGHT: Dict[str, str] = {
+    "bg_base": "#f4f5f8",         # Fundo principal claro
+    "bg_surface": "#ffffff",      # Fundo elevado / cards brancos
+    "bg_elev": "#eaecef",         # Superfície secundária clara
+    "bg_input": "#ffffff",        # Fundo de campos de texto
+    "bg_hover": "#f0f2f5",        # Hover claro
+    "border": "#e2e8f0",          # Bordas sutis claras
+    "border_card": "#cbd5e1",     # Bordas de cards
+    "border_focus": "#2563eb",    # Borda em foco (azul vivo)
+    "fg_primary": "#0e1014",      # Texto principal escuro de alto contraste
+    "fg_secondary": "#475569",    # Texto atenuado / legendas
+    "fg_muted": "#94a3b8",        # Texto desabilitado
+    "accent": "#2563eb",          # Acento primário claro (Blue-600)
+    "accent_hover": "#1d4ed8",    # Acento em hover (Blue-700)
+    "accent_fg": "#ffffff",       # Texto sobre o acento primário
+    "success": "#10b981",         # Indicadores de sucesso
+    "success_bg": "#d1fae5",      # Fundo de badge de sucesso
+    "warning": "#f59e0b",         # Alertas e avisos
+    "warning_bg": "#fef3c7",      # Fundo de badge de alerta
+    "danger": "#ef4444",          # Erros e exclusões
+    "danger_bg": "#fee2e2",       # Fundo de badge de erro
+}
+
+def resolve_theme_mode(theme: Optional[str] = None) -> str:
+    """Resolve o modo de tema ('dark' ou 'light') a partir do parâmetro, CLI ou env var."""
+    if theme in ("dark", "light"):
+        return theme
+
+    # 1. Argumentos CLI (--theme light / --theme dark / --theme=light)
+    if sys.argv:
+        for i, arg in enumerate(sys.argv):
+            if arg == "--theme" and i + 1 < len(sys.argv):
+                val = sys.argv[i + 1].strip().lower()
+                if val in ("dark", "light"):
+                    return val
+            elif arg.startswith("--theme="):
+                val = arg.split("=", 1)[1].strip().lower()
+                if val in ("dark", "light"):
+                    return val
+
+    # 2. Variável de ambiente TOOLBOX_THEME
+    env_theme = os.environ.get("TOOLBOX_THEME", "").strip().lower()
+    if env_theme in ("dark", "light"):
+        return env_theme
+
+    return "dark"
+
+
+def get_theme_tokens(mode: Optional[str] = None) -> Dict[str, str]:
+    """Retorna um dicionário com os tokens do tema correspondente."""
+    m = resolve_theme_mode(mode)
+    return dict(THEME_LIGHT if m == "light" else THEME_DARK)
+
+
+# Dicionário de compatibilidade global (atualizado por setup_app_theme)
+THEME: Dict[str, str] = get_theme_tokens()
+
 
 def enable_high_dpi():
     """Ativa suporte a High-DPI no Windows para evitar fontes borradas em telas 1080p/4K."""
     if sys.platform == "win32":
         try:
             import ctypes
-            # Shcore SetProcessDpiAwareness: 1 = Process_System_DPI_Aware, 2 = Process_Per_Monitor_DPI_Aware
             try:
                 ctypes.windll.shcore.SetProcessDpiAwareness(1)
             except Exception:
@@ -51,10 +103,14 @@ def enable_high_dpi():
             pass
 
 
-def setup_app_theme(root: Any) -> Any:
+def setup_app_theme(root: Any, theme: Optional[str] = None) -> Any:
     """Configura tema visual global, estilos ttk e opções de popup no Tkinter."""
     enable_high_dpi()
     
+    tokens = get_theme_tokens(theme)
+    THEME.clear()
+    THEME.update(tokens)
+
     try:
         root.configure(bg=THEME["bg_base"])
     except Exception:
@@ -163,7 +219,7 @@ def create_styled_entry(parent: Any, textvariable: Any = None, **kwargs) -> Any:
 
 
 def create_styled_text(parent: Any, **kwargs) -> Any:
-    """Cria uma área ScrolledText integrada ao tema escuro suave."""
+    """Cria uma área ScrolledText integrada ao tema ativo."""
     from tkinter.scrolledtext import ScrolledText
     opts = {
         "font": ("Consolas", 9),
@@ -238,7 +294,7 @@ def create_info_banner(parent: Any, text: str, **kwargs) -> Any:
 
 
 def create_modal_window(parent: Any, title: str, geometry: str = "800x580") -> Any:
-    """Cria uma janela modal Toplevel com tema escuro e foco capturado."""
+    """Cria uma janela modal Toplevel com tema ativo e foco capturado."""
     import tkinter as tk
     win = tk.Toplevel(parent)
     win.title(title)
