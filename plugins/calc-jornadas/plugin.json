@@ -4,5 +4,7 @@
   "description": "Cálculo de horas trabalhadas, horas extras e saldos de jornada.",
   "language": "python",
   "entry": "main.py",
-  "icon": "clock-3"
+  "icon": "clock-3",
+  "min_toolbox_version": "1.0.0",
+  "theme_version": "classic"
 }

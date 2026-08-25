@@ -52,7 +52,8 @@
       "command": "calc-jornadas",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/calc-jornadas-1.2.1/calc-jornadas.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-25"
+      "updated_at": "2026-08-25",
+      "theme_version": "classic"
     },
     {
       "id": "converter-data",
