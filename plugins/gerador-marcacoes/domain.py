@@ -11,10 +11,13 @@ def format_date(dt: date, banco: str) -> str:
     return f"'{dt.strftime('%Y-%m-%d')}'"
 
 def time_to_minutes(t_str: str) -> int:
-    parts = t_str.strip().split(":")
-    h = int(parts[0])
-    m = int(parts[1]) if len(parts) > 1 else 0
-    return h * 60 + m
+    try:
+        parts = t_str.strip().split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        return h * 60 + m
+    except Exception:
+        return 0
 
 def gerar_sql_marcacoes(
     tabela: str,
