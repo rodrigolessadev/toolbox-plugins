@@ -78,11 +78,20 @@
           <span data-icon="folder"></span> Abrir Ticket Existente
         </div>
         <p style="font-size: 12px; color: var(--fg-muted);">
-          Selecione uma pasta de ticket existente no disco (ex: <code>CLIENTE_123456</code>) para filtrar seus logs:
+          Selecione uma pasta de ticket existente no diretório base ou procure em outro local:
         </p>
-        <div style="display: flex; justify-content: flex-start;">
-          <button class="btn btn-secondary" onclick="handleSelectExistingTicket()">
-            <span data-icon="folder"></span> Selecionar Pasta de Ticket Existente...
+        <div class="form-row">
+          <select id="selectExistingTicket" class="input" style="flex: 1;">
+            <option value="">Informe o diretório base para carregar os tickets...</option>
+          </select>
+          <button class="btn btn-primary" onclick="handleOpenSelectedTicket()">
+            <span data-icon="folder"></span> Abrir Ticket
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="refreshExistingTicketsList()" title="Recarregar lista de tickets">
+            <span data-icon="refresh"></span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleSelectExistingTicket()" title="Buscar pasta em outro local no disco">
+            <span data-icon="search"></span> Outro local...
           </button>
         </div>
       </div>

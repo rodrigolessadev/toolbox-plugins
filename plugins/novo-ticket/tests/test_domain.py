@@ -24,6 +24,7 @@ extract_log_line_timestamp = domain.extract_log_line_timestamp
 parse_log_blocks = domain.parse_log_blocks
 filter_log_file = domain.filter_log_file
 process_ticket_logs = domain.process_ticket_logs
+list_existing_tickets = domain.list_existing_tickets
 
 
 
@@ -230,3 +231,34 @@ def test_get_ticket_subdirectories_info_hierarchy(tmp_path: Path):
     assert info_child["name"] == "logs_brutos"
     assert info_child["depth"] == 1
     assert info_child["parent"] == "LogsSenior_COMPLETO_20260817"
+
+
+def test_list_existing_tickets(tmp_path: Path):
+    # Diretório vazio ou inválido
+    res_empty = list_existing_tickets("")
+    assert res_empty["success"] is False
+    assert res_empty["tickets"] == []
+
+    res_invalid = list_existing_tickets(str(tmp_path / "inexistente"))
+    assert res_invalid["success"] is False
+
+    # Diretório base com pastas de tickets e arquivos avulsos
+    t1 = tmp_path / "CLIENTE A_1001"
+    t2 = tmp_path / "CLIENTE B_1002"
+    hidden = tmp_path / ".git"
+    file1 = tmp_path / "anotacoes.txt"
+
+    t1.mkdir()
+    t2.mkdir()
+    hidden.mkdir()
+    file1.write_text("teste", encoding="utf-8")
+
+    res = list_existing_tickets(str(tmp_path))
+    assert res["success"] is True
+    assert res["count"] == 2
+    names = [t["name"] for t in res["tickets"]]
+    assert "CLIENTE A_1001" in names
+    assert "CLIENTE B_1002" in names
+    assert ".git" not in names
+    assert "anotacoes.txt" not in names
+

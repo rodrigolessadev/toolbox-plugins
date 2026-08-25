@@ -38,6 +38,15 @@ class NovoTicketApi(BasePluginApi):
     def select_base_folder(self, initial_dir: Optional[str] = None) -> str:
         return self.select_folder(initial_dir)
 
+    def list_tickets(self, base_dir: Optional[str] = None) -> Dict[str, Any]:
+        """Lista os tickets existentes no diretório base informado."""
+        target_dir = base_dir or (str(self.active_ticket_dir.parent) if self.active_ticket_dir else "")
+        return domain.list_existing_tickets(target_dir)
+
+    def select_existing_ticket_by_path(self, ticket_path: str) -> Dict[str, Any]:
+        """Carrega e ativa um ticket a partir do caminho selecionado."""
+        return self.get_ticket_details(ticket_path)
+
     def select_ticket_folder(self, initial_dir: Optional[str] = None) -> Dict[str, Any]:
         chosen = self.select_folder(initial_dir)
         if not chosen:
