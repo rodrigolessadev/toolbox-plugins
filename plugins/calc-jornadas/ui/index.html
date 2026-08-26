@@ -10,169 +10,263 @@
 <body>
   <div class="app-container">
     <!-- Header M3 -->
-    <header class="header">
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <span class="plugin-header-icon" data-icon="clock-3"></span>
-        <h1 class="header-title">Calculadora de Jornadas & Horas</h1>
-        <span class="badge badge-accent">Material 3</span>
+    <header class="header-row">
+      <div class="header-left">
+        <div class="header-title-group">
+          <span class="plugin-header-icon" data-icon="clock-3"></span>
+          <h1 class="header-title">Calculadora de Jornadas</h1>
+          <span class="badge badge-accent">Material 3</span>
+        </div>
+        <p class="header-desc">
+          Cálculo trabalhista com separação de horas diurnas, noturnas e redução noturna CLT (52,5 min).
+        </p>
       </div>
-      <p class="header-desc">
-        Apuração de horas trabalhadas, intervalos intrajornada, saldo de banco de horas e horas extras.
-      </p>
+      <div class="header-actions">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="copiarResumo()" title="Copiar resumo dos cálculos">
+          <span data-icon="copy"></span> Copiar Resumo
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handleLimpar()" title="Limpar todos os turnos">
+          <span data-icon="rotate-ccw"></span> Limpar
+        </button>
+      </div>
     </header>
 
-    <!-- Card: Parâmetros e Marcações -->
-    <div class="card">
-      <div class="card-header-row">
-        <div class="card-title">
-          <span data-icon="clock"></span> Marcações de Turnos
+    <!-- Card: Parâmetros Retráteis -->
+    <div class="accordion-card">
+      <button type="button" class="accordion-btn" id="btnToggleParams" onclick="toggleParametros()">
+        <span style="display: flex; align-items: center; gap: 6px;">
+          <span data-icon="settings-2"></span> Parâmetros de Cálculo Noturno & CLT
+        </span>
+        <span id="chevronParams" data-icon="chevron-down"></span>
+      </button>
+      <div id="paramsBody" class="accordion-body collapsed">
+        <div class="param-group">
+          <label class="param-label" for="paramIniNoturno">Início do Período Noturno</label>
+          <input type="time" id="paramIniNoturno" class="input-mono input-time-cell" value="22:00" onchange="calcularTudo()">
         </div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label style="font-size: 11px; color: var(--fg-muted);" for="jornadaPrevista">Jornada Prevista:</label>
-            <input type="text" id="jornadaPrevista" class="input-mono" value="08:00" style="width: 72px; text-align: center;" placeholder="HH:MM" oninput="handleCalcular()">
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="handleAddTurno()">
-            <span data-icon="plus"></span> Adicionar Turno
-          </button>
+        <div class="param-group">
+          <label class="param-label" for="paramFimNoturno">Fim do Período Noturno</label>
+          <input type="time" id="paramFimNoturno" class="input-mono input-time-cell" value="05:00" onchange="calcularTudo()">
         </div>
-      </div>
-
-      <div id="timesContainer" class="times-container">
-        <!-- Linhas dinâmicas de turnos -->
+        <div class="param-group">
+          <label class="param-label" for="paramFatorMinutos">Minutos por 1h Noturna (CLT)</label>
+          <input type="text" id="paramFatorMinutos" class="input-mono input-time-cell" value="52,5" placeholder="52,5" oninput="calcularTudo()">
+        </div>
       </div>
     </div>
 
-    <!-- Card: Resumo da Apuração -->
-    <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-      <div class="card-title">
-        <span data-icon="calculator"></span> Resumo da Apuração
+    <!-- Card: Tabela de Jornadas -->
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="jornada-table">
+          <thead>
+            <tr>
+              <th style="width: 140px;" class="text-center">Entrada</th>
+              <th style="width: 140px;" class="text-center">Saída</th>
+              <th style="text-align: right;">Normais</th>
+              <th style="text-align: right;">Noturnas</th>
+              <th style="text-align: right;">Not. Red.</th>
+              <th style="text-align: right;">Total</th>
+              <th style="width: 44px;" class="text-center"></th>
+            </tr>
+          </thead>
+          <tbody id="tabelaJornadasBody">
+            <!-- Linhas dinâmicas -->
+          </tbody>
+          <tfoot>
+            <tr class="tr-total">
+              <td colspan="2"><span style="font-weight: 700;">TOTAL CONSOLIDADO</span></td>
+              <td id="totNormais" class="cell-mono text-right">-</td>
+              <td id="totNoturnas" class="cell-mono text-right">-</td>
+              <td id="totNotRed" class="cell-mono text-right cell-accent">-</td>
+              <td id="totGeral" class="cell-mono text-right cell-total">-</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
 
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-label">HORAS TRABALHADAS</div>
-          <div id="totTrab" class="metric-value">00:00</div>
-          <div class="metric-sub" id="subTrab">0 minutos apurados</div>
-        </div>
+      <div style="display: flex; justify-content: flex-start;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="adicionarLinha(true)">
+          <span data-icon="plus"></span> Adicionar Linha
+        </button>
+      </div>
+    </div>
 
-        <div class="metric-card">
-          <div class="metric-label">JORNADA PREVISTA</div>
-          <div id="totPrev" class="metric-value">08:00</div>
-          <div class="metric-sub" id="subPrev">480 minutos de meta</div>
+    <!-- Card: Legenda Explicativa -->
+    <div class="legend-card">
+      <div class="legend-item">
+        <div class="legend-title">
+          <span data-icon="info" style="color: var(--accent);"></span> Normais (Diurnas)
         </div>
-
-        <div class="metric-card" id="cardSaldo">
-          <div class="metric-label">SALDO / EXTRAS</div>
-          <div id="totSaldo" class="metric-value" style="color: var(--success);">00:00</div>
-          <div class="metric-sub" id="subSaldo">Jornada cumprida</div>
+        <div class="legend-desc">
+          Horas trabalhadas fora do intervalo noturno (ex.: entre 05:00 e 22:00).
         </div>
       </div>
 
-      <!-- Detalhamento por Turno -->
-      <div style="margin-top: 12px; flex: 1; overflow-y: auto;">
-        <div style="font-size: 11px; font-weight: 600; color: var(--fg-muted); margin-bottom: 6px; text-transform: uppercase;">
-          Detalhamento dos Períodos
+      <div class="legend-item">
+        <div class="legend-title">
+          <span data-icon="clock" style="color: var(--warning);"></span> Noturnas (Relógio)
         </div>
-        <div id="detalhesContainer" class="detalhes-list">
-          <!-- Linhas de detalhe -->
+        <div class="legend-desc">
+          Horas de relógio efetivamente cumpridas dentro do período noturno (22:00 às 05:00).
+        </div>
+      </div>
+
+      <div class="legend-item">
+        <div class="legend-title">
+          <span data-icon="calculator" style="color: var(--success);"></span> Noturna Reduzida (CLT)
+        </div>
+        <div class="legend-desc">
+          Cada 52m30s noturnos reais equivalem a 1 hora (60 min) computada na apuração da jornada.
         </div>
       </div>
     </div>
   </div>
 
+  <div id="toast" class="toast"></div>
+
   <script src="icons.js"></script>
   <script>
-    let turnos = [
-      { in: "08:00", out: "12:00" },
-      { in: "13:00", out: "18:00" }
+    let grupos = [
+      { entrada: "08:00", saida: "12:00" },
+      { entrada: "13:00", saida: "17:00" }
     ];
+    let isParamsOpen = false;
 
-    function renderTurnos() {
-      const container = document.getElementById('timesContainer');
-      container.innerHTML = turnos.map((t, idx) => `
-        <div class="time-row" data-idx="${idx}">
-          <span class="turn-label">${idx + 1}º Turno</span>
-          <div class="time-input-group">
-            <label class="sub-label">Entrada</label>
-            <input type="text" class="t-in input-mono" value="${t.in}" placeholder="08:00" oninput="updateTurno(${idx}, 'in', this.value)">
-          </div>
-          <div class="time-input-group">
-            <label class="sub-label">Saída</label>
-            <input type="text" class="t-out input-mono" value="${t.out}" placeholder="12:00" oninput="updateTurno(${idx}, 'out', this.value)">
-          </div>
-          <button type="button" class="btn-icon-danger" onclick="handleRemoveTurno(${idx})" title="Remover Turno" ${turnos.length <= 1 ? 'disabled style="opacity:0.3;cursor:not-allowed;"' : ''}>
-            <span data-icon="trash-2"></span>
-          </button>
-        </div>
-      `).join('');
+    function toggleParametros() {
+      isParamsOpen = !isParamsOpen;
+      const body = document.getElementById('paramsBody');
+      const icon = document.getElementById('chevronParams');
+      if (isParamsOpen) {
+        body.classList.remove('collapsed');
+        if (icon) icon.setAttribute('data-icon', 'chevron-up');
+      } else {
+        body.classList.add('collapsed');
+        if (icon) icon.setAttribute('data-icon', 'chevron-down');
+      }
       if (window.renderIcons) window.renderIcons();
     }
 
-    function updateTurno(idx, field, val) {
-      if (turnos[idx]) {
-        turnos[idx][field] = val;
+    function renderTabela(resultados = []) {
+      const tbody = document.getElementById('tabelaJornadasBody');
+      tbody.innerHTML = grupos.map((g, idx) => {
+        const res = resultados[idx] && resultados[idx].resultado ? resultados[idx].resultado : null;
+        const norm = res ? res.normais : '-';
+        const notu = res ? res.noturnas : '-';
+        const notRed = res ? res.not_red : '-';
+        const total = res ? res.total : '-';
+
+        return `
+          <tr data-idx="${idx}">
+            <td>
+              <input type="time" class="input-time-cell input-in" value="${g.entrada}" 
+                oninput="updateCampo(${idx}, 'entrada', this.value)"
+                onkeydown="handleKeyDown(event, ${idx}, 'entrada')">
+            </td>
+            <td>
+              <input type="time" class="input-time-cell input-out" value="${g.saida}" 
+                oninput="updateCampo(${idx}, 'saida', this.value)"
+                onkeydown="handleKeyDown(event, ${idx}, 'saida')">
+            </td>
+            <td class="cell-mono text-right">${norm}</td>
+            <td class="cell-mono text-right">${notu}</td>
+            <td class="cell-mono text-right cell-accent">${notRed}</td>
+            <td class="cell-mono text-right" style="font-weight:700;">${total}</td>
+            <td class="text-center">
+              <button type="button" class="btn-icon-danger" onclick="removerLinha(${idx})" 
+                title="Remover linha" ${grupos.length <= 1 ? 'disabled' : ''}>
+                <span data-icon="trash-2"></span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      if (window.renderIcons) window.renderIcons();
+    }
+
+    function updateCampo(idx, campo, valor) {
+      if (grupos[idx]) {
+        grupos[idx][campo] = valor;
       }
-      handleCalcular();
+      calcularTudo();
     }
 
-    function handleAddTurno() {
-      turnos.push({ in: "", out: "" });
-      renderTurnos();
-      handleCalcular();
-    }
-
-    function handleRemoveTurno(idx) {
-      if (turnos.length <= 1) return;
-      turnos.splice(idx, 1);
-      renderTurnos();
-      handleCalcular();
-    }
-
-    async function handleCalcular() {
-      const ins = turnos.map(t => t.in.trim());
-      const outs = turnos.map(t => t.out.trim());
-      const prev = document.getElementById('jornadaPrevista').value.trim();
-
-      try {
-        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.calcular) {
-          return;
-        }
-        const res = await window.pywebview.api.calcular(ins, outs, prev);
-        if (res.success) {
-          document.getElementById('totTrab').textContent = res.total_trabalhado_str;
-          document.getElementById('subTrab').textContent = `${res.total_trabalhado_min} minutos apurados`;
-
-          document.getElementById('totPrev').textContent = res.jornada_prevista_str;
-
-          const saldoEl = document.getElementById('totSaldo');
-          const subSaldo = document.getElementById('subSaldo');
-          const isPos = res.saldo_min > 0;
-          const isNeg = res.saldo_min < 0;
-
-          saldoEl.textContent = (isPos ? '+' : '') + res.saldo_str;
-          saldoEl.style.color = isPos ? 'var(--success)' : (isNeg ? 'var(--danger)' : 'var(--fg)');
-
-          if (isPos) {
-            subSaldo.textContent = `+${res.saldo_min} min de horas extras`;
-          } else if (isNeg) {
-            subSaldo.textContent = `${res.saldo_min} min de déficit de jornada`;
-          } else {
-            subSaldo.textContent = 'Jornada exata cumprida';
+    function adicionarLinha(focus = false) {
+      grupos.push({ entrada: "", saida: "" });
+      renderTabela();
+      calcularTudo();
+      if (focus) {
+        setTimeout(() => {
+          const rows = document.querySelectorAll('.input-in');
+          if (rows.length > 0) {
+            rows[rows.length - 1].focus();
           }
+        }, 50);
+      }
+    }
 
-          // Renderiza detalhes
-          const detContainer = document.getElementById('detalhesContainer');
-          if (res.detalhes && res.detalhes.length > 0) {
-            detContainer.innerHTML = res.detalhes.map(d => `
-              <div class="detalhe-row">
-                <span style="font-weight:600;">Período ${d.periodo}:</span>
-                <span class="badge badge-muted">${d.entrada} às ${d.saida}</span>
-                <span class="badge badge-accent" style="margin-left: auto;">Duração: ${d.duracao}</span>
-              </div>
-            `).join('');
-          } else {
-            detContainer.innerHTML = '<div style="color:var(--fg-muted); font-size:12px;">Nenhum período calculado ainda.</div>';
+    function removerLinha(idx) {
+      if (grupos.length <= 1) return;
+      grupos.splice(idx, 1);
+      renderTabela();
+      calcularTudo();
+    }
+
+    function handleLimpar() {
+      grupos = [
+        { entrada: "", saida: "" },
+        { entrada: "", saida: "" }
+      ];
+      renderTabela();
+      document.getElementById('totNormais').textContent = '-';
+      document.getElementById('totNoturnas').textContent = '-';
+      document.getElementById('totNotRed').textContent = '-';
+      document.getElementById('totGeral').textContent = '-';
+      showToast('Calculadora reiniciada.');
+    }
+
+    function handleKeyDown(e, idx, campo) {
+      if (e.key === 'Tab' && !e.shiftKey && campo === 'saida' && idx === grupos.length - 1) {
+        e.preventDefault();
+        adicionarLinha(true);
+      } else if (e.key === 'Escape') {
+        if (!grupos[idx].entrada && !grupos[idx].saida && grupos.length > 1) {
+          removerLinha(idx);
+        }
+      }
+    }
+
+    function getParams() {
+      const ini = document.getElementById('paramIniNoturno').value || '22:00';
+      const fim = document.getElementById('paramFimNoturno').value || '05:00';
+      const fator = document.getElementById('paramFatorMinutos').value || '52,5';
+      return {
+        inicio_noturno: ini,
+        fim_noturno: fim,
+        fator_minutos: fator
+      };
+    }
+
+    async function calcularTudo() {
+      const params = getParams();
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.consolidar) {
+          const res = await window.pywebview.api.consolidar(grupos, params);
+          if (res && res.success) {
+            renderTabela(res.resultados);
+            if (res.totais && res.totais.tem_totais) {
+              document.getElementById('totNormais').textContent = res.totais.normais;
+              document.getElementById('totNoturnas').textContent = res.totais.noturnas;
+              document.getElementById('totNotRed').textContent = res.totais.not_red;
+              document.getElementById('totGeral').textContent = res.totais.total;
+            } else {
+              document.getElementById('totNormais').textContent = '-';
+              document.getElementById('totNoturnas').textContent = '-';
+              document.getElementById('totNotRed').textContent = '-';
+              document.getElementById('totGeral').textContent = '-';
+            }
           }
         }
       } catch (err) {
@@ -180,9 +274,59 @@
       }
     }
 
+    async function copiarResumo() {
+      const params = getParams();
+      let res = null;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.consolidar) {
+          res = await window.pywebview.api.consolidar(grupos, params);
+        }
+      } catch (e) {}
+
+      let texto = `📊 Resumo de Jornadas — Toolbox\n`;
+      texto += `-----------------------------------------\n`;
+      grupos.forEach((g, idx) => {
+        const itemRes = res && res.resultados && res.resultados[idx] && res.resultados[idx].resultado ? res.resultados[idx].resultado : null;
+        if (g.entrada && g.saida) {
+          texto += `Período ${idx + 1}: ${g.entrada} às ${g.saida} | Normais: ${itemRes ? itemRes.normais : '-'} | Noturnas: ${itemRes ? itemRes.noturnas : '-'} | Not. Red: ${itemRes ? itemRes.not_red : '-'} | Total: ${itemRes ? itemRes.total : '-'}\n`;
+        }
+      });
+      if (res && res.totais && res.totais.tem_totais) {
+        texto += `-----------------------------------------\n`;
+        texto += `TOTAL CONSOLIDADO: ${res.totais.total} (Normais: ${res.totais.normais}, Noturnas: ${res.totais.noturnas}, Not. Reduzida: ${res.totais.not_red})\n`;
+      }
+
+      let copied = false;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          const cRes = await window.pywebview.api.copy_text(texto);
+          if (cRes && cRes.success) copied = true;
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(texto);
+          copied = true;
+        }
+      } catch (e) {}
+
+      if (copied) {
+        showToast('Resumo copiado com sucesso!');
+      } else {
+        showToast('Não foi possível copiar o resumo.');
+      }
+    }
+
+    function showToast(msg) {
+      let toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-      renderTurnos();
-      handleCalcular();
+      renderTabela();
+      calcularTudo();
     });
   </script>
 </body>

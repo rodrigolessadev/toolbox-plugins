@@ -1,7 +1,7 @@
 {
   "name": "Calculadora de Jornadas",
-  "version": "1.3.0",
-  "description": "Cálculo de horas trabalhadas, horas extras e saldos de jornada.",
+  "version": "1.4.0",
+  "description": "Cálculo de jornadas com separação de horas diurnas, noturnas e redução legal CLT.",
   "language": "python",
   "entry": "main.py",
   "icon": "clock-3",
