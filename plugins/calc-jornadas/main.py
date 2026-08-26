@@ -18,16 +18,33 @@ class CalcJornadasApi(BasePluginApi):
         return domain.calcular_totais_jornada(entradas, saidas, j_min)
 
 def main():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.calcjornadas")
+        except Exception:
+            pass
+
     api = CalcJornadasApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
-    create_plugin_window(
+    window = create_plugin_window(
         title="Calculadora de Jornadas",
         entry_html=ui_index,
         js_api=api,
         width=740,
         height=660,
+        min_size=(640, 580),
     )
-    webview.start(debug=False)
+    if webview and window:
+        def on_shown():
+            domain.set_window_taskbar_icon()
+            import threading
+            threading.Timer(0.6, domain.set_window_taskbar_icon).start()
+
+        window.events.shown += on_shown
+
+    if webview:
+        webview.start(debug=False)
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,152 @@
+/* ==========================================================================
+   Calculadora de Jornadas M3 Styling
+   ========================================================================== */
 
-.time-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 1fr 40px;
-  gap: 8px;
+.plugin-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.times-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-input);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.time-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.turn-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.sub-label {
+  font-size: 11px;
+  color: var(--fg-subtle);
+}
+
+.time-input-group input {
+  width: 100%;
+  text-align: center;
+}
+
+.btn-icon-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--danger);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.metric-card {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.metric-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--fg);
+  line-height: 1.2;
+}
+
+.metric-sub {
+  font-size: 10px;
+  color: var(--fg-subtle);
+  margin-top: 4px;
+}
+
+.detalhes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detalhe-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
 }
