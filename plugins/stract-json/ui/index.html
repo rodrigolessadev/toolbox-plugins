@@ -1,63 +1,246 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stract JSON — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Extrator de JSON (Stract JSON)</h1>
-      <p class="header-desc">Extração automática de payloads JSON embutidos em logs e filtragem de campos específicos</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="scan-search"></span>
+        <h1 class="header-title">Stract JSON</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Extração, detecção e formatação de estruturas JSON embutidas em logs, mensagens ou textos brutos.
+      </p>
     </header>
 
+    <!-- Card: Entrada de Texto e Filtro -->
     <div class="card">
-      <div class="card-title"><span data-icon="zap"></span> Texto / Log de Entrada</div>
-      <textarea id="inputText" style="height: 140px; font-family: Consolas, monospace;" placeholder="Cole o texto contendo JSONs embutidos..."></textarea>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <input type="text" id="targetField" placeholder="Campo específico (opcional, ex: responseBody)" style="flex: 1;">
-        <button class="btn btn-primary" onclick="handleExtract()"><span data-icon="zap"></span> Extrair JSONs</button>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-title"><span data-icon="zap"></span> Texto / Log de Origem</div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="clearAll()" title="Limpar campos">
+          <span data-icon="trash"></span> Limpar
+        </button>
+      </div>
+
+      <textarea
+        id="rawInput"
+        class="json-input-area"
+        placeholder="Cole aqui o log, payload ou texto com estruturas JSON embutidas..."
+        autofocus
+      ></textarea>
+
+      <div class="filter-row">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <label class="form-label" for="targetField">Campo Específico <span style="opacity: 0.5; font-weight: 400;">(opcional — ex: id, token, error, payload)</span></label>
+          <input
+            type="text"
+            id="targetField"
+            class="input input-mono"
+            placeholder="Deixe em branco para extrair a estrutura completa..."
+            onkeydown="if(event.key === 'Enter') handleExtract()"
+          />
+        </div>
+        <div style="align-self: flex-end;">
+          <button type="button" class="btn btn-primary" id="btnExtract" onclick="handleExtract()">
+            <span data-icon="scan-search"></span> Extrair JSON
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="card" style="flex: 1; overflow-y: auto;">
-      <div class="card-title" id="resultsTitle"><span data-icon="check"></span> Itens Extraídos</div>
-      <div id="resultsContainer">
-        <div style="color: var(--fg-muted); text-align: center; padding: 16px;">Nenhum JSON extraído ainda.</div>
+    <!-- Card: Resultados Extraídos -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="card-title">
+          <span data-icon="check"></span> Estruturas Extraídas
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span id="resultCountBadge" class="badge badge-muted">0 itens</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnCopyAll" style="display: none;" onclick="copyAllResults()">
+            <span data-icon="copy"></span> Copiar Todos
+          </button>
+        </div>
+      </div>
+
+      <div id="resultsContainer" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+        <div class="empty-state">
+          <span data-icon="info" style="color: var(--accent-hover); transform: scale(1.4);"></span>
+          <span>Cole um texto ou log acima e clique em <strong>Extrair JSON</strong> para visualizar os blocos estruturados.</span>
+        </div>
       </div>
     </div>
   </div>
+
+  <div id="toast" class="toast" style="display: none;">
+    <span data-icon="check" style="color: var(--success);"></span>
+    <span id="toastMsg">Copiado!</span>
+  </div>
+
   <script src="icons.js"></script>
   <script>
-    async function handleExtract() {
-      const text = document.getElementById('inputText').value;
-      const field = document.getElementById('targetField').value;
-      const res = await window.pywebview.api.extract_json(text, field);
-      const container = document.getElementById('resultsContainer');
-      const title = document.getElementById('resultsTitle');
+    let extractedItems = [];
 
-      if (!res.success || res.items.length === 0) {
-        container.innerHTML = `<div style="color: var(--danger); padding: 12px;">${res.message || 'Nenhum JSON encontrado.'}</div>`;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.style.display = 'flex';
+      if (window.renderIcons) window.renderIcons();
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 2200);
+    }
+
+    function clearAll() {
+      document.getElementById('rawInput').value = '';
+      document.getElementById('targetField').value = '';
+      extractedItems = [];
+      document.getElementById('resultCountBadge').textContent = '0 itens';
+      document.getElementById('resultCountBadge').className = 'badge badge-muted';
+      document.getElementById('btnCopyAll').style.display = 'none';
+      document.getElementById('resultsContainer').innerHTML = `
+        <div class="empty-state">
+          <span data-icon="info" style="color: var(--accent-hover); transform: scale(1.4);"></span>
+          <span>Cole um texto ou log acima e clique em <strong>Extrair JSON</strong> para visualizar os blocos estruturados.</span>
+        </div>
+      `;
+      if (window.renderIcons) window.renderIcons();
+    }
+
+    async function handleExtract() {
+      const rawText = document.getElementById('rawInput').value.trim();
+      const targetField = document.getElementById('targetField').value.trim();
+
+      if (!rawText) {
+        showToast('Insira um texto para extração.');
         return;
       }
 
-      title.innerHTML = `<span data-icon="check"></span> ${res.count} item(ns) extraído(s)`;
-      container.innerHTML = res.items.map((item, idx) => `
-        <div class="json-card">
-          <div class="json-card-header">
-            <span class="badge badge-accent">#${idx + 1}</span>
-            <button class="btn btn-secondary btn-sm" onclick="copyItem(${idx})"><span data-icon="copy"></span> Copiar</button>
-          </div>
-          <pre class="json-pre" id="json_item_${idx}">${item}</pre>
+      const container = document.getElementById('resultsContainer');
+      container.innerHTML = `
+        <div class="empty-state">
+          <span data-icon="refresh" style="animation: spin 1s infinite linear;"></span>
+          <span>Analisando e extraindo blocos JSON...</span>
         </div>
-      `).join('');
+      `;
+      if (window.renderIcons) window.renderIcons();
+
+      try {
+        let res = null;
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.extract_json) {
+          res = await window.pywebview.api.extract_json(rawText, targetField);
+        }
+
+        if (res && res.success) {
+          extractedItems = res.items || [];
+          renderResults(extractedItems, targetField);
+        } else {
+          container.innerHTML = `<div style="color: var(--danger); padding: 16px;">${res?.message || 'Nenhum JSON detectado.'}</div>`;
+          document.getElementById('resultCountBadge').textContent = '0 itens';
+          document.getElementById('resultCountBadge').className = 'badge badge-danger';
+          document.getElementById('btnCopyAll').style.display = 'none';
+        }
+      } catch (err) {
+        container.innerHTML = `<div style="color: var(--danger); padding: 16px;">Erro: ${err}</div>`;
+      }
+    }
+
+    function renderResults(items, targetField) {
+      const container = document.getElementById('resultsContainer');
+      const badge = document.getElementById('resultCountBadge');
+      const btnCopyAll = document.getElementById('btnCopyAll');
+
+      badge.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+      badge.className = items.length > 0 ? 'badge badge-accent' : 'badge badge-muted';
+      btnCopyAll.style.display = items.length > 0 ? 'inline-flex' : 'none';
+
+      if (!items.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span data-icon="alert" style="color: var(--warning);"></span>
+            <span>Nenhum bloco JSON ou campo correspondente foi encontrado.</span>
+          </div>
+        `;
+        if (window.renderIcons) window.renderIcons();
+        return;
+      }
+
+      container.innerHTML = items.map((item, idx) => {
+        const itemStr = typeof item === 'object' ? JSON.stringify(item, null, 2) : String(item);
+        const safeAttr = itemStr.replace(/"/g, '&quot;');
+        return `
+          <div class="result-card">
+            <div class="result-header">
+              <span class="badge badge-muted">Bloco #${idx + 1}${targetField ? ' · ' + escapeHtml(targetField) : ''}</span>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="copyItemText(this, '${safeAttr}')">
+                <span data-icon="copy"></span> Copiar
+              </button>
+            </div>
+            <pre class="result-code-block">${escapeHtml(itemStr)}</pre>
+          </div>
+        `;
+      }).join('');
+
       if (window.renderIcons) window.renderIcons();
     }
-    async function copyItem(idx) {
-      const el = document.getElementById(`json_item_${idx}`);
-      if (el) await window.pywebview.api.copy_text(el.textContent);
+
+    async function copyItemText(btn, text) {
+      if (!text) return;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(text);
+        } else {
+          await navigator.clipboard.writeText(text);
+        }
+        showToast('Copiado para a Área de Transferência!');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span data-icon="check"></span> Copiado!';
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = origHtml;
+          btn.classList.remove('btn-primary');
+          btn.classList.add('btn-secondary');
+          if (window.renderIcons) window.renderIcons();
+        }, 1500);
+      } catch (err) {
+        showToast('Erro ao copiar: ' + err);
+      }
+    }
+
+    async function copyAllResults() {
+      if (!extractedItems.length) return;
+      const fullText = extractedItems.map(it => typeof it === 'object' ? JSON.stringify(it, null, 2) : String(it)).join('\n\n');
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(fullText);
+        } else {
+          await navigator.clipboard.writeText(fullText);
+        }
+        showToast('Todos os itens foram copiados!');
+      } catch (err) {
+        showToast('Erro ao copiar: ' + err);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
   </script>
 </body>
