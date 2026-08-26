@@ -114,7 +114,11 @@ html, body {
   gap: 6px;
 }
 
-/* Layout Principal */
+/* Layout Principal com Grid Areas */
+#tocSidebar { grid-area: toc; }
+#editorPane { grid-area: editor; }
+#previewPane { grid-area: preview; }
+
 .main-layout {
   display: grid;
   flex: 1;
@@ -126,26 +130,36 @@ html, body {
 
 .layout-split {
   grid-template-columns: 220px 1fr 1fr;
+  grid-template-areas: "toc editor preview";
 }
 
 .layout-split.toc-collapsed {
   grid-template-columns: 44px 1fr 1fr;
+  grid-template-areas: "toc editor preview";
 }
 
 .layout-reader {
   grid-template-columns: 240px 1fr;
+  grid-template-areas: "toc preview";
 }
 
 .layout-reader.toc-collapsed {
   grid-template-columns: 44px 1fr;
+  grid-template-areas: "toc preview";
+}
+
+.layout-reader #editorPane {
+  display: none !important;
 }
 
 .layout-editor {
   grid-template-columns: 1fr;
+  grid-template-areas: "editor";
 }
 
-.layout-editor #tocSidebar, .layout-editor #previewPane {
-  display: none;
+.layout-editor #tocSidebar,
+.layout-editor #previewPane {
+  display: none !important;
 }
 
 /* Sidebar TOC (Sumário) */

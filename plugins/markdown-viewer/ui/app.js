@@ -152,6 +152,40 @@ function setupEventListeners() {
     });
 
     textarea.addEventListener('scroll', syncScroll);
+
+    // Suporte a indentação com a tecla Tab e Shift+Tab
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const val = textarea.value;
+
+        if (e.shiftKey) {
+          // Shift + Tab (recuar 2 espaços)
+          const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+          if (val.substring(lineStart, lineStart + 2) === '  ') {
+            textarea.value = val.substring(0, lineStart) + val.substring(lineStart + 2);
+            textarea.selectionStart = Math.max(lineStart, start - 2);
+            textarea.selectionEnd = Math.max(lineStart, end - 2);
+          } else if (val.charAt(lineStart) === ' ' || val.charAt(lineStart) === '\t') {
+            textarea.value = val.substring(0, lineStart) + val.substring(lineStart + 1);
+            textarea.selectionStart = Math.max(lineStart, start - 1);
+            textarea.selectionEnd = Math.max(lineStart, end - 1);
+          }
+        } else {
+          // Tab (inserir 2 espaços)
+          textarea.value = val.substring(0, start) + '  ' + val.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + 2;
+        }
+
+        state.content = textarea.value;
+        state.isModified = true;
+        renderDocument();
+        updateStats();
+        updateTitle();
+      }
+    });
   }
 
   // Drag & Drop
@@ -475,6 +509,7 @@ function showToast(msg) {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+window.addEventListener('pywebviewready', loadPluginVersion);
 window.copyCode = copyCode;
 window.toggleTheme = toggleTheme;
 window.toggleTocCollapse = toggleTocCollapse;
