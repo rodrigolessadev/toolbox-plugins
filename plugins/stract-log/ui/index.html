@@ -1,72 +1,216 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stract Log — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Extrator & Filtro de Logs (Stract Log)</h1>
-      <p class="header-desc">Filtragem estruturada por nível de log, regex e remoção de ocorrências repetidas</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="file-search"></span>
+        <h1 class="header-title">Stract Log</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Extração, filtragem e desduplicação de blocos de log por nível (DEBUG/INFO/WARN/ERROR), termos e expressões regulares.
+      </p>
     </header>
 
+    <!-- Card: Entrada de Log e Carregamento -->
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title"><span data-icon="folder"></span> Arquivo ou Texto de Log</div>
-        <button class="btn btn-secondary btn-sm" onclick="handlePickFile()"><span data-icon="folder"></span> Carregar Arquivo...</button>
+        <div class="card-title"><span data-icon="zap"></span> Log de Origem</div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handlePickFile()" title="Carregar arquivo .log ou .txt">
+            <span data-icon="file-up"></span> Abrir Arquivo
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="clearAll()" title="Limpar campos">
+            <span data-icon="trash"></span> Limpar
+          </button>
+        </div>
       </div>
-      <textarea id="inputLogText" class="log-textarea" placeholder="Cole o texto de log aqui ou carregue um arquivo..."></textarea>
-      
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <select id="selectLevel" style="width: 140px;">
-          <option value="TODOS">Todos os Níveis</option>
-          <option value="ERROR">ERROR / FATAL</option>
-          <option value="WARN">WARN / WARNING</option>
-          <option value="INFO">INFO</option>
-          <option value="DEBUG">DEBUG</option>
-        </select>
-        <input type="text" id="inputRegex" placeholder="Filtro Regex / Termo (ex: NullPointerException)" style="flex: 1;">
-        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
-          <input type="checkbox" id="checkDedup"> <span>Dedup</span>
-        </label>
-        <button class="btn btn-primary" onclick="handleFilter()"><span data-icon="zap"></span> Filtrar</button>
+
+      <textarea
+        id="rawInput"
+        class="log-input-area"
+        placeholder="Cole as linhas/blocos de log aqui ou abra um arquivo de log..."
+        autofocus
+      ></textarea>
+
+      <!-- Grade de Filtros -->
+      <div class="filter-grid">
+        <div class="form-group">
+          <label class="form-label" for="levelSelect">Nível do Log</label>
+          <select id="levelSelect" class="input">
+            <option value="TODOS">Todos os níveis</option>
+            <option value="ERROR">ERROR</option>
+            <option value="WARN">WARN</option>
+            <option value="INFO">INFO</option>
+            <option value="DEBUG">DEBUG</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="regexInput">Filtro / Regex <span style="opacity: 0.5; font-weight: 400;">(opcional)</span></label>
+          <input
+            type="text"
+            id="regexInput"
+            class="input input-mono"
+            placeholder="Ex: Exception|Timeout|Status 500"
+            onkeydown="if(event.key === 'Enter') handleFilter()"
+          />
+        </div>
+
+        <div style="padding-bottom: 2px;">
+          <label class="checkbox-container" title="Remove blocos com o mesmo cabeçalho/assinatura">
+            <input type="checkbox" id="chkDeduplicate" />
+            <span>Desduplicar</span>
+          </label>
+        </div>
+
+        <div style="padding-bottom: 2px;">
+          <button type="button" class="btn btn-primary" id="btnFilter" onclick="handleFilter()">
+            <span data-icon="filter"></span> Filtrar Logs
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="card" style="flex: 1;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title" id="resTitle"><span data-icon="check"></span> Logs Filtrados</div>
-        <button class="btn btn-secondary btn-sm" onclick="handleCopyResult()"><span data-icon="copy"></span> Copiar Resultado</button>
+    <!-- Card: Resultados Filtrados -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="card-title">
+          <span data-icon="check"></span> Logs Filtrados
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span id="metricBadge" class="badge badge-muted">0 blocos</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnCopy" style="display: none;" onclick="copyResult()">
+            <span data-icon="copy"></span> Copiar Resultado
+          </button>
+        </div>
       </div>
-      <textarea id="outputLogText" class="log-textarea" style="flex: 1; height: auto;" readonly placeholder="Os logs filtrados aparecerão aqui..."></textarea>
+
+      <pre id="logOutput" class="log-output-area">Cole um log ou abra um arquivo acima e clique em "Filtrar Logs" para processar.</pre>
     </div>
   </div>
+
+  <div id="toast" class="toast" style="display: none;">
+    <span data-icon="check" style="color: var(--success);"></span>
+    <span id="toastMsg">Copiado!</span>
+  </div>
+
   <script src="icons.js"></script>
   <script>
+    let currentResultText = '';
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.style.display = 'flex';
+      if (window.renderIcons) window.renderIcons();
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 2200);
+    }
+
+    function clearAll() {
+      document.getElementById('rawInput').value = '';
+      document.getElementById('regexInput').value = '';
+      document.getElementById('levelSelect').value = 'TODOS';
+      document.getElementById('chkDeduplicate').checked = false;
+      currentResultText = '';
+      document.getElementById('metricBadge').textContent = '0 blocos';
+      document.getElementById('metricBadge').className = 'badge badge-muted';
+      document.getElementById('btnCopy').style.display = 'none';
+      document.getElementById('logOutput').textContent = 'Cole um log ou abra um arquivo acima e clique em "Filtrar Logs" para processar.';
+    }
+
     async function handlePickFile() {
-      const res = await window.pywebview.api.pick_log_file();
-      if (res.success) {
-        document.getElementById('inputLogText').value = res.content;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_log_file) {
+          const res = await window.pywebview.api.pick_log_file();
+          if (res && res.success && res.content) {
+            document.getElementById('rawInput').value = res.content;
+            showToast(`Arquivo "${res.name}" carregado com sucesso!`);
+            handleFilter();
+          }
+        }
+      } catch (err) {
+        showToast('Erro ao abrir arquivo: ' + err);
       }
     }
+
     async function handleFilter() {
-      const text = document.getElementById('inputLogText').value;
-      const regex = document.getElementById('inputRegex').value;
-      const level = document.getElementById('selectLevel').value;
-      const dedup = document.getElementById('checkDedup').checked;
-      const res = await window.pywebview.api.filter_logs(text, regex, level, dedup);
-      if (res.success) {
-        document.getElementById('outputLogText').value = res.result_text;
-        document.getElementById('resTitle').innerHTML = `<span data-icon="check"></span> ${res.filtered_blocks} de ${res.total_blocks} blocos encontrados`;
-        if (window.renderIcons) window.renderIcons();
+      const rawText = document.getElementById('rawInput').value;
+      const regexTerm = document.getElementById('regexInput').value;
+      const level = document.getElementById('levelSelect').value;
+      const deduplicate = document.getElementById('chkDeduplicate').checked;
+
+      if (!rawText.trim()) {
+        showToast('Insira um texto ou log para filtrar.');
+        return;
+      }
+
+      const output = document.getElementById('logOutput');
+      output.textContent = 'Processando blocos de log...';
+
+      try {
+        let res = null;
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.filter_logs) {
+          res = await window.pywebview.api.filter_logs(rawText, regexTerm, level, deduplicate);
+        }
+
+        const badge = document.getElementById('metricBadge');
+        const btnCopy = document.getElementById('btnCopy');
+
+        if (res && res.success) {
+          currentResultText = res.result_text || '';
+          badge.textContent = `${res.filtered_blocks} de ${res.total_blocks} blocos`;
+          badge.className = res.filtered_blocks > 0 ? 'badge badge-accent' : 'badge badge-muted';
+          btnCopy.style.display = res.filtered_blocks > 0 ? 'inline-flex' : 'none';
+          output.textContent = currentResultText || 'Nenhum bloco atendeu aos critérios de filtro informados.';
+        } else {
+          badge.textContent = '0 blocos';
+          badge.className = 'badge badge-danger';
+          btnCopy.style.display = 'none';
+          output.textContent = res?.message || 'Falha ao processar filtros.';
+        }
+      } catch (err) {
+        output.textContent = 'Erro ao processar: ' + err;
       }
     }
-    async function handleCopyResult() {
-      const text = document.getElementById('outputLogText').value;
-      if (text) await window.pywebview.api.copy_text(text);
+
+    async function copyResult() {
+      if (!currentResultText) return;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(currentResultText);
+        } else {
+          await navigator.clipboard.writeText(currentResultText);
+        }
+        showToast('Resultado copiado para a Área de Transferência!');
+        const btn = document.getElementById('btnCopy');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span data-icon="check"></span> Copiado!';
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = origHtml;
+          btn.classList.remove('btn-primary');
+          btn.classList.add('btn-secondary');
+          if (window.renderIcons) window.renderIcons();
+        }, 1500);
+      } catch (err) {
+        showToast('Erro ao copiar: ' + err);
+      }
     }
   </script>
 </body>

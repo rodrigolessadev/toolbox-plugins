@@ -167,7 +167,7 @@
       "id": "stract-log",
       "name": "Stract Log",
       "description": "Filtra e extrai blocos de log por nível, parâmetro adicional e regra de recorrência (mais recente / mais antiga). Salva o resultado em um arquivo .log ao lado do original.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -178,9 +178,10 @@
       ],
       "icon": "file-search",
       "command": "stract-log",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.1.0/stract-log.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-log-1.2.0/stract-log.zip",
+      "min_toolbox_version": "1.22.3",
+      "updated_at": "2026-08-26",
+      "theme_version": "material-3"
     },
     {
       "name": "Analysis Orchestrator",
