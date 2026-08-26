@@ -17,16 +17,37 @@ def read_markdown_file(file_path: str) -> dict:
 
     try:
         content = path.read_text(encoding="utf-8", errors="replace")
+        mtime = path.stat().st_mtime
         stats = analyze_markdown(content)
         return {
             "success": True,
             "path": str(path.resolve()),
             "filename": path.name,
             "content": content,
+            "mtime": mtime,
             "stats": stats
         }
     except Exception as exc:
         return {"success": False, "error": f"Falha ao ler arquivo: {str(exc)}"}
+
+
+def get_file_info(file_path: str) -> dict:
+    """Retorna metadados de modificação do arquivo para Live Watcher/Hot-Reload."""
+    if not file_path:
+        return {"success": False, "error": "Caminho não fornecido."}
+    path = Path(file_path)
+    if not path.exists():
+        return {"success": False, "exists": False}
+    try:
+        stat = path.stat()
+        return {
+            "success": True,
+            "exists": True,
+            "mtime": stat.st_mtime,
+            "size": stat.st_size
+        }
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
 
 
 def save_markdown_file(file_path: str, content: str) -> dict:

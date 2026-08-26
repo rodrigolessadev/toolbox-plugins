@@ -3,13 +3,15 @@
    Identidade visual unificada para plugins pywebview
    ========================================================================== */
 
-:root {
-  /* Cores de Fundo */
+:root, [data-theme="dark"] {
+  /* Cores de Fundo (Dark Mode M3) */
   --bg: #0e1014;
   --bg-card: #161a21;
+  --bg-surface: #161a21;
   --bg-input: #12151c;
   --bg-hover: #1e232d;
   --bg-elevated: #1f2530;
+  --bg-elev-2: #252d3a;
 
   /* Cores de Texto */
   --fg: #e8eaed;
@@ -35,6 +37,10 @@
   --warning: #f59e0b;
   --warning-soft: rgba(245, 158, 11, 0.15);
 
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+
   /* Geometria e Transições */
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -43,6 +49,45 @@
   --transition-normal: 0.25s ease;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --font-mono: "Consolas", "Courier New", monospace;
+}
+
+[data-theme="light"] {
+  /* Cores de Fundo (Light Mode M3) */
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-input: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --bg-elevated: #ffffff;
+  --bg-elev-2: #f1f5f9;
+
+  /* Cores de Texto */
+  --fg: #0f172a;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
+
+  /* Bordas */
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --border-focus: #2563eb;
+
+  /* Acento e Destaques */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-fg: #ffffff;
+
+  /* Status e Alertas */
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 /* Reset Básico */
