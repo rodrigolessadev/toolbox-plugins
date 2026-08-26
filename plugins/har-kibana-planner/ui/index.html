@@ -1,70 +1,278 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HAR Kibana Planner — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">HAR Kibana Planner</h1>
-      <p class="header-desc">Análise de tráfego HTTP (.har) e geração automática de queries Kibana de correlação</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="search-code"></span>
+        <h1 class="header-title">HAR Kibana Planner</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Análise de tráfego HTTP (.har / .json) e geração automática de queries Kibana de correlação e diagnóstico.
+      </p>
     </header>
 
+    <!-- Card: Entrada do Arquivo HAR -->
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title"><span data-icon="folder"></span> Arquivo HAR</div>
-        <button class="btn btn-secondary btn-sm" onclick="handlePickFile()"><span data-icon="folder"></span> Selecionar Arquivo HAR...</button>
+        <div class="card-title"><span data-icon="folder"></span> Arquivo HAR / JSON</div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="clearAll()" title="Limpar conteúdo">
+            <span data-icon="trash"></span> Limpar
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handlePickFile()">
+            <span data-icon="folder"></span> Selecionar Arquivo HAR...
+          </button>
+        </div>
       </div>
-      <textarea id="harContent" style="height: 120px; font-family: Consolas, monospace;" placeholder="Selecione um arquivo .har ou cole seu JSON aqui..."></textarea>
-      <div style="display: flex; justify-content: flex-end;">
-        <button class="btn btn-primary" onclick="handlePlan()"><span data-icon="zap"></span> Planejar Queries Kibana</button>
+      <textarea
+        id="harContent"
+        class="har-input-area"
+        placeholder="Selecione um arquivo .har ou cole seu JSON de tráfego aqui..."
+        oninput="onContentChange()"
+      ></textarea>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="fileNameLabel" style="font-size: 11px; color: var(--fg-muted);">Nenhum arquivo selecionado</span>
+        <button type="button" class="btn btn-primary" id="btnPlan" onclick="handlePlan()">
+          <span data-icon="zap"></span> Planejar Queries Kibana
+        </button>
       </div>
     </div>
 
-    <div class="card" style="flex: 1; overflow-y: auto;">
-      <div class="card-title" id="planTitle"><span data-icon="check"></span> Queries Planejadas</div>
-      <div id="planResults">
-        <div style="color: var(--fg-muted); text-align: center; padding: 16px;">Carregue um arquivo .har para gerar o plano de busca.</div>
+    <!-- Card: Resumo dos Sinais & Queries Planejadas -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="card-title" id="planTitle">
+          <span data-icon="check"></span> Queries Planejadas
+        </div>
+        <span id="planCountBadge" class="badge badge-muted">0 queries</span>
+      </div>
+
+      <!-- Resumo Tonal de Estatísticas do HAR -->
+      <div id="harSummaryContainer" style="display: none;">
+        <div class="har-summary-grid">
+          <div class="summary-pill">
+            <span class="summary-pill-label">Total Requisições</span>
+            <span class="summary-pill-val" id="sumTotal">0</span>
+          </div>
+          <div class="summary-pill">
+            <span class="summary-pill-label">APIs</span>
+            <span class="summary-pill-val" id="sumApi" style="color: var(--accent-hover);">0</span>
+          </div>
+          <div class="summary-pill">
+            <span class="summary-pill-label">Falhas (HTTP 4xx/5xx)</span>
+            <span class="summary-pill-val" id="sumFailed" style="color: var(--danger);">0</span>
+          </div>
+          <div class="summary-pill">
+            <span class="summary-pill-label">Janela Temporal</span>
+            <span class="summary-pill-val" id="sumTime" style="font-size: 11px; font-weight: 500;">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Container de Resultados com Scroll -->
+      <div id="planResults" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+        <div class="empty-state">
+          <span data-icon="info" style="color: var(--accent-hover); transform: scale(1.4);"></span>
+          <span>Selecione ou cole um arquivo HAR acima para gerar automaticamente o plano de busca no Kibana.</span>
+        </div>
       </div>
     </div>
   </div>
+
+  <div id="toast" class="toast" style="display: none;">
+    <span data-icon="check" style="color: var(--success);"></span>
+    <span id="toastMsg">Copiado!</span>
+  </div>
+
   <script src="icons.js"></script>
   <script>
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = msg;
+      toast.style.display = 'flex';
+      if (window.renderIcons) window.renderIcons();
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 2200);
+    }
+
+    function clearAll() {
+      document.getElementById('harContent').value = '';
+      document.getElementById('fileNameLabel').textContent = 'Nenhum arquivo selecionado';
+      document.getElementById('harSummaryContainer').style.display = 'none';
+      document.getElementById('planCountBadge').textContent = '0 queries';
+      document.getElementById('planCountBadge').className = 'badge badge-muted';
+      document.getElementById('planResults').innerHTML = `
+        <div class="empty-state">
+          <span data-icon="info" style="color: var(--accent-hover); transform: scale(1.4);"></span>
+          <span>Selecione ou cole um arquivo HAR acima para gerar automaticamente o plano de busca no Kibana.</span>
+        </div>
+      `;
+      if (window.renderIcons) window.renderIcons();
+    }
+
+    function onContentChange() {
+      const txt = document.getElementById('harContent').value.trim();
+      if (txt.length > 50) {
+        document.getElementById('fileNameLabel').textContent = 'Conteúdo manual inserido (' + (txt.length > 1024 ? Math.round(txt.length / 1024) + ' KB' : txt.length + ' B') + ')';
+      } else if (!txt) {
+        document.getElementById('fileNameLabel').textContent = 'Nenhum arquivo selecionado';
+      }
+    }
+
     async function handlePickFile() {
-      const res = await window.pywebview.api.pick_har_file();
-      if (res.success) {
-        document.getElementById('harContent').value = res.content;
-        handlePlan();
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.pick_har_file) return;
+        const res = await window.pywebview.api.pick_har_file();
+        if (res.success && res.content) {
+          document.getElementById('harContent').value = res.content;
+          document.getElementById('fileNameLabel').textContent = res.name || res.path || 'Arquivo carregado';
+          await handlePlan();
+        }
+      } catch (err) {
+        showToast('Erro ao abrir arquivo: ' + err);
       }
     }
+
     async function handlePlan() {
-      const txt = document.getElementById('harContent').value;
-      if (!txt) return;
-      const res = await window.pywebview.api.plan_queries(txt);
+      const txt = document.getElementById('harContent').value.trim();
+      if (!txt) {
+        showToast('Insira ou selecione um arquivo HAR.');
+        return;
+      }
+
       const container = document.getElementById('planResults');
-      if (res.success && res.data && res.data.queries) {
-        const queries = res.data.queries;
-        document.getElementById('planTitle').innerHTML = `<span data-icon="check"></span> ${queries.length} Queries Geradas`;
-        container.innerHTML = queries.map((q, idx) => `
-          <div class="query-card">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span class="badge badge-accent">${q.strategy || 'Kibana Query'}</span>
-              <button class="btn btn-secondary btn-sm" onclick="copyQuery('${q.query}')"><span data-icon="copy"></span> Copiar</button>
-            </div>
-            <div style="font-family: Consolas, monospace; font-size: 12px; color: var(--fg);">${q.query}</div>
-            <div style="font-size: 11px; color: var(--fg-muted); margin-top: 4px;">${q.reason || ''}</div>
-          </div>
-        `).join('');
-        if (window.renderIcons) window.renderIcons();
-      } else {
-        container.innerHTML = `<div style="color: var(--danger);">${res.message || 'Erro ao processar HAR.'}</div>`;
+      container.innerHTML = `
+        <div class="empty-state">
+          <span data-icon="refresh" style="animation: spin 1s infinite linear;"></span>
+          <span>Analisando tráfego e planejando queries...</span>
+        </div>
+      `;
+      if (window.renderIcons) window.renderIcons();
+
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.plan_queries) return;
+        const res = await window.pywebview.api.plan_queries(txt);
+        if (res.success && res.data) {
+          renderPlanResult(res.data);
+        } else {
+          container.innerHTML = `<div style="color: var(--danger); padding: 16px;">${res.message || 'Erro ao processar arquivo HAR.'}</div>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<div style="color: var(--danger); padding: 16px;">Erro: ${err}</div>`;
       }
     }
-    async function copyQuery(text) {
-      if (text) await window.pywebview.api.copy_text(text);
+
+    function renderPlanResult(data) {
+      const container = document.getElementById('planResults');
+      const summary = data.har_summary || {};
+      const queries = data.query_plan || [];
+
+      // Renderiza resumo
+      if (summary.total_entries !== undefined) {
+        document.getElementById('harSummaryContainer').style.display = 'block';
+        document.getElementById('sumTotal').textContent = summary.total_entries || 0;
+        document.getElementById('sumApi').textContent = summary.api_entries || 0;
+        document.getElementById('sumFailed').textContent = summary.failed_entries || 0;
+        
+        let timeStr = '--';
+        if (summary.time_range && summary.time_range.start) {
+          const s = summary.time_range.start.split('T')[1]?.replace('Z', '') || summary.time_range.start;
+          const e = summary.time_range.end?.split('T')[1]?.replace('Z', '') || summary.time_range.end;
+          timeStr = `${s} → ${e}`;
+        }
+        document.getElementById('sumTime').textContent = timeStr;
+      }
+
+      // Renderiza badge de contagem
+      const countBadge = document.getElementById('planCountBadge');
+      countBadge.textContent = `${queries.length} queries`;
+      countBadge.className = queries.length > 0 ? 'badge badge-accent' : 'badge badge-muted';
+
+      if (!queries.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span data-icon="alert" style="color: var(--warning);"></span>
+            <span>Nenhuma query pôde ser planejada a partir deste arquivo HAR.</span>
+          </div>
+        `;
+        if (window.renderIcons) window.renderIcons();
+        return;
+      }
+
+      container.innerHTML = queries.map((q, idx) => {
+        const queryText = q.kql || (typeof q.query_dsl === 'object' ? JSON.stringify(q.query_dsl, null, 2) : String(q.query_dsl || ''));
+        const safeQueryAttr = queryText.replace(/"/g, '&quot;');
+        const badgeClass = q.strategy?.includes('failure') ? 'badge-danger' : q.is_exact ? 'badge-success' : 'badge-accent';
+
+        return `
+          <div class="query-card">
+            <div class="query-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="badge ${badgeClass}">${q.strategy || 'Kibana Query'}</span>
+                <span style="font-size: 11px; color: var(--fg-muted);">Prioridade #${q.priority || idx + 1}</span>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="copyQueryText(this, '${safeQueryAttr}')">
+                <span data-icon="copy"></span> Copiar KQL
+              </button>
+            </div>
+            <pre class="query-code-block">${escapeHtml(queryText)}</pre>
+            <div class="query-reason">
+              <span data-icon="info" style="color: var(--accent-hover);"></span>
+              <span>${escapeHtml(q.reason || '')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (window.renderIcons) window.renderIcons();
+    }
+
+    async function copyQueryText(btn, text) {
+      if (!text) return;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(text);
+        } else {
+          await navigator.clipboard.writeText(text);
+        }
+        showToast('Query KQL copiada para a Área de Transferência!');
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span data-icon="check"></span> Copiado!';
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = origHtml;
+          btn.classList.remove('btn-primary');
+          btn.classList.add('btn-secondary');
+          if (window.renderIcons) window.renderIcons();
+        }, 1500);
+      } catch (err) {
+        showToast('Falha ao copiar: ' + err);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
   </script>
 </body>

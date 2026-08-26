@@ -18,8 +18,13 @@ try:
 except ImportError:
     webview = None
 
+import importlib.util
 from shared.web_utils import BasePluginApi, create_plugin_window
-import domain
+
+domain_path = PLUGIN_DIR / "domain.py"
+spec = importlib.util.spec_from_file_location("logon_aws_domain", domain_path)
+domain = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(domain)
 
 
 class LogonAwsApi(BasePluginApi):

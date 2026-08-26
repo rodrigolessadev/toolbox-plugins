@@ -9,9 +9,14 @@ PLUGINS_ROOT = PLUGIN_DIR.parent
 if str(PLUGINS_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGINS_ROOT))
 
+import importlib.util
 from shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard
-import domain
 import webview
+
+domain_path = PLUGIN_DIR / "domain.py"
+spec = importlib.util.spec_from_file_location("markdown_viewer_domain", domain_path)
+domain = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(domain)
 
 
 class MarkdownViewerApi(BasePluginApi):
