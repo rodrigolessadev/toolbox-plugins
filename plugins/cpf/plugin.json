@@ -1,10 +1,10 @@
 {
   "name": "Validador de CPF",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Validação de dígitos verificadores e geração de CPFs válidos para testes.",
   "language": "python",
   "entry": "main.py",
   "icon": "badge-check",
-  "min_toolbox_version": "1.0.0",
+  "min_toolbox_version": "1.22.3",
   "theme_version": "material-3"
 }
