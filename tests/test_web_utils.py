@@ -28,6 +28,17 @@ def test_base_plugin_api():
     res_copy = api.copy_text("teste de copia")
     assert isinstance(res_copy, dict)
     assert "success" in res_copy
+    assert res_copy["success"] is True
+
+    res_none = api.copy_text(None)
+    assert res_none["success"] is False
+
+
+def test_copy_to_clipboard_functionality():
+    assert copy_to_clipboard(None) is False
+    assert copy_to_clipboard("") is True
+    assert copy_to_clipboard("console.log('Hello World!');\nconst x = 42;") is True
+    assert copy_to_clipboard("Caractéres acentuados e emojis 🚀✨") is True
 
 
 def test_create_plugin_window_validations(tmp_path: Path):

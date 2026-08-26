@@ -450,16 +450,57 @@ async function handleExportHtml() {
   }
 }
 
-async function copyRawMarkdown() {
+async function copyTextToClipboard(text) {
+  if (text === undefined || text === null) return false;
+
+  // 1. Tenta via backend Python (pywebview API)
   try {
     if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
-      await window.pywebview.api.copy_text(state.content);
-    } else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(state.content);
+      const res = await window.pywebview.api.copy_text(text);
+      if (res && res.success) return true;
     }
-    showToast('Markdown bruto copiado!');
   } catch (e) {
-    console.error(e);
+    console.warn('Falha na cópia via pywebview.api.copy_text:', e);
+  }
+
+  // 2. Tenta via Clipboard API padrão
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) {
+    console.warn('Falha na cópia via navigator.clipboard:', e);
+  }
+
+  // 3. Fallback clássico via elemento textarea invisível e execCommand
+  try {
+    const tempTextArea = document.createElement('textarea');
+    tempTextArea.value = text;
+    tempTextArea.style.position = 'fixed';
+    tempTextArea.style.left = '-9999px';
+    tempTextArea.style.top = '0';
+    tempTextArea.style.opacity = '0';
+    tempTextArea.setAttribute('readonly', '');
+    document.body.appendChild(tempTextArea);
+    tempTextArea.focus();
+    tempTextArea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(tempTextArea);
+    if (successful) return true;
+  } catch (e) {
+    console.error('Falha no fallback de cópia via execCommand:', e);
+  }
+
+  return false;
+}
+
+async function copyRawMarkdown() {
+  const success = await copyTextToClipboard(state.content);
+  if (success) {
+    showToast('Markdown bruto copiado!');
+  } else {
+    showToast('Não foi possível copiar o Markdown.');
   }
 }
 
@@ -470,21 +511,20 @@ async function copyCode(btn) {
   if (!code) return;
 
   const txt = code.innerText || code.textContent;
-  try {
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
-      await window.pywebview.api.copy_text(txt);
-    } else if (navigator.clipboard) {
-      await navigator.clipboard.writeText(txt);
-    }
+  const success = await copyTextToClipboard(txt);
+
+  if (success) {
     const orig = btn.innerHTML;
     btn.innerHTML = `<span data-icon="check" style="color:var(--success);"></span> Copiado!`;
+    btn.classList.add('copied');
     if (window.renderIcons) window.renderIcons();
     setTimeout(() => {
       btn.innerHTML = orig;
+      btn.classList.remove('copied');
       if (window.renderIcons) window.renderIcons();
-    }, 1200);
-  } catch (e) {
-    console.error(e);
+    }, 1500);
+  } else {
+    showToast('Não foi possível copiar o código.');
   }
 }
 

@@ -465,6 +465,12 @@ html, body {
   border-color: var(--accent);
 }
 
+.btn-copy-code.copied {
+  background: var(--success-soft, rgba(76, 195, 138, 0.16));
+  color: var(--success, #4cc38a);
+  border-color: var(--success, #4cc38a);
+}
+
 .code-block-wrapper pre {
   margin: 0;
   padding: 12px 16px;
