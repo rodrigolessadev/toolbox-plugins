@@ -1,8 +1,9 @@
 {
   "name": "HAR Kibana Planner",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Parser de arquivos HAR e planejador de queries para Kibana.",
   "language": "python",
   "entry": "main.py",
-  "icon": "search-code"
+  "icon": "search-code",
+  "theme_version": "material-3"
 }

@@ -5,16 +5,23 @@
     {
       "id": "har-kibana-planner",
       "name": "HAR Kibana Planner",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "description": "Gera planos de consulta determinísticos no Elasticsearch/Kibana a partir de arquivos HAR 1.2.",
       "author": "Rodrigo Lessa",
-      "icon": "search-code",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/har-kibana-planner-1.1.0/har-kibana-planner.zip",
-      "entry": "main.py",
-      "updated_at": "2026-08-19",
+      "language": "python",
       "tags": [
-        "har-kibana-planner"
-      ]
+        "har",
+        "kibana",
+        "elasticsearch",
+        "logs",
+        "debug"
+      ],
+      "icon": "search-code",
+      "command": "har-kibana-planner",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/har-kibana-planner-1.2.0/har-kibana-planner.zip",
+      "min_toolbox_version": "1.22.3",
+      "updated_at": "2026-08-26",
+      "theme_version": "material-3"
     },
     {
       "id": "gerador-afd",

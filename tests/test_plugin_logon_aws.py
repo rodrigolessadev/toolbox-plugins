@@ -8,12 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import sys
+import importlib.util
 
 ROOT = Path(__file__).parent.parent
 PLUGIN_DIR = ROOT / "plugins" / "logon-aws"
-sys.path.insert(0, str(PLUGIN_DIR))
 
-import domain
+spec = importlib.util.spec_from_file_location("logon_aws_domain", PLUGIN_DIR / "domain.py")
+domain = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(domain)
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +132,7 @@ def test_check_sts_session(mock_run: MagicMock) -> None:
     assert "expired" in err
 
 
-@patch("domain.check_sts_session")
+@patch.object(domain, "check_sts_session")
 @patch.object(domain.AwsTunnelManager, "start_tunnel")
 def test_one_click_connect_with_active_session(
     mock_start_tunnel: MagicMock,
@@ -152,7 +154,7 @@ def test_one_click_connect_with_active_session(
     mock_start_tunnel.assert_called_once_with("test-profile", 42586, "sa-east-1")
 
 
-@patch("domain.check_sts_session")
+@patch.object(domain, "check_sts_session")
 @patch.object(domain.AwsTunnelManager, "run_sso_login")
 def test_one_click_connect_with_expired_session(
     mock_sso_login: MagicMock,
@@ -271,8 +273,8 @@ def test_stop_all_cleans_active_processes() -> None:
     mgr.sso_process = mock_s_proc
     mgr.current_state = "connected"
 
-    with patch("domain.terminate_process_tree") as mock_term, \
-         patch("domain.set_window_taskbar_icon") as mock_icon:
+    with patch.object(domain, "terminate_process_tree") as mock_term, \
+         patch.object(domain, "set_window_taskbar_icon") as mock_icon:
         mgr.stop_all()
         assert mock_term.call_count == 2
         assert mgr.process is None

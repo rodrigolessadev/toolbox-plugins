@@ -220,3 +220,33 @@ def test_20_protocolo_toolbox_v1():
     assert resp["status"] == "success"
     assert resp["protocol_version"] == "1.0"
     assert resp["request_id"] == "req_test_kibana"
+
+
+def test_21_manifest_theme_and_icon():
+    manifest_path = plugin_root / "plugin.json"
+    assert manifest_path.exists()
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data.get("theme_version") == "material-3"
+    assert data.get("icon") == "search-code"
+    assert data.get("version") == "1.2.0"
+
+
+def test_22_search_code_ico_exists():
+    ico_path = plugin_root / "ui" / "assets" / "search-code.ico"
+    assert ico_path.exists()
+    assert ico_path.stat().st_size > 0
+
+
+def test_23_set_window_taskbar_icon():
+    res = domain_mod.set_window_taskbar_icon(hwnd=99999999)
+    assert isinstance(res, bool)
+
+
+def test_24_api_version_and_copy():
+    api = main_mod.HarKibanaApi()
+    v = api.get_plugin_version()
+    assert v["success"] is True
+    assert v["version"] == "1.2.0"
+    c = api.copy_text("test_kql_query")
+    assert c["success"] is True
+
