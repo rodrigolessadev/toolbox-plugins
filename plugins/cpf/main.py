@@ -21,16 +21,33 @@ class CpfApi(BasePluginApi):
         return domain.generate_cpf(formatted)
 
 def main():
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.cpf")
+        except Exception:
+            pass
+
     api = CpfApi()
     ui_index = Path(__file__).parent / "ui" / "index.html"
-    create_plugin_window(
+    window = create_plugin_window(
         title="Validador & Gerador de CPF",
         entry_html=ui_index,
         js_api=api,
-        width=640,
-        height=580,
+        width=660,
+        height=620,
+        min_size=(580, 540),
     )
-    webview.start(debug=False)
+    if webview and window:
+        def on_shown():
+            domain.set_window_taskbar_icon()
+            import threading
+            threading.Timer(0.6, domain.set_window_taskbar_icon).start()
+
+        window.events.shown += on_shown
+
+    if webview:
+        webview.start(debug=False)
 
 if __name__ == "__main__":
     main()
