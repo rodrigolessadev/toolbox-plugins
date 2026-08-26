@@ -20,7 +20,7 @@
       "id": "gerador-afd",
       "name": "Gerador de AFD",
       "description": "Gera arquivo AFD (Arquivo de Fonte de Dados) no padrão REP-C com CRC16. Suporta múltiplos colaboradores, horários e intervalo de datas.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -31,8 +31,8 @@
       ],
       "icon": "file-clock",
       "command": "gerador-afd",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.1.0/gerador-afd.zip",
-      "min_toolbox_version": "1.0.0",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.2.0/gerador-afd.zip",
+      "min_toolbox_version": "1.22.3",
       "updated_at": "2026-08-26",
       "theme_version": "material-3"
     },
