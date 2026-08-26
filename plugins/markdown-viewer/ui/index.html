@@ -31,8 +31,8 @@
       </div>
 
       <div class="doc-info">
-        <span class="badge badge-accent">Material 3</span>
         <span id="docTitle" class="doc-title">sem-titulo.md</span>
+        <span id="pluginVersionBadge" class="badge badge-accent">v1.0.0</span>
       </div>
 
       <div class="toolbar-right">
@@ -47,15 +47,37 @@
             <span data-icon="code"></span> Editor
           </button>
         </div>
+
+        <button type="button" class="btn btn-secondary btn-sm" id="btnThemeToggle" onclick="toggleTheme()" title="Alternar Tema Claro / Escuro">
+          <span data-icon="sun" id="themeIcon"></span>
+        </button>
       </div>
     </header>
 
+    <!-- Banner de Notificação de Modificação Externa -->
+    <div id="externalBanner" class="external-banner">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span data-icon="alert-circle"></span>
+        <span>Este arquivo foi modificado externamente por outro aplicativo.</span>
+      </div>
+      <div class="banner-actions">
+        <button type="button" class="btn btn-primary btn-sm" onclick="applyExternalReload()">Recarregar Arquivo</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="dismissExternalBanner()">Manter Alterações Locais</button>
+      </div>
+    </div>
+
     <!-- Main Layout (TOC + Editor + Preview) -->
     <main id="mainLayout" class="main-layout layout-split">
-      <!-- Table of Contents Sidebar -->
+      <!-- Table of Contents Sidebar (Retrátil) -->
       <aside id="tocSidebar" class="toc-sidebar">
-        <div class="toc-title">
-          <span data-icon="list"></span> Sumário
+        <div class="toc-header" onclick="toggleTocCollapse()" title="Recolher / Expandir Sumário">
+          <div class="toc-title">
+            <span data-icon="list"></span>
+            <span class="toc-title-text">Sumário</span>
+          </div>
+          <button type="button" class="btn-icon-subtle" id="btnToggleToc">
+            <span data-icon="chevron-left" id="tocIconToggle"></span>
+          </button>
         </div>
         <nav id="tocList" class="toc-list">
           <!-- Heading links rendered here -->
@@ -67,7 +89,7 @@
         <textarea id="editorTextarea" class="editor-textarea" placeholder="Digite ou cole markdown aqui..."></textarea>
       </section>
 
-      <!-- Preview Pane -->
+      <!-- Preview Pane (Scroll irrestrito) -->
       <section id="previewPane" class="preview-pane">
         <article id="previewContent" class="preview-content">
           <!-- Parsed HTML rendered here -->
@@ -85,7 +107,7 @@
         <span id="statChars">0 caracteres</span>
       </div>
       <div class="status-right">
-        <span>Arraste e solte arquivos <code>.md</code> aqui</span>
+        <span id="watchStatus">Sincronização em tempo real ativa</span>
         <span>•</span>
         <span class="badge badge-muted">UTF-8</span>
       </div>

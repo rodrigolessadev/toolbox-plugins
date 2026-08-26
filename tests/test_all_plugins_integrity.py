@@ -19,6 +19,7 @@ OFFICIAL_LUCIDE_ICONS = {
     "cpf": "badge-check",
     "novo-ticket": "ticket",
     "logon-aws": "cloud-cog",
+    "markdown-viewer": "file-text",
 }
 
 def test_catalog_exists_and_valid():

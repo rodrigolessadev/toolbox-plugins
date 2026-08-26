@@ -98,3 +98,12 @@ def test_markdown_viewer_api(tmp_path: Path):
     res_stats = api.analyze_text("# Teste")
     assert res_stats["success"] is True
     assert res_stats["stats"]["heading_count"] == 1
+
+    res_info = api.get_file_info(str(test_file))
+    assert res_info["success"] is True
+    assert res_info["exists"] is True
+    assert "mtime" in res_info
+
+    res_ver = api.get_plugin_version()
+    assert res_ver["success"] is True
+    assert "version" in res_ver

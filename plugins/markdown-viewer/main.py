@@ -92,6 +92,22 @@ class MarkdownViewerApi(BasePluginApi):
         except Exception as exc:
             return {"success": False, "error": f"Erro ao exportar HTML: {str(exc)}"}
 
+    def get_file_info(self, path: str) -> dict:
+        """Retorna informações de modificação do arquivo para Hot-Reload."""
+        return domain.get_file_info(path)
+
+    def get_plugin_version(self) -> dict:
+        """Retorna a versão do plugin declarada no plugin.json."""
+        try:
+            pj = PLUGIN_DIR / "plugin.json"
+            if pj.exists():
+                import json
+                data = json.loads(pj.read_text(encoding="utf-8"))
+                return {"success": True, "version": data.get("version", "1.0.0")}
+        except Exception:
+            pass
+        return {"success": True, "version": "1.0.0"}
+
 
 def main():
     if sys.platform == "win32":

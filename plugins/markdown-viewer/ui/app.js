@@ -6,8 +6,13 @@ let state = {
   currentPath: '',
   filename: 'sem-titulo.md',
   content: '',
+  lastMtime: 0,
+  pendingExternalContent: null,
+  pendingExternalMtime: 0,
   viewMode: 'split', // 'reader' | 'split' | 'editor'
-  isModified: false
+  isModified: false,
+  isTocCollapsed: false,
+  theme: 'dark'
 };
 
 const SAMPLE_MARKDOWN = `# 🚀 Visualizador de Markdown — Toolbox
@@ -23,7 +28,9 @@ Bem-vindo ao **Visualizador & Editor de Markdown** no padrão oficial **Material
 
 - **Visualização Rica:** Suporte a GitHub Flavored Markdown (GFM), tabelas, alertas e listas de tarefas.
 - **Destaque de Sintaxe:** Blocos de código coloridos com botão de cópia rápida em 1 clique.
-- **Table of Contents (TOC):** Sumário lateral dinâmico navegável automaticamente gerado dos cabeçalhos.
+- **Table of Contents (TOC) Retrátil:** Sumário lateral navegável que pode ser recolhido para leitura em tela cheia.
+- **Live Hot-Reload:** Qualquer alteração feita externamente no arquivo aberto reflete em tempo real nesta janela.
+- **Temas Claro & Escuro:** Alterne entre os temas Claro e Escuro clicando no ícone do sol/lua na barra superior.
 - **Modos de Exibição:** Modo Leitor (*Zen View*), Modo Dividido (*Split-View*) e Modo Editor Puro.
 
 ---
@@ -49,7 +56,7 @@ print(f"Média apurada: {resultado['media']}")
 | :--- | :---: | :---: | ---: |
 | **Toolbox Core** | \`v1.22.3\` | 🟢 Ativo | Windows 10/11 |
 | **Marketplace** | \`v4.5.0\` | 🟢 Ativo | Multi-plugins |
-| **Theme System** | \`M3\` | 🎨 Dark M3 | Full CSS Tokens |
+| **Theme System** | \`M3\` | 🎨 Dark & Light M3 | Full CSS Tokens |
 
 ---
 
@@ -57,15 +64,19 @@ print(f"Média apurada: {resultado['media']}")
 
 - [x] Implementar parser standalone GFM
 - [x] Suporte a alertas e notas GitHub (\`[!NOTE]\`, \`[!WARNING]\`, etc.)
-- [x] Gerar sumário lateral (TOC) dinâmico
-- [x] Drag & Drop de arquivos locais
-- [ ] Exportação direta para PDF
+- [x] Sumário lateral retrátil com 1 clique
+- [x] Sincronização e Hot-reload de arquivos em tempo real
+- [x] Alternador de tema Claro / Escuro com persistência
+- [x] Scroll completo irrestrito para documentos longos
 
 > [!TIP]
 > Use os atalhos de teclado **Ctrl+O** (Abrir), **Ctrl+S** (Salvar) e **Ctrl+N** (Novo) para navegar com máxima produtividade.
 `;
 
 function init() {
+  initTheme();
+  loadPluginVersion();
+
   const textarea = document.getElementById('editorTextarea');
   if (textarea) {
     textarea.value = SAMPLE_MARKDOWN;
@@ -75,6 +86,58 @@ function init() {
   setupEventListeners();
   renderDocument();
   updateViewMode('split');
+  startFileWatcher();
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('toolbox_theme') || 'dark';
+  applyTheme(savedTheme);
+}
+
+function applyTheme(theme) {
+  state.theme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('toolbox_theme', theme);
+
+  const iconEl = document.getElementById('themeIcon');
+  if (iconEl) {
+    iconEl.setAttribute('data-icon', theme === 'dark' ? 'sun' : 'moon');
+  }
+  if (window.renderIcons) window.renderIcons();
+}
+
+function toggleTheme() {
+  const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(newTheme);
+}
+
+async function loadPluginVersion() {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_plugin_version) {
+      const res = await window.pywebview.api.get_plugin_version();
+      if (res.success && res.version) {
+        const badge = document.getElementById('pluginVersionBadge');
+        if (badge) badge.textContent = `v${res.version}`;
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function toggleTocCollapse() {
+  state.isTocCollapsed = !state.isTocCollapsed;
+  const layout = document.getElementById('mainLayout');
+  const iconToggle = document.getElementById('tocIconToggle');
+
+  if (state.isTocCollapsed) {
+    layout.classList.add('toc-collapsed');
+    if (iconToggle) iconToggle.setAttribute('data-icon', 'chevron-right');
+  } else {
+    layout.classList.remove('toc-collapsed');
+    if (iconToggle) iconToggle.setAttribute('data-icon', 'chevron-left');
+  }
+  if (window.renderIcons) window.renderIcons();
 }
 
 function setupEventListeners() {
@@ -88,7 +151,6 @@ function setupEventListeners() {
       updateTitle();
     });
 
-    // Sincronização de scroll simples
     textarea.addEventListener('scroll', syncScroll);
   }
 
@@ -111,7 +173,7 @@ function setupEventListeners() {
     if (files && files.length > 0) {
       const file = files[0];
       const text = await file.text();
-      loadFileContent(file.name, file.path || '', text);
+      loadFileContent(file.name, file.path || '', text, Date.now());
     }
   });
 
@@ -210,14 +272,16 @@ function updateViewMode(mode) {
 
   [btnReader, btnSplit, btnEditor].forEach(b => b && b.classList.remove('active'));
 
+  main.classList.remove('layout-reader', 'layout-split', 'layout-editor');
+
   if (mode === 'reader') {
-    main.className = 'layout-reader';
+    main.classList.add('layout-reader');
     if (btnReader) btnReader.classList.add('active');
   } else if (mode === 'editor') {
-    main.className = 'layout-editor';
+    main.classList.add('layout-editor');
     if (btnEditor) btnEditor.classList.add('active');
   } else {
-    main.className = 'layout-split';
+    main.classList.add('layout-split');
     if (btnSplit) btnSplit.classList.add('active');
   }
 }
@@ -229,18 +293,21 @@ async function handleOpenFile() {
     }
     const res = await window.pywebview.api.open_file_dialog();
     if (res.success) {
-      loadFileContent(res.filename, res.path, res.content);
+      loadFileContent(res.filename, res.path, res.content, res.mtime || 0);
     }
   } catch (err) {
     console.error('Erro ao abrir arquivo:', err);
   }
 }
 
-function loadFileContent(filename, path, content) {
+function loadFileContent(filename, path, content, mtime = 0) {
   state.filename = filename;
   state.currentPath = path;
   state.content = content;
+  state.lastMtime = mtime;
   state.isModified = false;
+  state.pendingExternalContent = null;
+  dismissExternalBanner();
 
   const textarea = document.getElementById('editorTextarea');
   if (textarea) textarea.value = content;
@@ -259,6 +326,11 @@ async function handleSaveFile() {
       state.currentPath = res.path;
       state.filename = res.filename;
       state.isModified = false;
+      
+      // Atualiza o timestamp após salvar para não disparar falso reload
+      const info = await window.pywebview.api.get_file_info(res.path);
+      if (info && info.mtime) state.lastMtime = info.mtime;
+
       updateTitle();
       showToast('Arquivo salvo com sucesso!');
     }
@@ -273,7 +345,7 @@ function handleNewFile() {
       return;
     }
   }
-  loadFileContent('sem-titulo.md', '', '# Novo Documento\n\nComece a digitar seu markdown aqui...');
+  loadFileContent('sem-titulo.md', '', '# Novo Documento\n\nComece a digitar seu markdown aqui...', 0);
 }
 
 async function handleExportHtml() {
@@ -329,6 +401,64 @@ async function copyCode(btn) {
   }
 }
 
+// ─────────────────────── Live Watcher / Hot-Reload ───────────────────────
+
+function startFileWatcher() {
+  setInterval(async () => {
+    if (!state.currentPath) return;
+    try {
+      if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.get_file_info) return;
+
+      const info = await window.pywebview.api.get_file_info(state.currentPath);
+      if (info && info.success && info.exists && info.mtime) {
+        if (state.lastMtime === 0) {
+          state.lastMtime = info.mtime;
+          return;
+        }
+
+        if (info.mtime > state.lastMtime) {
+          const res = await window.pywebview.api.read_file(state.currentPath);
+          if (res && res.success) {
+            if (!state.isModified) {
+              // Recarrega silenciosamente e atualiza a visualização
+              state.content = res.content;
+              state.lastMtime = info.mtime;
+              const textarea = document.getElementById('editorTextarea');
+              if (textarea) textarea.value = res.content;
+              renderDocument();
+              showToast('⚡ Documento atualizado em tempo real!');
+            } else {
+              // Há alterações locais não salvas, exibe o banner de aviso
+              state.pendingExternalContent = res.content;
+              state.pendingExternalMtime = info.mtime;
+              showExternalModifiedBanner();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro na verificação do arquivo:', e);
+    }
+  }, 1200);
+}
+
+function showExternalModifiedBanner() {
+  const banner = document.getElementById('externalBanner');
+  if (banner) banner.classList.add('show');
+}
+
+function dismissExternalBanner() {
+  const banner = document.getElementById('externalBanner');
+  if (banner) banner.classList.remove('show');
+}
+
+function applyExternalReload() {
+  if (state.pendingExternalContent !== null) {
+    loadFileContent(state.filename, state.currentPath, state.pendingExternalContent, state.pendingExternalMtime);
+    showToast('Arquivo recarregado com o conteúdo do disco!');
+  }
+}
+
 function showToast(msg) {
   let toast = document.getElementById('toast');
   if (!toast) {
@@ -341,8 +471,12 @@ function showToast(msg) {
   toast.classList.add('show');
   setTimeout(() => {
     toast.classList.remove('show');
-  }, 2000);
+  }, 2200);
 }
 
 document.addEventListener('DOMContentLoaded', init);
 window.copyCode = copyCode;
+window.toggleTheme = toggleTheme;
+window.toggleTocCollapse = toggleTocCollapse;
+window.applyExternalReload = applyExternalReload;
+window.dismissExternalBanner = dismissExternalBanner;
