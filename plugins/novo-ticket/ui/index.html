@@ -28,6 +28,9 @@
       <button id="tabBtn2" class="tab-btn" onclick="switchTab('tabLogs')">
         <span data-icon="calendar"></span> 2. Filtragem de Logs
       </button>
+      <button id="tabBtn3" class="tab-btn" onclick="switchTab('tabFiles')">
+        <span data-icon="file-text"></span> 3. Arquivos do Ticket <span id="tabFilesBadge" class="tab-count-badge" style="display: none;">0</span>
+      </button>
     </nav>
 
     <!-- ABA 1: Gestão de Ticket -->
@@ -105,15 +108,18 @@
           <div id="activeTicketName" style="font-size: 14px; font-weight: 700; color: var(--fg);"></div>
           <div id="activeTicketPath" style="font-size: 12px; font-family: 'Consolas', monospace; color: var(--accent);"></div>
         </div>
-        <div class="form-row">
+        <div class="form-row" style="flex-wrap: wrap; gap: 8px;">
           <button class="btn btn-secondary btn-sm" onclick="handleCopyActivePath()">
             <span data-icon="copy"></span> Copiar Caminho
           </button>
           <button class="btn btn-secondary btn-sm" onclick="handleOpenActiveInExplorer()">
             <span data-icon="external"></span> Abrir no Explorer
           </button>
+          <button class="btn btn-secondary btn-sm" onclick="switchTab('tabFiles')">
+            <span data-icon="file-text"></span> Ver Arquivos (<span id="activeFilesCount">0</span>)
+          </button>
           <button class="btn btn-primary btn-sm" style="margin-left: auto;" onclick="switchTab('tabLogs')">
-            Avançar para Filtragem de Logs ➔
+            Avançar para Filtragem ➔
           </button>
         </div>
       </div>
@@ -205,6 +211,44 @@
           <button class="btn btn-secondary btn-sm" onclick="handleOpenFilteredFolder()">
             <span data-icon="folder"></span> Abrir Pasta logs_filtrados
           </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: Arquivos do Ticket -->
+    <section id="tabFiles" class="tab-pane">
+      <div class="card">
+        <div class="card-header-flex">
+          <div>
+            <div class="card-title">
+              <span data-icon="file-text"></span> Arquivos do Ticket
+            </div>
+            <div id="filesSectionDesc" style="font-size: 12px; color: var(--fg-muted); margin-top: 2px;">
+              Documentos, relatórios, notas Markdown e logs presentes na pasta.
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-secondary btn-sm" onclick="handleOpenActiveInExplorer()" title="Abrir pasta no Explorer">
+              <span data-icon="external"></span> Abrir Pasta
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="reloadTicketFiles()" title="Recarregar arquivos">
+              <span data-icon="refresh"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="search-row" style="margin-top: 10px;">
+          <div class="search-input-wrapper">
+            <span data-icon="search" class="search-icon"></span>
+            <input type="text" id="inputSearchFiles" class="input-search" placeholder="Filtrar arquivos por nome ou extensão (.md, .log, .json)..." oninput="handleSearchFiles()">
+          </div>
+        </div>
+
+        <!-- Lista / Tabela de Arquivos -->
+        <div id="ticketFilesContainer" class="files-container">
+          <div style="padding: 24px; text-align: center; color: var(--fg-muted);">
+            Nenhum ticket ativo selecionado.
+          </div>
         </div>
       </div>
     </section>
