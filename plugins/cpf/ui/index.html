@@ -1,72 +1,202 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <title>Validador de CPF — Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Validador & Gerador de CPF — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Validador & Gerador de CPF</h1>
-      <p class="header-desc">Geração de CPFs válidos e validação instantânea com formatação automática</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="badge-check"></span>
+        <h1 class="header-title">Validador & Gerador de CPF</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Geração instantânea de CPFs válidos para testes e validação de algoritmo de dígitos verificadores com máscara.
+      </p>
     </header>
 
+    <!-- Card: Gerador de CPF -->
     <div class="card">
-      <div class="card-title"><span data-icon="zap"></span> Gerador de CPF</div>
-      <div class="cpf-display" id="generatedCpf">Clique em Gerar</div>
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="checkbox" id="checkFormat" checked> <span>Com pontuação</span>
+      <div class="card-header-row">
+        <div class="card-title">
+          <span data-icon="zap"></span> Gerador de CPF
+        </div>
+        <label class="toggle-label" title="Alternar formato com ou sem pontuação">
+          <input type="checkbox" id="checkFormat" checked onchange="handleGenerate()">
+          <span>Com pontuação (000.000.000-00)</span>
         </label>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" onclick="copyGenerated()"><span data-icon="copy"></span> Copiar</button>
-          <button class="btn btn-primary" onclick="handleGenerate()"><span data-icon="refresh"></span> Gerar Novo CPF</button>
+      </div>
+
+      <div class="cpf-display-box">
+        <div class="cpf-display-val" id="generatedCpf">---.---.---/--</div>
+        <div class="cpf-display-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnCopyGen" onclick="copyGenerated()" title="Copiar CPF gerado">
+            <span data-icon="copy"></span> Copiar
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="handleGenerate()" title="Gerar novo CPF aleatório válido">
+            <span data-icon="refresh"></span> Gerar Novo
+          </button>
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title"><span data-icon="check"></span> Validador de CPF</div>
-      <div style="display: flex; gap: 8px;">
-        <input type="text" id="inputValidate" placeholder="Digite ou cole o CPF a validar..." style="flex: 1;" oninput="handleValidate()">
+    <!-- Card: Validador de CPF -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+      <div class="card-title">
+        <span data-icon="shield-check"></span> Validador de CPF
       </div>
-      <div id="validateResult" style="display: none; align-items: center; justify-content: space-between; margin-top: 4px;">
-        <div id="validateBadge" class="badge"></div>
-        <div id="validateFormatted" style="font-family: Consolas, monospace; color: var(--fg-muted);"></div>
+
+      <div class="input-wrapper" style="margin-top: 4px;">
+        <input type="text" id="inputValidate" class="input-mono" placeholder="Digite ou cole o CPF (ex: 123.456.789-00 ou 12345678900)..." oninput="handleValidate()" autofocus>
+        <button type="button" class="btn btn-secondary" onclick="clearInput()" title="Limpar campo">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+
+      <!-- Card Tonal de Status de Validação -->
+      <div id="validateResult" class="validate-card" style="display: none;">
+        <div class="validate-status-row">
+          <div id="validateBadge" class="badge"></div>
+          <div id="validateFormatted" class="validate-formatted"></div>
+        </div>
+
+        <div class="validate-details-grid">
+          <div class="detail-item">
+            <span class="detail-label">Formatado</span>
+            <div class="detail-val-row">
+              <span id="txtFormatted" class="detail-val">--</span>
+              <button type="button" class="btn-copy-mini" onclick="copyTextFromEl('txtFormatted', this)" title="Copiar formatado">
+                <span data-icon="copy"></span>
+              </button>
+            </div>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Apenas Dígitos</span>
+            <div class="detail-val-row">
+              <span id="txtDigits" class="detail-val">--</span>
+              <button type="button" class="btn-copy-mini" onclick="copyTextFromEl('txtDigits', this)" title="Copiar apenas números">
+                <span data-icon="copy"></span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+
   <script src="icons.js"></script>
   <script>
     async function handleGenerate() {
       const fmt = document.getElementById('checkFormat').checked;
-      const res = await window.pywebview.api.generate(fmt);
-      document.getElementById('generatedCpf').textContent = res;
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.generate) {
+          return;
+        }
+        const res = await window.pywebview.api.generate(fmt);
+        document.getElementById('generatedCpf').textContent = res;
+      } catch (err) {
+        console.error('Erro ao gerar CPF:', err);
+      }
     }
+
     async function copyGenerated() {
       const txt = document.getElementById('generatedCpf').textContent;
-      if (txt && txt !== 'Clique em Gerar') await window.pywebview.api.copy_text(txt);
+      const btn = document.getElementById('btnCopyGen');
+      if (!txt || txt.includes('-')) {
+        // Pode copiar
+      }
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(txt);
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(txt);
+        }
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<span data-icon="check" style="color:var(--success);"></span> Copiado!`;
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          if (window.renderIcons) window.renderIcons();
+        }, 1200);
+      } catch (e) {
+        console.error(e);
+      }
     }
+
     async function handleValidate() {
       const val = document.getElementById('inputValidate').value.trim();
       const resEl = document.getElementById('validateResult');
-      if (!val) { resEl.style.display = 'none'; return; }
-      const res = await window.pywebview.api.validate(val);
-      resEl.style.display = 'flex';
-      const badge = document.getElementById('validateBadge');
-      if (res.valid) {
-        badge.className = 'badge badge-success';
-        badge.textContent = '✔ CPF VÁLIDO';
-        document.getElementById('validateFormatted').textContent = res.formatted;
-      } else {
-        badge.className = 'badge badge-danger';
-        badge.textContent = '✖ CPF INVÁLIDO';
-        document.getElementById('validateFormatted').textContent = '';
+      if (!val) {
+        resEl.style.display = 'none';
+        return;
+      }
+
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.validate) {
+          return;
+        }
+        const res = await window.pywebview.api.validate(val);
+        resEl.style.display = 'flex';
+        const badge = document.getElementById('validateBadge');
+        const formatted = document.getElementById('validateFormatted');
+
+        if (res.valid) {
+          resEl.className = 'validate-card validate-valid';
+          badge.className = 'badge badge-success';
+          badge.innerHTML = `<span data-icon="shield-check"></span> CPF VÁLIDO`;
+          formatted.textContent = res.formatted;
+          document.getElementById('txtFormatted').textContent = res.formatted;
+          document.getElementById('txtDigits').textContent = res.digits;
+        } else {
+          resEl.className = 'validate-card validate-invalid';
+          badge.className = 'badge badge-danger';
+          badge.innerHTML = `<span data-icon="shield-alert"></span> CPF INVÁLIDO`;
+          formatted.textContent = 'Dígitos verificadores ou tamanho incorreto';
+          document.getElementById('txtFormatted').textContent = res.formatted || '--';
+          document.getElementById('txtDigits').textContent = res.digits || '--';
+        }
+        if (window.renderIcons) window.renderIcons();
+      } catch (e) {
+        console.error('Erro ao validar CPF:', e);
       }
     }
-    document.addEventListener('DOMContentLoaded', handleGenerate);
+
+    function clearInput() {
+      document.getElementById('inputValidate').value = '';
+      document.getElementById('validateResult').style.display = 'none';
+      document.getElementById('inputValidate').focus();
+    }
+
+    async function copyTextFromEl(id, btn) {
+      const txt = document.getElementById(id).textContent;
+      if (!txt || txt === '--') return;
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(txt);
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(txt);
+        }
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<span data-icon="check" style="color:var(--success);"></span>`;
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          if (window.renderIcons) window.renderIcons();
+        }, 1200);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      handleGenerate();
+    });
   </script>
 </body>
 </html>

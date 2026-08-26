@@ -129,7 +129,8 @@
       "command": "cpf",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/cpf-1.1.0/cpf.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "updated_at": "2026-08-26",
+      "theme_version": "material-3"
     },
     {
       "id": "gerador-json",

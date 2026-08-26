@@ -1,12 +1,160 @@
+/* ==========================================================================
+   Validador & Gerador de CPF M3 Styling
+   ========================================================================== */
 
-.cpf-display {
-  font-family: Consolas, monospace;
+.plugin-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.cpf-display-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-top: 4px;
+  transition: all var(--transition-fast);
+}
+
+.cpf-display-box:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.cpf-display-val {
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
-  color: var(--accent);
-  text-align: center;
-  padding: 12px;
-  background: var(--bg-elev-2);
+  color: var(--fg);
+  letter-spacing: 1px;
+}
+
+.cpf-display-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.input-wrapper input {
+  flex: 1;
+}
+
+.validate-card {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all var(--transition-fast);
+}
+
+.validate-valid {
+  background: var(--bg-input);
+  border: 1px solid var(--success);
+}
+
+.validate-invalid {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+}
+
+.validate-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.validate-formatted {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.validate-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-surface);
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
+}
+
+.detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.detail-val-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.detail-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.btn-copy-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg-muted);
+  border-radius: var(--radius-sm);
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-mini:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+  border-color: var(--border-subtle);
 }
