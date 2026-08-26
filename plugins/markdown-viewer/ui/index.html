@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualizador de Markdown — Toolbox</title>
+  <link rel="stylesheet" href="toolbox-theme.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Top Toolbar -->
+    <header class="top-toolbar">
+      <div class="toolbar-left">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handleNewFile()" title="Novo Documento (Ctrl+N)">
+          <span data-icon="plus"></span> Novo
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handleOpenFile()" title="Abrir Arquivo .md (Ctrl+O)">
+          <span data-icon="folder-open"></span> Abrir
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="handleSaveFile()" title="Salvar Arquivo (Ctrl+S)">
+          <span data-icon="save"></span> Salvar
+        </button>
+        <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 4px;"></div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="copyRawMarkdown()" title="Copiar Markdown Bruto">
+          <span data-icon="copy"></span> Copiar MD
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handleExportHtml()" title="Exportar Documento HTML">
+          <span data-icon="download"></span> Exportar HTML
+        </button>
+      </div>
+
+      <div class="doc-info">
+        <span class="badge badge-accent">Material 3</span>
+        <span id="docTitle" class="doc-title">sem-titulo.md</span>
+      </div>
+
+      <div class="toolbar-right">
+        <div class="mode-switcher">
+          <button type="button" id="btnModeSplit" class="mode-btn active" onclick="updateViewMode('split')" title="Modo Dividido (Editor + Preview)">
+            <span data-icon="columns"></span> Dividido
+          </button>
+          <button type="button" id="btnModeReader" class="mode-btn" onclick="updateViewMode('reader')" title="Modo Leitor (Preview com Sumário)">
+            <span data-icon="eye"></span> Leitor
+          </button>
+          <button type="button" id="btnModeEditor" class="mode-btn" onclick="updateViewMode('editor')" title="Modo Editor Puro">
+            <span data-icon="code"></span> Editor
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Layout (TOC + Editor + Preview) -->
+    <main id="mainLayout" class="main-layout layout-split">
+      <!-- Table of Contents Sidebar -->
+      <aside id="tocSidebar" class="toc-sidebar">
+        <div class="toc-title">
+          <span data-icon="list"></span> Sumário
+        </div>
+        <nav id="tocList" class="toc-list">
+          <!-- Heading links rendered here -->
+        </nav>
+      </aside>
+
+      <!-- Editor Pane -->
+      <section id="editorPane" class="editor-pane">
+        <textarea id="editorTextarea" class="editor-textarea" placeholder="Digite ou cole markdown aqui..."></textarea>
+      </section>
+
+      <!-- Preview Pane -->
+      <section id="previewPane" class="preview-pane">
+        <article id="previewContent" class="preview-content">
+          <!-- Parsed HTML rendered here -->
+        </article>
+      </section>
+    </main>
+
+    <!-- Bottom Status Bar -->
+    <footer class="status-bar">
+      <div class="status-left">
+        <span id="statLines">0 linhas</span>
+        <span>•</span>
+        <span id="statWords">0 palavras</span>
+        <span>•</span>
+        <span id="statChars">0 caracteres</span>
+      </div>
+      <div class="status-right">
+        <span>Arraste e solte arquivos <code>.md</code> aqui</span>
+        <span>•</span>
+        <span class="badge badge-muted">UTF-8</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="vendor/marked_parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
