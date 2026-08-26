@@ -561,8 +561,24 @@ function showToast(msg) {
   }, 2200);
 }
 
+async function checkInitialFile() {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_initial_file) {
+      const res = await window.pywebview.api.get_initial_file();
+      if (res && res.success && res.content !== undefined) {
+        loadFileContent(res.filename, res.path, res.content, res.mtime || 0);
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao checar arquivo inicial:', e);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', init);
-window.addEventListener('pywebviewready', loadPluginVersion);
+window.addEventListener('pywebviewready', () => {
+  loadPluginVersion();
+  checkInitialFile();
+});
 window.copyCode = copyCode;
 window.toggleTheme = toggleTheme;
 window.toggleTocCollapse = toggleTocCollapse;

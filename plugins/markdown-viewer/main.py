@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from typing import Optional, Dict, Any
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 if str(PLUGIN_DIR) not in sys.path:
@@ -21,6 +22,16 @@ spec.loader.exec_module(domain)
 
 class MarkdownViewerApi(BasePluginApi):
     """API exposta para a interface WebView do visualizador de Markdown."""
+
+    def __init__(self, initial_file: Optional[str] = None):
+        super().__init__()
+        self.initial_file = initial_file
+
+    def get_initial_file(self) -> dict:
+        """Retorna o arquivo passado como argumento inicial na inicialização, se houver."""
+        if self.initial_file and Path(self.initial_file).exists():
+            return domain.read_markdown_file(self.initial_file)
+        return {"success": False}
 
     def open_file_dialog(self) -> dict:
         """Abre caixa de diálogo para seleção de arquivo Markdown."""
@@ -122,7 +133,8 @@ def main():
         except Exception:
             pass
 
-    api = MarkdownViewerApi()
+    initial_file = sys.argv[1] if len(sys.argv) > 1 and Path(sys.argv[1]).exists() else None
+    api = MarkdownViewerApi(initial_file=initial_file)
     ui_index = Path(__file__).parent / "ui" / "index.html"
     window = create_plugin_window(
         title="Visualizador de Markdown",

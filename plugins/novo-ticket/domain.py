@@ -8,12 +8,17 @@ Contém funções puras e testáveis para:
 5. Filtragem temporal, processamento incremental e cópia espelhada para pasta logs_filtrados.
 """
 
+import json
 import os
 import re
+import subprocess
 import sys
 from datetime import date, datetime, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+CONFIG_DIR = Path.home() / ".toolbox"
+CONFIG_FILE = CONFIG_DIR / "novo_ticket_config.json"
 
 # Caracteres inválidos para nomes de arquivos e pastas no Windows: \ / : * ? " < > |
 INVALID_CHARS_REGEX = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
@@ -739,4 +744,127 @@ def set_window_taskbar_icon(icon_path: Optional[Path] = None, hwnd: Optional[int
     except Exception:
         pass
     return False
+
+
+# ---------------------------------------------------------------------------
+# 6. Gestão de Configurações, Arquivos do Ticket e Integração
+# ---------------------------------------------------------------------------
+
+def load_user_config(config_file: Optional[Path] = None) -> Dict[str, Any]:
+    """Carrega as preferências do usuário salvas no disco."""
+    target = config_file or CONFIG_FILE
+    if not target.exists():
+        return {"base_dir": ""}
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return {"base_dir": ""}
+
+
+def save_user_config(config: Dict[str, Any], config_file: Optional[Path] = None) -> bool:
+    """Persiste as preferências do usuário no disco de forma permanente."""
+    target = config_file or CONFIG_FILE
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Converte tamanho em bytes para representação legível."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+def list_ticket_files(ticket_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Lista todos os arquivos presentes no diretório do ticket recursivamente,
+    com metadados detalhados de tamanho, data e tipo.
+    """
+    ticket_path = Path(ticket_dir).resolve()
+    if not ticket_path.exists() or not ticket_path.is_dir():
+        return []
+
+    files: List[Dict[str, Any]] = []
+    for item in sorted(ticket_path.rglob("*")):
+        # Ignora arquivos/diretórios ocultos ou de controle interno
+        rel_parts = item.relative_to(ticket_path).parts
+        if any(part.startswith(".") or part == "__pycache__" for part in rel_parts):
+            continue
+
+        if item.is_file():
+            try:
+                stat = item.stat()
+                rel = item.relative_to(ticket_path)
+                ext = item.suffix.lower()
+                is_md = ext in [".md", ".markdown", ".mdown", ".mkd"]
+                files.append({
+                    "name": item.name,
+                    "relative_path": str(rel).replace("\\", "/"),
+                    "full_path": str(item.resolve()),
+                    "size_bytes": stat.st_size,
+                    "size_formatted": format_file_size(stat.st_size),
+                    "modified_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                    "extension": ext,
+                    "is_markdown": is_md,
+                })
+            except Exception:
+                continue
+
+    return files
+
+
+def open_ticket_file(file_path: str, plugins_root: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    Abre o arquivo do ticket. Se for Markdown, abre diretamente via plugin markdown-viewer
+    caso disponível; caso contrário, abre no visualizador padrão do sistema.
+    """
+    if not file_path:
+        return {"success": False, "message": "Caminho de arquivo não fornecido."}
+
+    target = Path(file_path).resolve()
+    if not target.exists():
+        return {"success": False, "message": f"Arquivo '{file_path}' não encontrado."}
+
+    ext = target.suffix.lower()
+    is_md = ext in [".md", ".markdown", ".mdown", ".mkd"]
+
+    if is_md:
+        root = plugins_root or (Path(__file__).resolve().parent.parent)
+        md_main = root / "markdown-viewer" / "main.py"
+        if md_main.exists():
+            try:
+                flags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+                subprocess.Popen([sys.executable, str(md_main), str(target)], creationflags=flags)
+                return {
+                    "success": True,
+                    "opened_with": "markdown-viewer",
+                    "path": str(target),
+                    "message": "Arquivo aberto no Visualizador de Markdown.",
+                }
+            except Exception as exc:
+                pass
+
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(target))
+        else:
+            subprocess.Popen(["xdg-open", str(target)])
+        return {
+            "success": True,
+            "opened_with": "default_app",
+            "path": str(target),
+            "message": "Arquivo aberto no aplicativo padrão do sistema.",
+        }
+    except Exception as exc:
+        return {"success": False, "message": f"Falha ao abrir arquivo: {exc}"}
+
 

@@ -86,6 +86,32 @@ class NovoTicketApi(BasePluginApi):
             "ticket": details.get("ticket"),
         }
 
+    def get_config(self) -> Dict[str, Any]:
+        """Retorna as configurações do usuário salvas no disco."""
+        return {"success": True, "config": domain.load_user_config()}
+
+    def set_base_dir(self, base_dir: str) -> Dict[str, Any]:
+        """Salva o diretório base nas preferências do usuário no disco."""
+        cfg = domain.load_user_config()
+        cfg["base_dir"] = base_dir or ""
+        saved = domain.save_user_config(cfg)
+        return {"success": saved, "config": cfg}
+
+    def list_ticket_files(self, ticket_path: Optional[str] = None) -> Dict[str, Any]:
+        """Lista os arquivos presentes na pasta do ticket."""
+        target_path = ticket_path or (str(self.active_ticket_dir) if self.active_ticket_dir else "")
+        if not target_path:
+            return {"success": False, "message": "Nenhum ticket especificado.", "files": []}
+        p = Path(target_path).resolve()
+        if not p.exists() or not p.is_dir():
+            return {"success": False, "message": "Pasta do ticket não encontrada.", "files": []}
+        files = domain.list_ticket_files(p)
+        return {"success": True, "files": files, "count": len(files)}
+
+    def open_ticket_file(self, file_path: str) -> Dict[str, Any]:
+        """Abre um arquivo do ticket (com suporte ao Visualizador de Markdown)."""
+        return domain.open_ticket_file(file_path, PLUGINS_ROOT)
+
     def get_ticket_details(self, ticket_path: str) -> Dict[str, Any]:
         p = Path(ticket_path).resolve()
         if not p.exists() or not p.is_dir():
@@ -93,12 +119,14 @@ class NovoTicketApi(BasePluginApi):
         self.active_ticket_dir = p
         subfolders = domain.get_ticket_subdirectories_info(p)
         logs_filtrados = p / "logs_filtrados"
+        files = domain.list_ticket_files(p)
         return {
             "success": True,
             "ticket": {
                 "name": p.name,
                 "path": str(p),
                 "subfolders": subfolders,
+                "files": files,
                 "has_logs_filtrados": logs_filtrados.exists(),
             }
         }

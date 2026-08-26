@@ -362,3 +362,165 @@
   border-color: var(--danger);
   color: var(--fg);
 }
+
+/* Badge de contagem nas Abas */
+.tab-count-badge {
+  background: var(--bg-elev-3);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.tab-btn.active .tab-count-badge {
+  background: #0e1014;
+  color: var(--accent);
+  border-color: #0e1014;
+}
+
+/* Lista / Painel de Arquivos do Ticket */
+.files-container {
+  background-color: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-y: auto;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s ease;
+  gap: 12px;
+}
+
+.file-row:last-child {
+  border-bottom: none;
+}
+
+.file-row:hover {
+  background-color: var(--bg-elev-3);
+}
+
+.file-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-icon-box.is-markdown {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.file-icon-box.is-log {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.file-icon-box.is-code {
+  background: var(--warning-soft, rgba(234, 179, 8, 0.15));
+  border-color: var(--warning, #eab308);
+  color: var(--warning, #eab308);
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.file-name:hover {
+  color: var(--accent);
+}
+
+.file-path {
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-icon {
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-icon:hover {
+  background: var(--bg-elev-3);
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.btn-icon.btn-icon-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-icon.btn-icon-accent:hover {
+  background: var(--accent);
+  color: #0e1014;
+}
+

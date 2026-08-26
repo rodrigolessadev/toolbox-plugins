@@ -1,15 +1,17 @@
 let currentTicket = null;
 let currentSubfolders = [];
+let currentTicketFiles = [];
 let quickDatesData = null;
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', async () => {
   setupInputListeners();
-  loadSavedBaseDir();
+  await loadSavedBaseDir();
   await loadQuickDates();
 });
 
-window.addEventListener('pywebviewready', () => {
+window.addEventListener('pywebviewready', async () => {
+  await loadSavedBaseDir();
   refreshExistingTicketsList();
 });
 
@@ -17,21 +19,35 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   
-  document.getElementById(tabId).classList.add('active');
+  const pane = document.getElementById(tabId);
+  if (pane) pane.classList.add('active');
+
   if (tabId === 'tabTicket') {
-    document.getElementById('tabBtn1').classList.add('active');
-  } else {
-    document.getElementById('tabBtn2').classList.add('active');
+    document.getElementById('tabBtn1')?.classList.add('active');
+  } else if (tabId === 'tabLogs') {
+    document.getElementById('tabBtn2')?.classList.add('active');
     renderSubfoldersTree();
+  } else if (tabId === 'tabFiles') {
+    document.getElementById('tabBtn3')?.classList.add('active');
+    renderTicketFiles();
   }
+
+  if (window.renderIcons) window.renderIcons();
 }
 
 function setupInputListeners() {
-  const updatePreviewAndList = () => {
+  const updatePreviewAndList = async () => {
     handlePreviewUpdate();
     const baseDir = document.getElementById('inputBaseDir').value.trim();
     if (baseDir) {
       localStorage.setItem('toolbox_novo_ticket_base_dir', baseDir);
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.set_base_dir) {
+        try {
+          await window.pywebview.api.set_base_dir(baseDir);
+        } catch (e) {
+          console.warn('Erro ao persistir base_dir:', e);
+        }
+      }
       refreshExistingTicketsList();
     } else {
       const select = document.getElementById('selectExistingTicket');
@@ -47,8 +63,23 @@ function setupInputListeners() {
   document.getElementById('inputTicket').addEventListener('input', () => handlePreviewUpdate());
 }
 
-function loadSavedBaseDir() {
-  const saved = localStorage.getItem('toolbox_novo_ticket_base_dir');
+async function loadSavedBaseDir() {
+  let saved = '';
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.get_config) {
+    try {
+      const res = await window.pywebview.api.get_config();
+      if (res && res.success && res.config && res.config.base_dir) {
+        saved = res.config.base_dir;
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar config do backend:', e);
+    }
+  }
+
+  if (!saved) {
+    saved = localStorage.getItem('toolbox_novo_ticket_base_dir') || '';
+  }
+
   if (saved && saved.trim()) {
     document.getElementById('inputBaseDir').value = saved.trim();
     handlePreviewUpdate();
@@ -95,7 +126,7 @@ async function refreshExistingTicketsList() {
 
 async function loadQuickDates() {
   try {
-    if (window.pywebview && window.pywebview.api) {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_quick_dates) {
       quickDatesData = await window.pywebview.api.get_quick_dates();
       if (quickDatesData) {
         document.getElementById('startDate').value = quickDatesData.today;
@@ -128,6 +159,9 @@ async function handleSelectBaseDir() {
     if (res) {
       document.getElementById('inputBaseDir').value = res;
       localStorage.setItem('toolbox_novo_ticket_base_dir', res);
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.set_base_dir) {
+        await window.pywebview.api.set_base_dir(res);
+      }
       handlePreviewUpdate();
       refreshExistingTicketsList();
     }
@@ -172,6 +206,9 @@ async function handleCreateTicket() {
     if (res.success && res.ticket) {
       setActiveTicket(res.ticket);
       localStorage.setItem('toolbox_novo_ticket_base_dir', baseDir);
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.set_base_dir) {
+        await window.pywebview.api.set_base_dir(baseDir);
+      }
       refreshExistingTicketsList();
       switchTab('tabLogs');
     } else {
@@ -219,22 +256,48 @@ async function handleSelectExistingTicket() {
 function setActiveTicket(ticket) {
   currentTicket = ticket;
   currentSubfolders = ticket.subfolders || [];
+  currentTicketFiles = ticket.files || [];
   
   // Atualiza Badge do Header
   const badge = document.getElementById('activeTicketBadge');
-  badge.textContent = `Ticket Ativo: ${ticket.name}`;
-  badge.className = 'badge badge-accent';
+  if (badge) {
+    badge.textContent = `Ticket Ativo: ${ticket.name}`;
+    badge.className = 'badge badge-accent';
+  }
 
   // Atualiza Card de Ticket Ativo
-  document.getElementById('cardActiveTicket').style.display = 'flex';
-  document.getElementById('activeTicketName').textContent = ticket.name;
-  document.getElementById('activeTicketPath').textContent = ticket.path;
+  const cardActive = document.getElementById('cardActiveTicket');
+  if (cardActive) cardActive.style.display = 'flex';
+  
+  const nameEl = document.getElementById('activeTicketName');
+  if (nameEl) nameEl.textContent = ticket.name;
+  
+  const pathEl = document.getElementById('activeTicketPath');
+  if (pathEl) pathEl.textContent = ticket.path;
+
+  // Atualiza contadores de arquivos
+  updateFilesBadges(currentTicketFiles.length);
 
   renderSubfoldersTree();
+  renderTicketFiles();
 }
+
+function updateFilesBadges(count) {
+  const countEl = document.getElementById('activeFilesCount');
+  if (countEl) countEl.textContent = count;
+
+  const tabBadge = document.getElementById('tabFilesBadge');
+  if (tabBadge) {
+    tabBadge.textContent = count;
+    tabBadge.style.display = count > 0 ? 'inline-block' : 'none';
+  }
+}
+
+// ─────────────────────── Aba 2: Subpastas e Filtro de Logs ───────────────────────
 
 function renderSubfoldersTree() {
   const container = document.getElementById('subfoldersTree');
+  if (!container) return;
   if (!currentTicket) {
     container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--fg-muted);">Nenhum ticket ativo selecionado.</div>`;
     return;
@@ -292,6 +355,154 @@ async function reloadSubfolders() {
     }
   } catch (err) {
     console.error(err);
+  }
+}
+
+// ─────────────────────── Aba 3: Arquivos do Ticket ───────────────────────
+
+function renderTicketFiles() {
+  const container = document.getElementById('ticketFilesContainer');
+  if (!container) return;
+  if (!currentTicket) {
+    container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--fg-muted);">Nenhum ticket ativo selecionado.</div>`;
+    return;
+  }
+
+  const query = (document.getElementById('inputSearchFiles')?.value || '').toLowerCase().trim();
+  const filtered = currentTicketFiles.filter(f => 
+    f.name.toLowerCase().includes(query) || 
+    f.relative_path.toLowerCase().includes(query) ||
+    f.extension.toLowerCase().includes(query)
+  );
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--fg-muted);">Nenhum arquivo encontrado ${query ? 'com o filtro aplicado' : 'na pasta do ticket'}.</div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(file => {
+    let iconName = 'file';
+    let iconClass = '';
+    const ext = file.extension.toLowerCase();
+
+    if (file.is_markdown) {
+      iconName = 'file-text';
+      iconClass = 'is-markdown';
+    } else if (['.log', '.txt', '.out'].includes(ext)) {
+      iconName = 'terminal';
+      iconClass = 'is-log';
+    } else if (['.json', '.sql', '.py', '.xml', '.csv', '.yaml', '.yml'].includes(ext)) {
+      iconName = 'code';
+      iconClass = 'is-code';
+    }
+
+    const isMd = file.is_markdown;
+    const safeFullPath = file.full_path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    return `
+      <div class="file-row">
+        <div class="file-row-left">
+          <div class="file-icon-box ${iconClass}">
+            <span data-icon="${iconName}"></span>
+          </div>
+          <div class="file-info">
+            <div class="file-name" onclick="handleOpenTicketFile('${safeFullPath}')" title="Clique para abrir">
+              ${file.name}
+            </div>
+            <div class="file-path" title="${file.full_path}">
+              ${file.relative_path}
+            </div>
+          </div>
+        </div>
+        <div class="file-meta">
+          <span class="badge badge-muted" style="font-family: monospace;">${file.size_formatted}</span>
+          <span style="font-size: 11px; color: var(--fg-muted);">${file.modified_at}</span>
+        </div>
+        <div class="file-actions">
+          ${isMd ? `
+            <button class="btn-icon btn-icon-accent" onclick="handleOpenTicketFile('${safeFullPath}')" title="Abrir no Visualizador de Markdown">
+              <span data-icon="file-text"></span> Visualizar
+            </button>
+          ` : `
+            <button class="btn-icon" onclick="handleOpenTicketFile('${safeFullPath}')" title="Abrir arquivo">
+              <span data-icon="eye"></span> Abrir
+            </button>
+          `}
+          <button class="btn-icon" onclick="handleCopyFilePath('${safeFullPath}', this)" title="Copiar caminho completo">
+            <span data-icon="copy"></span>
+          </button>
+          <button class="btn-icon" onclick="handleOpenTicketFileLocation('${safeFullPath}')" title="Abrir pasta no Explorer">
+            <span data-icon="external"></span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (window.renderIcons) window.renderIcons();
+}
+
+function handleSearchFiles() {
+  renderTicketFiles();
+}
+
+async function reloadTicketFiles() {
+  if (!currentTicket) return;
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.list_ticket_files) {
+      const res = await window.pywebview.api.list_ticket_files(currentTicket.path);
+      if (res && res.success) {
+        currentTicketFiles = res.files || [];
+        updateFilesBadges(currentTicketFiles.length);
+        renderTicketFiles();
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao recarregar arquivos:', err);
+  }
+}
+
+async function handleOpenTicketFile(filePath) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.open_ticket_file) {
+      const res = await window.pywebview.api.open_ticket_file(filePath);
+      if (res && !res.success && res.message) {
+        alert(res.message);
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao abrir arquivo:', err);
+  }
+}
+
+async function handleCopyFilePath(filePath, btn) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+      await window.pywebview.api.copy_text(filePath);
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(filePath);
+    }
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = `<span data-icon="check" style="color:var(--success);"></span>`;
+      if (window.renderIcons) window.renderIcons();
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        if (window.renderIcons) window.renderIcons();
+      }, 1200);
+    }
+  } catch (err) {
+    console.error('Erro ao copiar caminho:', err);
+  }
+}
+
+async function handleOpenTicketFileLocation(filePath) {
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.open_path) {
+      await window.pywebview.api.open_path(filePath);
+    }
+  } catch (err) {
+    console.error('Erro ao abrir localização no explorer:', err);
   }
 }
 
@@ -356,6 +567,7 @@ async function handleExecuteFilter() {
       feedbackCard.className = 'feedback-box feedback-success';
       feedbackMsg.textContent = res.message;
       feedbackActions.style.display = 'flex';
+      await reloadTicketFiles();
     } else {
       feedbackCard.className = 'feedback-box feedback-danger';
       feedbackMsg.textContent = res.message;
@@ -381,3 +593,4 @@ async function handleOpenFilteredFolder() {
     console.error(err);
   }
 }
+
