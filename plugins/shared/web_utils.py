@@ -59,17 +59,50 @@ def open_in_explorer(path: Path | str) -> bool:
 
 def copy_to_clipboard(text: str) -> bool:
     """Copia texto para a área de transferência do sistema operacional."""
+    if text is None:
+        return False
     try:
         if sys.platform == "win32":
-            subprocess.run(
-                ["powershell", "-NoProfile", "-Command", "Set-Clipboard -Value $args[0]"],
+            res = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "$input | Set-Clipboard"],
                 input=text,
                 text=True,
+                encoding="utf-8",
                 check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
             )
-            return True
-        return False
+            return res.returncode == 0
+        elif sys.platform == "darwin":
+            res = subprocess.run(
+                ["pbcopy"],
+                input=text,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            return res.returncode == 0
+        else:
+            # Linux: tenta xclip e depois wl-copy
+            try:
+                res = subprocess.run(
+                    ["xclip", "-selection", "clipboard"],
+                    input=text,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                )
+                if res.returncode == 0:
+                    return True
+            except FileNotFoundError:
+                pass
+            res = subprocess.run(
+                ["wl-copy"],
+                input=text,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            return res.returncode == 0
     except Exception:
         return False
 
