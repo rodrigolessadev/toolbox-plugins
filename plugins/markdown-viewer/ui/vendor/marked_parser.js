@@ -173,25 +173,15 @@ function parseMarkdown(md) {
       continue;
     }
 
-    // Task list check
-    const taskMatch = line.match(/^(\s*)-\s+\[([ xX])\]\s+(.+)$/);
-    if (taskMatch) {
-      const checked = taskMatch[2].toLowerCase() === 'x' ? 'checked' : '';
-      out.push(`<div class="task-list-item"><input type="checkbox" ${checked} disabled> <span>${inlineMarkdown(taskMatch[3])}</span></div>`);
-      continue;
-    }
-
-    // Unordered List
-    if (/^\s*[-*+]\s+(.+)$/.test(line)) {
-      const item = line.replace(/^\s*[-*+]\s+/, '');
-      out.push(`<ul><li>${inlineMarkdown(item)}</li></ul>`);
-      continue;
-    }
-
-    // Ordered List
-    const numMatch = line.match(/^\s*(\d+)\.\s+(.+)$/);
-    if (numMatch) {
-      out.push(`<ol start="${numMatch[1]}"><li>${inlineMarkdown(numMatch[2])}</li></ol>`);
+    // Check if start of a list (unordered, ordered, or task list)
+    if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
+      const listLines = [];
+      while (i < lines.length && (/^\s*[-*+]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]) || (lines[i].startsWith('  ') && lines[i].trim() !== ''))) {
+        listLines.push(lines[i]);
+        i++;
+      }
+      i--; // adjust loop pointer
+      out.push(renderNestedList(listLines));
       continue;
     }
 
@@ -202,12 +192,76 @@ function parseMarkdown(md) {
   if (inTable) flushTable();
   if (inCodeBlock) flushCodeBlock();
 
-  // Combine adjacent <ul> and <ol>
-  let finalHtml = out.join('\n')
-    .replace(/<\/ul>\s*<ul>/g, '')
-    .replace(/<\/ol>\s*<ol[^>]*>/g, '');
+  return { html: out.join('\n'), toc };
+}
 
-  return { html: finalHtml, toc };
+function renderNestedList(lines) {
+  let html = '';
+  const stack = []; // { type: 'ul' | 'ol', level: number }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const indentMatch = line.match(/^(\s*)/);
+    const rawIndent = indentMatch ? indentMatch[1].replace(/\t/g, '  ').length : 0;
+    const level = Math.floor(rawIndent / 2);
+
+    const taskMatch = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/);
+    const olMatch = line.match(/^\s*\d+\.\s+(.*)$/);
+    const ulMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+
+    const type = olMatch ? 'ol' : 'ul';
+    let content = '';
+
+    if (taskMatch) {
+      const checked = taskMatch[1].toLowerCase() === 'x' ? 'checked' : '';
+      content = `<div class="task-list-item"><input type="checkbox" ${checked} disabled> <span>${inlineMarkdown(taskMatch[2])}</span></div>`;
+    } else if (olMatch) {
+      content = inlineMarkdown(olMatch[1]);
+    } else if (ulMatch) {
+      content = inlineMarkdown(ulMatch[1]);
+    } else {
+      // Continuation line of previous list item
+      content = inlineMarkdown(line.trim());
+      html += ` ${content}`;
+      continue;
+    }
+
+    if (stack.length === 0) {
+      stack.push({ type, level });
+      html += `<${type}><li>${content}`;
+    } else if (level > stack[stack.length - 1].level) {
+      stack.push({ type, level });
+      html += `<${type}><li>${content}`;
+    } else if (level === stack[stack.length - 1].level) {
+      if (type !== stack[stack.length - 1].type) {
+        html += `</li></${stack.pop().type}><${type}><li>${content}`;
+        stack.push({ type, level });
+      } else {
+        html += `</li><li>${content}`;
+      }
+    } else {
+      while (stack.length > 0 && level < stack[stack.length - 1].level) {
+        html += `</li></${stack.pop().type}>`;
+      }
+      if (stack.length > 0 && stack[stack.length - 1].level === level) {
+        if (type !== stack[stack.length - 1].type) {
+          html += `</li></${stack.pop().type}><${type}><li>${content}`;
+          stack.push({ type, level });
+        } else {
+          html += `</li><li>${content}`;
+        }
+      } else {
+        stack.push({ type, level });
+        html += `<${type}><li>${content}`;
+      }
+    }
+  }
+
+  while (stack.length > 0) {
+    html += `</li></${stack.pop().type}>`;
+  }
+
+  return html;
 }
 
 function inlineMarkdown(text) {

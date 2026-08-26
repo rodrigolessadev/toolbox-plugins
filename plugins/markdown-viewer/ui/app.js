@@ -12,7 +12,8 @@ let state = {
   viewMode: 'split', // 'reader' | 'split' | 'editor'
   isModified: false,
   isTocCollapsed: false,
-  theme: 'dark'
+  theme: 'dark',
+  lastToc: []
 };
 
 const SAMPLE_MARKDOWN = `# 🚀 Visualizador de Markdown — Toolbox
@@ -26,9 +27,11 @@ Bem-vindo ao **Visualizador & Editor de Markdown** no padrão oficial **Material
 
 ## 📌 Principais Recursos
 
-- **Visualização Rica:** Suporte a GitHub Flavored Markdown (GFM), tabelas, alertas e listas de tarefas.
+- **Visualização Rica:** Suporte a GitHub Flavored Markdown (GFM), tabelas, alertas e listas.
+  - Sub-níveis e recuo de listas aninhadas
+  - Caixas de seleção e *task lists*
 - **Destaque de Sintaxe:** Blocos de código coloridos com botão de cópia rápida em 1 clique.
-- **Table of Contents (TOC) Retrátil:** Sumário lateral navegável que pode ser recolhido para leitura em tela cheia.
+- **Table of Contents (TOC) Retrátil:** Sumário lateral navegável nos modos Leitor, Dividido e Editor.
 - **Live Hot-Reload:** Qualquer alteração feita externamente no arquivo aberto reflete em tempo real nesta janela.
 - **Temas Claro & Escuro:** Alterne entre os temas Claro e Escuro clicando no ícone do sol/lua na barra superior.
 - **Modos de Exibição:** Modo Leitor (*Zen View*), Modo Dividido (*Split-View*) e Modo Editor Puro.
@@ -243,6 +246,7 @@ function renderDocument() {
   if (!preview) return;
 
   const { html, toc } = window.parseMarkdown(state.content);
+  state.lastToc = toc || [];
   preview.innerHTML = html;
 
   renderTOC(toc);
@@ -267,14 +271,63 @@ function renderTOC(toc) {
 }
 
 function scrollToHeading(e, id) {
-  e.preventDefault();
-  const el = document.getElementById(id);
-  const pane = document.getElementById('previewPane');
-  if (el && pane) {
-    pane.scrollTo({
-      top: el.offsetTop - 20,
-      behavior: 'smooth'
-    });
+  if (e) e.preventDefault();
+
+  // 1. Se o Preview estiver ativo/visível (modos 'reader' e 'split')
+  if (state.viewMode === 'reader' || state.viewMode === 'split') {
+    const el = document.getElementById(id);
+    const pane = document.getElementById('previewPane');
+    if (el && pane) {
+      pane.scrollTo({
+        top: el.offsetTop - 20,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  // 2. Se o Editor estiver ativo/visível (modos 'editor' e 'split')
+  if (state.viewMode === 'editor' || state.viewMode === 'split') {
+    const textarea = document.getElementById('editorTextarea');
+    if (textarea) {
+      const headingItem = (state.lastToc || []).find(h => h.id === id);
+      const targetText = headingItem ? headingItem.text.trim().toLowerCase() : '';
+      
+      const content = textarea.value;
+      const lines = content.split(/\r?\n/);
+      let targetLineIndex = -1;
+      let charPos = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+        if (headingMatch) {
+          const matchText = headingMatch[2].trim();
+          if (headingItem && matchText === headingItem.text) {
+            targetLineIndex = i;
+            break;
+          }
+          if (targetText && matchText.toLowerCase() === targetText) {
+            targetLineIndex = i;
+            break;
+          }
+        }
+        charPos += line.length + 1; // +1 para \n
+      }
+
+      if (targetLineIndex !== -1) {
+        textarea.focus();
+        const lineLen = lines[targetLineIndex] ? lines[targetLineIndex].length : 0;
+        textarea.setSelectionRange(charPos, charPos + lineLen);
+
+        const totalLines = lines.length || 1;
+        const lineRatio = targetLineIndex / totalLines;
+        const targetScrollTop = lineRatio * (textarea.scrollHeight - textarea.clientHeight);
+        textarea.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth'
+        });
+      }
+    }
   }
 }
 
