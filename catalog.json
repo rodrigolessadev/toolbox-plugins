@@ -136,18 +136,20 @@
     {
       "id": "gerador-json",
       "name": "Gerador de JSON",
-      "description": "Gera mock data em JSON (Pessoa, Produto, Usuário) com quantidade configurável e cópia para área de transferência.",
+      "description": "Formatação, validação de sintaxe, minificação e gerador de mock data JSON.",
       "version": "1.2.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
-        "dev",
         "json",
+        "formatador",
+        "validador",
         "mock",
-        "dados"
+        "desenvolvimento"
       ],
       "icon": "file-json",
       "command": "gerador-json",
+      "entry": "main.py",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.2.0/gerador-json.zip",
       "min_toolbox_version": "1.22.3",
       "updated_at": "2026-08-26",
@@ -258,28 +260,6 @@
       "entry": "main.py",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/markdown-viewer-1.1.1/markdown-viewer.zip",
       "min_toolbox_version": "1.22.3",
-      "theme_version": "material-3",
-      "updated_at": "2026-08-26"
-    },
-    {
-      "id": "gerador-json",
-      "name": "Gerador de JSON",
-      "description": "Formatação, validação de sintaxe, minificação e gerador de mock data JSON.",
-      "version": "1.2.0",
-      "author": "Rodrigo Lessa",
-      "language": "python",
-      "tags": [
-        "json",
-        "formatador",
-        "validador",
-        "mock",
-        "desenvolvimento"
-      ],
-      "icon": "file-json",
-      "command": "gerador-json",
-      "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-json-1.2.0/gerador-json.zip",
-      "min_toolbox_version": "1.0.0",
       "theme_version": "material-3",
       "updated_at": "2026-08-26"
     }
