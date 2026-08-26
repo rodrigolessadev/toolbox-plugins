@@ -1,8 +1,10 @@
 {
   "name": "Converter Data",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Conversão bidirecional de datas, timestamps Epoch Unix, ISO 8601 e Excel Serial.",
   "language": "python",
   "entry": "main.py",
-  "icon": "calendar-sync"
+  "icon": "calendar-sync",
+  "min_toolbox_version": "1.22.3",
+  "theme_version": "material-3"
 }
