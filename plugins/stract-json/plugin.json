@@ -1,8 +1,9 @@
 {
   "name": "Stract JSON",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Extração de estruturas JSON embutidas em logs e textos não estruturados.",
   "language": "python",
   "entry": "main.py",
-  "icon": "scan-search"
+  "icon": "scan-search",
+  "theme_version": "material-3"
 }

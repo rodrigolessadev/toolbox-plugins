@@ -87,7 +87,7 @@
       "id": "stract-json",
       "name": "Stract JSON",
       "description": "Extrai valores de um campo específico a partir de um JSON colado. Útil para transformar listas de objetos em listas de valores.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -98,9 +98,10 @@
       ],
       "icon": "scan-search",
       "command": "stract-json",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.1.0/stract-json.zip",
-      "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/stract-json-1.2.0/stract-json.zip",
+      "min_toolbox_version": "1.22.3",
+      "updated_at": "2026-08-26",
+      "theme_version": "material-3"
     },
     {
       "id": "gerador-marcacoes",
