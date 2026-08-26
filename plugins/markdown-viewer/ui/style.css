@@ -153,11 +153,15 @@ html, body {
 }
 
 .layout-editor {
-  grid-template-columns: 1fr;
-  grid-template-areas: "editor";
+  grid-template-columns: 240px 1fr;
+  grid-template-areas: "toc editor";
 }
 
-.layout-editor #tocSidebar,
+.layout-editor.toc-collapsed {
+  grid-template-columns: 44px 1fr;
+  grid-template-areas: "toc editor";
+}
+
 .layout-editor #previewPane {
   display: none !important;
 }
@@ -372,6 +376,48 @@ html, body {
   border: none;
   border-top: 1px solid var(--border-subtle);
   margin: 24px 0;
+}
+
+/* Listas e Sub-listas Aninhadas */
+.preview-content ul,
+.preview-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.preview-content ul ul,
+.preview-content ol ol,
+.preview-content ul ol,
+.preview-content ol ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.preview-content li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+.preview-content ul { list-style-type: disc; }
+.preview-content ul ul { list-style-type: circle; }
+.preview-content ul ul ul { list-style-type: square; }
+
+.preview-content ol { list-style-type: decimal; }
+.preview-content ol ol { list-style-type: lower-alpha; }
+.preview-content ol ol ol { list-style-type: lower-roman; }
+
+.task-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.task-list-item input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: default;
 }
 
 /* Código & Syntax Highlighting */
