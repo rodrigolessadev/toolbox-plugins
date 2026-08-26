@@ -1,10 +1,10 @@
 {
   "name": "Visualizador de Markdown",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Visualizador e editor de Markdown com suporte a GFM, tabelas, syntax highlighting, alertas e diagramas Mermaid.",
   "language": "python",
   "entry": "main.py",
   "icon": "file-text",
-  "min_toolbox_version": "1.0.0",
+  "min_toolbox_version": "1.22.3",
   "theme_version": "material-3"
 }
