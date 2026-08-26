@@ -26,3 +26,28 @@ class TestGeradorAfdDomain(unittest.TestCase):
         self.assertEqual(limpar_numero("12.345.678/0001-95"), "12345678000195")
         self.assertEqual(pad_left("42", 5), "00042")
         self.assertEqual(pad_right("Empresa", 10), "Empresa   ")
+
+    def test_gerar_afd_execution(self):
+        res = gerar_afd(
+            rep_number="123",
+            cnpj_cpf="12345678000195",
+            razao_social="Empresa Teste",
+            local_prestacao="Matriz",
+            pis="12345678901",
+            nome_empregado="Funcionario",
+            start_date="2026-08-20",
+            end_date="2026-08-21",
+            horarios=["08:00", "12:00"]
+        )
+        self.assertTrue(res["success"])
+        self.assertGreater(res["total_records"], 0)
+        self.assertIn("12345678000195", res["filename"])
+
+    def test_file_clock_icon_and_taskbar_helper(self):
+        icon_path = domain.FILE_CLOCK_ICON_PATH
+        self.assertTrue(icon_path.exists())
+        self.assertEqual(icon_path.suffix, ".ico")
+        self.assertGreater(icon_path.stat().st_size, 0)
+        res = domain.set_window_taskbar_icon(icon_path=icon_path, hwnd=None)
+        self.assertIsInstance(res, bool)
+

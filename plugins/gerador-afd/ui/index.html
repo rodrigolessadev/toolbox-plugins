@@ -1,85 +1,193 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gerador de AFD — Toolbox</title>
   <link rel="stylesheet" href="toolbox-theme.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- Header M3 -->
     <header class="header">
-      <h1 class="header-title">Gerador de AFD (Portaria 1510/671)</h1>
-      <p class="header-desc">Geração de Arquivo Fonte de Dados para testes de importação e auditoria de REP</p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="plugin-header-icon" data-icon="file-clock"></span>
+        <h1 class="header-title">Gerador de AFD (Portaria 1510/671)</h1>
+        <span class="badge badge-accent">Material 3</span>
+      </div>
+      <p class="header-desc">
+        Geração de Arquivo Fonte de Dados (AFD) para testes de importação, simulação de batidas e auditoria de REP.
+      </p>
     </header>
 
+    <!-- Card: Parâmetros de Entrada -->
     <div class="card">
-      <div class="card-title"><span data-icon="folder"></span> Dados do Empregador e REP</div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <input type="text" id="repNumber" placeholder="Nº de Fabricação do REP (17 dígitos)" value="00000000000000001">
-        <input type="text" id="cnpj" placeholder="CNPJ do Empregador" value="00000000000191">
-        <input type="text" id="razao" placeholder="Razão Social" value="EMPRESA TESTE S/A">
-        <input type="text" id="pis" placeholder="PIS do Colaborador" value="12345678901">
-      </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 4px;">
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Data Inicial</label>
-          <input type="date" id="dtIni" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Data Final</label>
-          <input type="date" id="dtFim" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Horários Padrão</label>
-          <input type="text" id="horarios" value="08:00, 12:00, 13:00, 18:00" style="width: 100%;">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--fg-muted);">Variação (min)</label>
-          <input type="number" id="variacao" value="2" style="width: 100%;">
+      <div class="card-header-row">
+        <div class="card-title">
+          <span data-icon="sliders"></span> Parâmetros de Empregador & REP
         </div>
       </div>
-      <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
-        <button class="btn btn-primary" onclick="handleGerar()"><span data-icon="zap"></span> Gerar Arquivo AFD</button>
+
+      <div class="form-grid-2">
+        <div class="input-group">
+          <label class="field-label" for="repNumber">Nº de Fabricação do REP (17 dígitos)</label>
+          <input type="text" id="repNumber" class="input-mono" placeholder="00000000000000001" value="00000000000000001">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="cnpj">CNPJ / CPF do Empregador</label>
+          <input type="text" id="cnpj" class="input-mono" placeholder="00000000000191" value="00000000000191">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="razao">Razão Social</label>
+          <input type="text" id="razao" placeholder="EMPRESA TESTE S/A" value="EMPRESA TESTE S/A">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="pis">PIS do Colaborador (11 dígitos)</label>
+          <input type="text" id="pis" class="input-mono" placeholder="12345678901" value="12345678901">
+        </div>
+      </div>
+
+      <div class="card-divider"></div>
+
+      <div class="card-title" style="margin-bottom: 8px;">
+        <span data-icon="calendar"></span> Período & Horários das Marcações
+      </div>
+
+      <div class="form-grid-4">
+        <div class="input-group">
+          <label class="field-label" for="dtIni">Data Inicial</label>
+          <input type="date" id="dtIni" class="input-date">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="dtFim">Data Final</label>
+          <input type="date" id="dtFim" class="input-date">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="horarios">Horários Diários (separados por vírgula)</label>
+          <input type="text" id="horarios" class="input-mono" value="08:00, 12:00, 13:00, 18:00" placeholder="08:00, 12:00, 13:00, 18:00">
+        </div>
+        <div class="input-group">
+          <label class="field-label" for="variacao">Variação Aleatória (min)</label>
+          <input type="number" id="variacao" value="2" min="0" max="30">
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <label class="checkbox-label">
+          <input type="checkbox" id="checkFimSemana" checked>
+          <span>Pular Fins de Semana (Sáb/Dom)</span>
+        </label>
+        <button type="button" class="btn btn-primary" onclick="handleGerar()">
+          <span data-icon="zap"></span> Gerar Arquivo AFD
+        </button>
       </div>
     </div>
 
-    <div class="card" style="flex: 1;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title" id="resTitle"><span data-icon="check"></span> Arquivo AFD Gerado</div>
-        <button class="btn btn-secondary btn-sm" onclick="handleCopy()"><span data-icon="copy"></span> Copiar AFD</button>
+    <!-- Card: Saída do Arquivo AFD -->
+    <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+      <div class="card-header-row">
+        <div class="card-title" id="resTitle">
+          <span data-icon="file-clock"></span> Arquivo AFD Gerado
+        </div>
+        <div class="output-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnCopy" onclick="handleCopy()" title="Copiar conteúdo completo">
+            <span data-icon="copy"></span> Copiar AFD
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnSave" onclick="handleSalvarArquivo()" title="Salvar arquivo .txt no disco">
+            <span data-icon="download"></span> Salvar Arquivo
+          </button>
+        </div>
       </div>
-      <textarea id="afdOutput" class="afd-textarea" style="flex: 1; height: auto;" readonly></textarea>
+
+      <div class="textarea-wrapper">
+        <textarea id="afdOutput" class="afd-textarea" placeholder="Clique em 'Gerar Arquivo AFD' para simular e visualizar as marcações..." readonly></textarea>
+      </div>
     </div>
   </div>
+
   <script src="icons.js"></script>
   <script>
+    let currentResult = {
+      filename: 'AFD.txt',
+      content: ''
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('dtIni').value = today;
       document.getElementById('dtFim').value = today;
     });
+
     async function handleGerar() {
       const params = {
-        rep_number: document.getElementById('repNumber').value,
-        cnpj_cpf: document.getElementById('cnpj').value,
-        razao_social: document.getElementById('razao').value,
-        pis: document.getElementById('pis').value,
+        rep_number: document.getElementById('repNumber').value.trim(),
+        cnpj_cpf: document.getElementById('cnpj').value.trim(),
+        razao_social: document.getElementById('razao').value.trim(),
+        pis: document.getElementById('pis').value.trim(),
         start_date: document.getElementById('dtIni').value,
         end_date: document.getElementById('dtFim').value,
-        horarios: document.getElementById('horarios').value.split(',').map(s => s.trim()),
-        variacao_minutos: parseInt(document.getElementById('variacao').value) || 0
+        horarios: document.getElementById('horarios').value.split(',').map(s => s.trim()).filter(Boolean),
+        variacao_minutos: parseInt(document.getElementById('variacao').value) || 0,
+        pular_fins_de_semana: document.getElementById('checkFimSemana').checked
       };
-      const res = await window.pywebview.api.gerar(params);
-      if (res.success) {
-        document.getElementById('afdOutput').value = res.content;
-        document.getElementById('resTitle').innerHTML = `<span data-icon="check"></span> ${res.total_records} registros gerados (${res.filename})`;
-        if (window.renderIcons) window.renderIcons();
+
+      try {
+        if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.gerar) {
+          return;
+        }
+        const res = await window.pywebview.api.gerar(params);
+        if (res.success) {
+          currentResult.filename = res.filename;
+          currentResult.content = res.content;
+
+          document.getElementById('afdOutput').value = res.content;
+          document.getElementById('resTitle').innerHTML = `
+            <span data-icon="check" style="color:var(--success);"></span>
+            <span>${res.total_records} registros gerados</span>
+            <span class="badge badge-muted" style="margin-left: 6px;">${res.filename}</span>
+          `;
+          if (window.renderIcons) window.renderIcons();
+        }
+      } catch (err) {
+        console.error('Erro ao gerar AFD:', err);
       }
     }
+
     async function handleCopy() {
       const txt = document.getElementById('afdOutput').value;
-      if (txt) await window.pywebview.api.copy_text(txt);
+      const btn = document.getElementById('btnCopy');
+      if (!txt) return;
+
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+          await window.pywebview.api.copy_text(txt);
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(txt);
+        }
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<span data-icon="check" style="color:var(--success);"></span> Copiado!`;
+        if (window.renderIcons) window.renderIcons();
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          if (window.renderIcons) window.renderIcons();
+        }, 1200);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function handleSalvarArquivo() {
+      if (!currentResult.content) {
+        return;
+      }
+      try {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.salvar_arquivo) {
+          await window.pywebview.api.salvar_arquivo(currentResult.filename, currentResult.content);
+        }
+      } catch (e) {
+        console.error('Erro ao salvar arquivo:', e);
+      }
     }
   </script>
 </body>
