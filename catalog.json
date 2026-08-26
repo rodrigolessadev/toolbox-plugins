@@ -236,6 +236,28 @@
       "min_toolbox_version": "1.16.11",
       "theme_version": "material-3",
       "updated_at": "2026-08-21"
+    },
+    {
+      "id": "markdown-viewer",
+      "name": "Visualizador de Markdown",
+      "description": "Visualizador e editor de Markdown com suporte a GFM, tabelas, syntax highlighting, alertas e diagramas Mermaid.",
+      "version": "1.0.0",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "markdown",
+        "viewer",
+        "editor",
+        "docs",
+        "utilidade"
+      ],
+      "icon": "file-text",
+      "command": "markdown-viewer",
+      "entry": "main.py",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/markdown-viewer-1.0.0/markdown-viewer.zip",
+      "min_toolbox_version": "1.0.0",
+      "theme_version": "material-3",
+      "updated_at": "2026-08-26"
     }
   ]
 }
