@@ -33,7 +33,8 @@
       "command": "gerador-afd",
       "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/gerador-afd-1.1.0/gerador-afd.zip",
       "min_toolbox_version": "1.0.0",
-      "updated_at": "2026-08-19"
+      "updated_at": "2026-08-26",
+      "theme_version": "material-3"
     },
     {
       "id": "calc-jornadas",
