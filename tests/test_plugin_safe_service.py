@@ -264,3 +264,85 @@ def test_service_import_export_save_in_cloud():
         titles = [e["title"] for e in exported]
         assert "AWS Root Account" in titles
         assert "Database Staging" in titles
+
+
+def test_service_windows_hello_and_password_dual_wrapping(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+
+        # Mock das funções do Windows Hello para simular DPAPI em qualquer SO / ambiente de teste
+        fake_dpapi_store = {}
+
+        def mock_is_available():
+            return True
+
+        def mock_verify(reason=""):
+            return True, "OK"
+
+        def mock_protect(data: bytes, entropy: bytes = None) -> bytes:
+            fake_blob = b"DPAPI_WRAPPED:" + data
+            return fake_blob
+
+        def mock_unprotect(blob: bytes, entropy: bytes = None) -> bytes:
+            if not blob.startswith(b"DPAPI_WRAPPED:"):
+                raise ValueError("Invalid DPAPI blob")
+            return blob[len(b"DPAPI_WRAPPED:"):]
+
+        import safe.windows_hello as wh
+        monkeypatch.setattr(wh, "is_windows_hello_available", mock_is_available)
+        monkeypatch.setattr(wh, "verify_windows_hello", mock_verify)
+        monkeypatch.setattr(wh, "protect_data_dpapi", mock_protect)
+        monkeypatch.setattr(wh, "unprotect_data_dpapi", mock_unprotect)
+
+        # 1. Setup no modo Híbrido (com senha + Windows Hello)
+        setup_res = service.setup_vault(auth_mode="hybrid", password="InitialPassword123!", use_hello=True)
+        assert setup_res["success"] is True
+
+        # Salva um segredo
+        service.save_secret(title="Secret 1", secret_payload="Value 1")
+
+        # 2. Testa desbloqueio com Senha Mestra
+        service.lock()
+        assert service.unlock(password="InitialPassword123!") is True
+        assert service.get_secret(service.list_secrets()[0]["id"])["payload"] == "Value 1"
+
+        # 3. Testa desbloqueio com Windows Hello
+        service.lock()
+        assert service.unlock(use_hello=True) is True
+        assert service.get_secret(service.list_secrets()[0]["id"])["payload"] == "Value 1"
+
+        # 4. Altera a Senha Mestra (migração / update)
+        pwd_res = service.set_master_password("UpdatedPassword456!")
+        assert pwd_res["success"] is True
+
+        # 5. Após alterar a Senha Mestra, testa desbloqueio com a NOVA senha
+        service.lock()
+        assert service.unlock(password="UpdatedPassword456!") is True
+
+        # 6. E testa desbloqueio com Windows Hello após alteração de senha (garante que o vínculo biométrico NÃO quebrou)
+        service.lock()
+        assert service.unlock(use_hello=True) is True
+        assert service.get_secret(service.list_secrets()[0]["id"])["payload"] == "Value 1"
+
+
+def test_service_auto_lock_disabled_mode():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+        
+        # Setup com auto_lock_timeout = 0 (Desativado)
+        service.setup_vault(password="SecretPassword123!", auto_lock_timeout=0)
+        
+        status = service.get_status()
+        assert status["auto_lock_timeout"] == 0
+        assert status["auto_lock_remaining"] == 0
+        assert status["status"] == "UNLOCKED"
+
+        # Simula passagem de tempo excessivo (ex: 1 hora)
+        service._last_activity_time = time.time() - 3600
+
+        # Não deve bloquear quando auto_lock_timeout <= 0
+        assert service.check_auto_lock() is False
+        assert service.get_status()["status"] == "UNLOCKED"
+

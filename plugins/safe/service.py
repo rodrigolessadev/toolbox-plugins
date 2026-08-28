@@ -168,8 +168,13 @@ class SafeService:
         wrapped_mk = iv + auth_tag + ciphertext  # 12b IV + 16b Tag + 32b Ciphertext
 
         hello_cred_id = None
+        wrapped_hello = None
         if auth_mode_clean == "hybrid":
             hello_cred_id = str(uuid.uuid4())
+            try:
+                wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_cred_id.encode("utf-8"))
+            except Exception:
+                wrapped_hello = None
 
         self.db.save_metadata(
             auth_mode=auth_mode_clean,
@@ -177,6 +182,7 @@ class SafeService:
             kdf_algorithm=kdf_algorithm,
             kdf_params=kdf_params,
             wrapped_master_key=wrapped_mk,
+            wrapped_hello_key=wrapped_hello,
             hello_credential_id=hello_cred_id,
             auto_lock_timeout=auto_lock_timeout,
             lock_on_os_lock=lock_on_os_lock,
@@ -191,7 +197,7 @@ class SafeService:
     def set_master_password(self, password: str) -> Dict[str, Any]:
         """
         Define ou altera a Senha Mestra do cofre (para migração de contas ou alteração de senha).
-        Exige que o cofre esteja desbloqueado.
+        Exige que o cofre esteja desbloqueado. Mantém o envelope do Windows Hello sincronizado.
         """
         self._require_unlocked()
         if not password or len(password.strip()) < 4:
@@ -217,12 +223,20 @@ class SafeService:
         if new_auth_mode == "hybrid" and not hello_id:
             hello_id = str(uuid.uuid4())
 
+        wrapped_hello = None
+        if new_auth_mode == "hybrid" and hello_id:
+            try:
+                wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_id.encode("utf-8"))
+            except Exception:
+                wrapped_hello = meta.get("wrapped_hello_key")
+
         self.db.save_metadata(
             auth_mode=new_auth_mode,
             kdf_salt=kdf_salt,
             kdf_algorithm=kdf_algorithm,
             kdf_params=kdf_params,
             wrapped_master_key=wrapped_mk,
+            wrapped_hello_key=wrapped_hello,
             hello_credential_id=hello_id,
             auto_lock_timeout=meta.get("auto_lock_timeout", 300),
             lock_on_os_lock=meta.get("lock_on_os_lock", True),
@@ -245,8 +259,9 @@ class SafeService:
 
         auth_mode = meta.get("auth_mode", "master_password")
         wrapped_mk = meta.get("wrapped_master_key")
+        wrapped_hello = meta.get("wrapped_hello_key")
 
-        if not wrapped_mk:
+        if not wrapped_mk and not wrapped_hello:
             raise ValueError("Chave mestra não encontrada nos metadados do cofre.")
 
         mk_bytes: Optional[bytes] = None
@@ -258,12 +273,14 @@ class SafeService:
                 raise SafeAccessDeniedError(f"Windows Hello recusado: {msg}")
 
             hello_id = (meta.get("hello_credential_id") or "").encode("utf-8")
+            # Prefere wrapped_hello_key se disponível, caso contrário fallback para wrapped_mk (bases legadas)
+            target_hello_blob = wrapped_hello or wrapped_mk
             try:
-                mk_bytes = windows_hello.unprotect_data_dpapi(wrapped_mk, entropy=hello_id if hello_id else None)
-            except Exception:
+                mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=hello_id if hello_id else None)
+            except Exception as e:
                 # Se falhar pelo DPAPI e for híbrido, tenta senha mestre se informada
                 if auth_mode != "hybrid" or not password:
-                    raise SafeAccessDeniedError("Não foi possível desencapsular a chave com Windows Hello.")
+                    raise SafeAccessDeniedError("Não foi possível desencapsular a chave com Windows Hello.") from e
 
         if mk_bytes is None:
             if not password:

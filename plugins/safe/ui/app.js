@@ -8,7 +8,10 @@ let cachedSecrets = [];
 let autoLockInterval = null;
 let currentSecretBeingViewed = null;
 
-let appInitialized = false;
+let configuredAutoLockTimeout = 300;
+let currentAutoLockRemaining = 300;
+let lastTouchActivityTime = 0;
+let activityTrackerInitialized = false;
 
 // ============================================================================
 // Inicialização
@@ -18,7 +21,8 @@ window.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) {
     window.lucide.createIcons();
   }
-  
+  setupActivityTracker();
+
   // Aguarda pywebview ficar pronto
   if (window.pywebview && window.pywebview.api) {
     initApp();
@@ -28,6 +32,26 @@ window.addEventListener('DOMContentLoaded', () => {
     setTimeout(initApp, 500);
   }
 });
+
+function setupActivityTracker() {
+  if (activityTrackerInitialized) return;
+  activityTrackerInitialized = true;
+
+  const onUserActivity = () => {
+    if (configuredAutoLockTimeout > 0) {
+      currentAutoLockRemaining = configuredAutoLockTimeout;
+      const now = Date.now();
+      if (now - lastTouchActivityTime > 5000) {
+        lastTouchActivityTime = now;
+        callApi('touch_activity');
+      }
+    }
+  };
+
+  ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
+    window.addEventListener(evt, onUserActivity, { passive: true });
+  });
+}
 
 async function callApi(method, ...args) {
   if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
@@ -58,7 +82,7 @@ async function initApp() {
     } else {
       showScreen('screen-vault');
       loadVaultData();
-      startAutoLockTimer(data.auto_lock_remaining);
+      startAutoLockTimer(data.auto_lock_timeout, data.auto_lock_remaining);
       checkPasswordMigrationBanner(data);
     }
   } else {
@@ -212,7 +236,7 @@ async function handleUnlockHello() {
       loadVaultData();
       const statusRes = await callApi('get_vault_status');
       if (statusRes && statusRes.success) {
-        startAutoLockTimer(statusRes.data.auto_lock_remaining);
+        startAutoLockTimer(statusRes.data.auto_lock_timeout, statusRes.data.auto_lock_remaining);
       }
     } else {
       errBanner.innerText = res.message || 'Falha ao autenticar com Windows Hello.';
@@ -248,7 +272,7 @@ async function handleUnlockPassword() {
     loadVaultData();
     const statusRes = await callApi('get_vault_status');
     if (statusRes.success) {
-      startAutoLockTimer(statusRes.data.auto_lock_remaining);
+      startAutoLockTimer(statusRes.data.auto_lock_timeout, statusRes.data.auto_lock_remaining);
     }
   } else {
     errBanner.innerText = res.message || 'Senha incorreta.';
@@ -258,7 +282,10 @@ async function handleUnlockPassword() {
 
 async function handleLockVault() {
   await callApi('lock_vault');
-  if (autoLockInterval) clearInterval(autoLockInterval);
+  if (autoLockInterval) {
+    clearInterval(autoLockInterval);
+    autoLockInterval = null;
+  }
   const statusRes = await callApi('get_vault_status');
   showScreen('screen-unlock');
   if (statusRes.success) setupUnlockScreen(statusRes.data);
@@ -268,21 +295,42 @@ async function handleLockVault() {
 // Temporizador de Auto-Lock
 // ============================================================================
 
-function startAutoLockTimer(remainingSeconds) {
-  if (autoLockInterval) clearInterval(autoLockInterval);
-  let timeLeft = remainingSeconds;
+function startAutoLockTimer(timeoutSeconds, initialRemaining) {
+  if (autoLockInterval) {
+    clearInterval(autoLockInterval);
+    autoLockInterval = null;
+  }
+
+  configuredAutoLockTimeout = (timeoutSeconds !== undefined && timeoutSeconds !== null) ? parseInt(timeoutSeconds, 10) : 300;
+
+  if (configuredAutoLockTimeout <= 0) {
+    const el = document.getElementById('autolock-countdown');
+    if (el) el.innerText = '∞';
+    return;
+  }
+
+  currentAutoLockRemaining = (initialRemaining !== undefined && initialRemaining !== null && initialRemaining > 0)
+    ? parseInt(initialRemaining, 10)
+    : configuredAutoLockTimeout;
 
   const updateDisplay = () => {
-    if (timeLeft <= 0) {
-      document.getElementById('autolock-countdown').innerText = '00:00';
+    const el = document.getElementById('autolock-countdown');
+    if (!el) return;
+
+    if (currentAutoLockRemaining <= 0) {
+      el.innerText = '00:00';
+      if (autoLockInterval) {
+        clearInterval(autoLockInterval);
+        autoLockInterval = null;
+      }
       handleLockVault();
       return;
     }
-    const mins = Math.floor(timeLeft / 60);
-    const secs = timeLeft % 60;
-    document.getElementById('autolock-countdown').innerText = 
-      `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    timeLeft--;
+
+    const mins = Math.floor(currentAutoLockRemaining / 60);
+    const secs = currentAutoLockRemaining % 60;
+    el.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    currentAutoLockRemaining--;
   };
 
   updateDisplay();
