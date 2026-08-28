@@ -9,8 +9,8 @@ let autoLockInterval = null;
 let currentSecretBeingViewed = null;
 
 let configuredAutoLockTimeout = 300;
-let currentAutoLockRemaining = 300;
-let lastTouchActivityTime = 0;
+let lastActivityTimestamp = Date.now();
+let lastBackendTouchTimestamp = 0;
 let activityTrackerInitialized = false;
 
 // ============================================================================
@@ -33,27 +33,47 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function registerUserActivity() {
+  lastActivityTimestamp = Date.now();
+  if (configuredAutoLockTimeout > 0) {
+    const now = Date.now();
+    if (now - lastBackendTouchTimestamp > 3000) {
+      lastBackendTouchTimestamp = now;
+      callApi('touch_activity');
+    }
+  }
+}
+
 function setupActivityTracker() {
   if (activityTrackerInitialized) return;
   activityTrackerInitialized = true;
 
-  const onUserActivity = () => {
-    if (configuredAutoLockTimeout > 0) {
-      currentAutoLockRemaining = configuredAutoLockTimeout;
-      const now = Date.now();
-      if (now - lastTouchActivityTime > 5000) {
-        lastTouchActivityTime = now;
-        callApi('touch_activity');
-      }
-    }
-  };
+  const events = [
+    'mousemove', 'mousedown', 'mouseup', 'click', 'dblclick',
+    'keydown', 'keyup', 'keypress',
+    'wheel', 'scroll',
+    'touchstart', 'touchmove', 'touchend',
+    'pointerdown', 'pointermove', 'pointerup',
+    'input', 'change', 'focus'
+  ];
 
-  ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
-    window.addEventListener(evt, onUserActivity, { passive: true });
+  events.forEach(evt => {
+    window.addEventListener(evt, registerUserActivity, { capture: true, passive: true });
+    document.addEventListener(evt, registerUserActivity, { capture: true, passive: true });
+  });
+
+  window.addEventListener('focus', registerUserActivity);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      registerUserActivity();
+    }
   });
 }
 
 async function callApi(method, ...args) {
+  if (method !== 'touch_activity') {
+    lastActivityTimestamp = Date.now();
+  }
   if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
     try {
       return await window.pywebview.api[method](...args);
@@ -309,15 +329,25 @@ function startAutoLockTimer(timeoutSeconds, initialRemaining) {
     return;
   }
 
-  currentAutoLockRemaining = (initialRemaining !== undefined && initialRemaining !== null && initialRemaining > 0)
-    ? parseInt(initialRemaining, 10)
-    : configuredAutoLockTimeout;
+  if (initialRemaining !== undefined && initialRemaining !== null && initialRemaining > 0 && initialRemaining < configuredAutoLockTimeout) {
+    lastActivityTimestamp = Date.now() - (configuredAutoLockTimeout - initialRemaining) * 1000;
+  } else {
+    lastActivityTimestamp = Date.now();
+  }
 
   const updateDisplay = () => {
     const el = document.getElementById('autolock-countdown');
     if (!el) return;
 
-    if (currentAutoLockRemaining <= 0) {
+    if (configuredAutoLockTimeout <= 0) {
+      el.innerText = '∞';
+      return;
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - lastActivityTimestamp) / 1000);
+    const remainingSeconds = configuredAutoLockTimeout - elapsedSeconds;
+
+    if (remainingSeconds <= 0) {
       el.innerText = '00:00';
       if (autoLockInterval) {
         clearInterval(autoLockInterval);
@@ -327,10 +357,9 @@ function startAutoLockTimer(timeoutSeconds, initialRemaining) {
       return;
     }
 
-    const mins = Math.floor(currentAutoLockRemaining / 60);
-    const secs = currentAutoLockRemaining % 60;
+    const mins = Math.floor(remainingSeconds / 60);
+    const secs = remainingSeconds % 60;
     el.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    currentAutoLockRemaining--;
   };
 
   updateDisplay();
