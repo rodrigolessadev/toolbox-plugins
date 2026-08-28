@@ -78,3 +78,28 @@ def test_novo_ticket_api_isolated_config_workflow(tmp_path: Path):
     res_get2 = api.get_config()
     assert res_get2["success"] is True
     assert res_get2["config"]["base_dir"] == str(tickets_dir)
+
+
+def test_novo_ticket_ui_copy_active_ticket_assets():
+    """Valida presença dos elementos e funções de cópia rápida do ticket ativo e toasts."""
+    ui_dir = NOVO_TICKET_DIR / "ui"
+    html_content = (ui_dir / "index.html").read_text(encoding="utf-8")
+    css_content = (ui_dir / "style.css").read_text(encoding="utf-8")
+    js_content = (ui_dir / "app.js").read_text(encoding="utf-8")
+
+    # HTML
+    assert 'id="activeTicketBadge"' in html_content
+    assert 'id="toastContainer"' in html_content
+
+    # CSS
+    assert '.badge-interactive' in css_content
+    assert '.toast-container' in css_content
+    assert '.toast-success' in css_content
+
+    # JS
+    assert 'handleCopyActiveTicketId' in js_content
+    assert 'handleCopyActivePath' in js_content
+    assert 'copyToClipboard' in js_content
+    assert 'showToast' in js_content
+    assert 'badge-interactive' in js_content
+
