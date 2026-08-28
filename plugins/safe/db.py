@@ -207,10 +207,20 @@ class SafeDatabase:
                 wrapped_master_key BLOB,
                 hello_credential_id TEXT,
                 auto_lock_timeout INTEGER DEFAULT 300,
+                lock_on_os_lock BOOLEAN DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             """)
+
+            # Migration defensiva para bases existentes sem lock_on_os_lock
+            cursor.execute("PRAGMA table_info(safe_metadata);")
+            cols = [c[1] for c in cursor.fetchall()]
+            if "lock_on_os_lock" not in cols:
+                try:
+                    cursor.execute("ALTER TABLE safe_metadata ADD COLUMN lock_on_os_lock BOOLEAN DEFAULT 1;")
+                except Exception:
+                    pass
 
             # Tabela: Registros de Segredos Cifrados
             cursor.execute("""
@@ -268,6 +278,8 @@ class SafeDatabase:
                     data["kdf_params"] = json.loads(data["kdf_params"])
                 except Exception:
                     pass
+            # Garante booleano para lock_on_os_lock
+            data["lock_on_os_lock"] = bool(data.get("lock_on_os_lock", 1))
             return data
 
     def save_metadata(
@@ -279,6 +291,7 @@ class SafeDatabase:
         wrapped_master_key: Optional[bytes],
         hello_credential_id: Optional[str] = None,
         auto_lock_timeout: int = 300,
+        lock_on_os_lock: bool = True,
     ) -> None:
         with self.connect() as conn:
             cursor = conn.cursor()
@@ -286,8 +299,8 @@ class SafeDatabase:
             cursor.execute("""
             INSERT INTO safe_metadata (
                 id, auth_mode, kdf_salt, kdf_algorithm, kdf_params,
-                wrapped_master_key, hello_credential_id, auto_lock_timeout, updated_at
-            ) VALUES ('default_vault', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                wrapped_master_key, hello_credential_id, auto_lock_timeout, lock_on_os_lock, updated_at
+            ) VALUES ('default_vault', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 auth_mode = excluded.auth_mode,
                 kdf_salt = excluded.kdf_salt,
@@ -296,6 +309,7 @@ class SafeDatabase:
                 wrapped_master_key = excluded.wrapped_master_key,
                 hello_credential_id = excluded.hello_credential_id,
                 auto_lock_timeout = excluded.auto_lock_timeout,
+                lock_on_os_lock = excluded.lock_on_os_lock,
                 updated_at = CURRENT_TIMESTAMP;
             """, (
                 auth_mode,
@@ -305,17 +319,24 @@ class SafeDatabase:
                 wrapped_master_key,
                 hello_credential_id,
                 auto_lock_timeout,
+                1 if lock_on_os_lock else 0,
             ))
             conn.commit()
 
-    def update_auto_lock_timeout(self, timeout_seconds: int) -> None:
+    def update_security_settings(self, auto_lock_timeout: int, lock_on_os_lock: bool = True) -> None:
         with self.connect() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-            UPDATE safe_metadata SET auto_lock_timeout = ?, updated_at = CURRENT_TIMESTAMP
+            UPDATE safe_metadata SET
+                auto_lock_timeout = ?,
+                lock_on_os_lock = ?,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = 'default_vault';
-            """, (timeout_seconds,))
+            """, (auto_lock_timeout, 1 if lock_on_os_lock else 0))
             conn.commit()
+
+    def update_auto_lock_timeout(self, timeout_seconds: int) -> None:
+        self.update_security_settings(auto_lock_timeout=timeout_seconds)
 
     # ========================================================================
     # Operações de Registros (safe_entries)
