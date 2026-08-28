@@ -83,3 +83,14 @@ def test_safe_taskbar_icon_exists():
     assert safe_main.SHIELD_CHECK_ICON_PATH.is_file()
     assert safe_main.SHIELD_CHECK_ICON_PATH.stat().st_size > 0
 
+
+def test_windows_hello_availability_detection():
+    """Valida que a função de detecção do Windows Hello executa e retorna booleano no Windows."""
+    from safe import windows_hello
+    avail = windows_hello.is_windows_hello_available()
+    assert isinstance(avail, bool)
+    if sys.platform == "win32":
+        # No ambiente Windows 10/11 atual, o retorno deve ser True
+        assert avail is True
+
+

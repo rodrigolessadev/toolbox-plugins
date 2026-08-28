@@ -27,23 +27,27 @@ def is_windows_hello_available() -> bool:
     if not _is_windows():
         return False
 
-    # Testa via PowerShell usando Windows.Security.Credentials.UI.UserConsentVerifier
+    # Testa via PowerShell usando Windows.Security.Credentials.UI.UserConsentVerifier com reflexão para AsTask
     ps_cmd = (
-        "$t = [Type]::GetType('Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime'); "
-        "if ($t) { "
+        "try { "
+        "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
+        "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null; "
+        "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { "
+        "    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 "
+        "  } | Select-Object -First 1; "
         "  $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::CheckAvailabilityAsync(); "
-        "  $task = [System.WindowsRuntimeSystemExtensions]::AsTask($op); "
+        "  $asTask = $asTaskGen.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerifierAvailability]); "
+        "  $task = $asTask.Invoke($null, @($op)); "
         "  $task.Wait(); "
-        "  $res = $task.Result.ToString(); "
-        "  Write-Output $res "
-        "} else { Write-Output 'Unavailable' }"
+        "  Write-Output $task.Result.ToString(); "
+        "} catch { Write-Output 'Unavailable' }"
     )
     try:
         res = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=8,
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
         out = (res.stdout or "").strip()
@@ -61,17 +65,23 @@ def verify_windows_hello(prompt_message: str = "Confirme sua identidade para ace
     if not _is_windows():
         return False, "Windows Hello só é suportado no ambiente Windows."
 
+    # Escapa aspas simples na mensagem do prompt
+    safe_msg = prompt_message.replace("'", "''")
+
     # Script PowerShell para invocar RequestVerificationAsync
     ps_cmd = (
-        f"$msg = '{prompt_message}'; "
-        "$t = [Type]::GetType('Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime'); "
-        "if ($t) { "
-        "  $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync($msg); "
-        "  $task = [System.WindowsRuntimeSystemExtensions]::AsTask($op); "
+        "try { "
+        "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
+        "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null; "
+        "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { "
+        "    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 "
+        "  } | Select-Object -First 1; "
+        f"  $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
+        "  $asTask = $asTaskGen.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]); "
+        "  $task = $asTask.Invoke($null, @($op)); "
         "  $task.Wait(); "
-        "  $res = $task.Result.ToString(); "
-        "  Write-Output $res "
-        "} else { Write-Output 'Unavailable' }"
+        "  Write-Output $task.Result.ToString(); "
+        "} catch { Write-Output ('Error: ' + $_.Exception.Message) }"
     )
 
     try:

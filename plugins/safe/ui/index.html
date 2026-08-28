@@ -106,20 +106,22 @@
           <i data-lucide="fingerprint"></i> Desbloquear com Windows Hello
         </button>
 
-        <div class="divider"><span>ou com Senha Mestre</span></div>
+        <div id="unlock-divider" class="divider"><span>ou com Senha Mestre</span></div>
 
-        <div class="form-group">
-          <div class="input-password-wrapper">
-            <input type="password" id="unlock-password" class="form-input" placeholder="Digite a Senha Mestre..." onkeydown="if(event.key==='Enter') handleUnlockPassword()">
-            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('unlock-password', this)">
-              <i data-lucide="eye"></i>
-            </button>
+        <div id="unlock-password-group">
+          <div class="form-group">
+            <div class="input-password-wrapper">
+              <input type="password" id="unlock-password" class="form-input" placeholder="Digite a Senha Mestre..." onkeydown="if(event.key==='Enter') handleUnlockPassword()">
+              <button type="button" class="btn-icon" onclick="togglePasswordVisibility('unlock-password', this)">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
           </div>
-        </div>
 
-        <button type="button" id="btn-unlock-pwd" class="btn btn-primary btn-block" onclick="handleUnlockPassword()">
-          <i data-lucide="key"></i> Desbloquear Cofre
-        </button>
+          <button type="button" id="btn-unlock-pwd" class="btn btn-primary btn-block" onclick="handleUnlockPassword()">
+            <i data-lucide="key"></i> Desbloquear com Senha Mestre
+          </button>
+        </div>
 
         <div id="unlock-error" class="error-banner hidden"></div>
       </div>

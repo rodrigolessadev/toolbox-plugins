@@ -51,6 +51,7 @@ async function initApp() {
     const data = statusRes.data;
     if (!data.configured) {
       showScreen('screen-setup');
+      setupSetupScreen(data);
     } else if (data.status === 'LOCKED') {
       showScreen('screen-unlock');
       setupUnlockScreen(data);
@@ -83,6 +84,33 @@ function showScreen(screenId) {
 // ============================================================================
 // Tela de Setup
 // ============================================================================
+
+function setupSetupScreen(data) {
+  const helloAvailable = Boolean(data && data.windows_hello_available);
+  const cardHello = document.querySelector('label[onclick*="windows_hello"]');
+  const cardHybrid = document.querySelector('label[onclick*="hybrid"]');
+  const cardMaster = document.querySelector('label[onclick*="master_password"]');
+
+  if (!helloAvailable) {
+    if (cardHello) {
+      cardHello.classList.add('disabled');
+      cardHello.style.opacity = '0.5';
+      cardHello.style.pointerEvents = 'none';
+    }
+    if (cardHybrid) {
+      cardHybrid.classList.add('disabled');
+      cardHybrid.style.opacity = '0.5';
+      cardHybrid.style.pointerEvents = 'none';
+    }
+    if (cardMaster) {
+      selectAuthMode('master_password', cardMaster);
+    }
+  } else {
+    if (cardHybrid) {
+      selectAuthMode('hybrid', cardHybrid);
+    }
+  }
+}
 
 function selectAuthMode(mode, element) {
   currentAuthMode = mode;
@@ -131,13 +159,35 @@ async function handleSetupSubmit() {
 
 function setupUnlockScreen(data) {
   const btnHello = document.getElementById('btn-unlock-hello');
-  if (data.auth_mode === 'master_password' || !data.windows_hello_available) {
+  const pwdGroup = document.getElementById('unlock-password-group');
+  const divider = document.getElementById('unlock-divider');
+  const errBanner = document.getElementById('unlock-error');
+
+  errBanner.classList.add('hidden');
+  document.getElementById('unlock-password').value = '';
+
+  const helloAvailable = Boolean(data && data.windows_hello_available);
+  const authMode = (data && data.auth_mode) || 'hybrid';
+
+  if (authMode === 'windows_hello') {
+    btnHello.style.display = helloAvailable ? 'flex' : 'none';
+    if (divider) divider.style.display = 'none';
+    if (pwdGroup) pwdGroup.style.display = 'none';
+    if (!helloAvailable) {
+      errBanner.innerText = 'Este cofre está protegido por Windows Hello, mas a autenticação biométrica/PIN não está acessível.';
+      errBanner.classList.remove('hidden');
+    }
+  } else if (authMode === 'master_password' || !helloAvailable) {
     btnHello.style.display = 'none';
+    if (divider) divider.style.display = 'none';
+    if (pwdGroup) pwdGroup.style.display = 'block';
   } else {
     btnHello.style.display = 'flex';
+    if (divider) divider.style.display = 'flex';
+    if (pwdGroup) pwdGroup.style.display = 'block';
   }
-  document.getElementById('unlock-password').value = '';
-  document.getElementById('unlock-error').classList.add('hidden');
+
+  if (window.lucide) window.lucide.createIcons();
 }
 
 async function handleUnlockHello() {
