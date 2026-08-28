@@ -107,3 +107,36 @@ def test_markdown_viewer_api(tmp_path: Path):
     res_ver = api.get_plugin_version()
     assert res_ver["success"] is True
     assert "version" in res_ver
+
+
+def test_markdown_viewer_ui_tab_elements():
+    ui_html = ROOT / "plugins" / "markdown-viewer" / "ui" / "index.html"
+    ui_js = ROOT / "plugins" / "markdown-viewer" / "ui" / "app.js"
+    ui_css = ROOT / "plugins" / "markdown-viewer" / "ui" / "style.css"
+
+    assert ui_html.exists()
+    assert ui_js.exists()
+    assert ui_css.exists()
+
+    html_content = ui_html.read_text(encoding="utf-8")
+    assert 'id="tabBarContainer"' in html_content
+    assert 'id="tabsList"' in html_content
+    assert 'id="btnNewTab"' in html_content
+    assert 'id="tabContextMenu"' in html_content
+    assert 'id="modalCloseConfirm"' in html_content
+
+    js_content = ui_js.read_text(encoding="utf-8")
+    assert "createTab" in js_content
+    assert "activateTab" in js_content
+    assert "handleCloseTab" in js_content
+    assert "openOrFocusFile" in js_content
+    assert "handleSaveAllFiles" in js_content
+    assert "handleTabContextMenu" in js_content
+
+    css_content = ui_css.read_text(encoding="utf-8")
+    assert ".tab-bar-container" in css_content
+    assert ".tab-item" in css_content
+    assert ".tab-close-btn" in css_content
+    assert ".tab-context-menu" in css_content
+    assert ".modal-overlay" in css_content
+

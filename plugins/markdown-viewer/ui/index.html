@@ -54,6 +54,64 @@
       </div>
     </header>
 
+    <!-- Barra de Abas (Tabs Bar) -->
+    <nav class="tab-bar-container" id="tabBarContainer" aria-label="Abas de Documentos">
+      <div class="tabs-scroll-area" id="tabsScrollArea">
+        <div class="tabs-list" id="tabsList">
+          <!-- Renderizado dinamicamente via JS -->
+        </div>
+      </div>
+      <div class="tabs-actions">
+        <button type="button" class="btn-new-tab" id="btnNewTab" onclick="handleNewTab()" title="Nova Aba (Ctrl+T / Ctrl+N)" aria-label="Nova Aba">
+          <span data-icon="plus"></span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Menu de Contexto da Aba -->
+    <div id="tabContextMenu" class="tab-context-menu" style="display: none;">
+      <div class="context-menu-item" onclick="handleContextMenuAction('close')">
+        <span data-icon="x"></span> Fechar
+      </div>
+      <div class="context-menu-item" onclick="handleContextMenuAction('close-others')">
+        <span data-icon="x-circle"></span> Fechar outras abas
+      </div>
+      <div class="context-menu-item" onclick="handleContextMenuAction('close-right')">
+        <span data-icon="arrow-right"></span> Fechar abas à direita
+      </div>
+      <div class="context-menu-item" onclick="handleContextMenuAction('close-all')">
+        <span data-icon="trash"></span> Fechar todas
+      </div>
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item" onclick="handleContextMenuAction('save')">
+        <span data-icon="save"></span> Salvar
+      </div>
+      <div class="context-menu-item" onclick="handleContextMenuAction('save-as')">
+        <span data-icon="download"></span> Salvar Como...
+      </div>
+    </div>
+
+    <!-- Modal de Confirmação de Fechamento com Alterações Pendentes -->
+    <div id="modalCloseConfirm" class="modal-overlay" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span data-icon="alert-circle" class="text-warning"></span>
+            <span>Salvar alterações?</span>
+          </div>
+          <button type="button" class="btn-close-icon" onclick="dismissCloseConfirmModal()" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="closeConfirmMessage">O documento possui alterações não salvas. Deseja salvar as alterações antes de fechar?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="confirmCloseWithoutSave()">Não Salvar</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="dismissCloseConfirmModal()">Cancelar</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="confirmCloseWithSave()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Banner de Notificação de Modificação Externa -->
     <div id="externalBanner" class="external-banner">
       <div style="display: flex; align-items: center; gap: 8px;">
