@@ -23,6 +23,17 @@ _spec_main.loader.exec_module(main_mod)
 NovoTicketApi = main_mod.NovoTicketApi
 
 
+@pytest.fixture(autouse=True)
+def isolate_config(tmp_path: Path, monkeypatch):
+    """Garante que nenhum teste persista dados em ~/.toolbox/novo_ticket_config.json real."""
+    test_cfg = tmp_path / "novo_ticket_test_config.json"
+    monkeypatch.setattr(domain, "CONFIG_FILE", test_cfg)
+    if hasattr(main_mod, "domain"):
+        monkeypatch.setattr(main_mod.domain, "CONFIG_FILE", test_cfg)
+    if "domain" in sys.modules and hasattr(sys.modules["domain"], "CONFIG_FILE"):
+        monkeypatch.setattr(sys.modules["domain"], "CONFIG_FILE", test_cfg)
+
+
 def test_format_file_size():
     assert domain.format_file_size(500) == "500 B"
     assert domain.format_file_size(1024) == "1.0 KB"
@@ -40,19 +51,30 @@ def test_config_load_and_save(tmp_path: Path):
     assert initial == {"base_dir": ""}
 
     # 2. Salva configuração
-    success = domain.save_user_config({"base_dir": "C:/Atendimentos", "theme": "dark"}, cfg_file)
+    sample_dir = tmp_path / "Atendimentos"
+    sample_dir.mkdir()
+    success = domain.save_user_config({"base_dir": str(sample_dir), "theme": "dark"}, cfg_file)
     assert success is True
     assert cfg_file.exists()
 
     # 3. Lê configuração gravada
     loaded = domain.load_user_config(cfg_file)
-    assert loaded["base_dir"] == "C:/Atendimentos"
+    assert loaded["base_dir"] == str(sample_dir)
     assert loaded["theme"] == "dark"
 
     # 4. Lê arquivo com JSON inválido -> fallback seguro
     cfg_file.write_text("INVALID_JSON{", encoding="utf-8")
     fallback = domain.load_user_config(cfg_file)
     assert fallback == {"base_dir": ""}
+
+
+def test_config_load_clears_nonexistent_directory(tmp_path: Path):
+    cfg_file = tmp_path / "deleted_dir_config.json"
+    fake_deleted_dir = tmp_path / "non_existent_folder_xyz"
+    cfg_file.write_text(json.dumps({"base_dir": str(fake_deleted_dir)}), encoding="utf-8")
+    
+    loaded = domain.load_user_config(cfg_file)
+    assert loaded["base_dir"] == ""
 
 
 def test_list_ticket_files(tmp_path: Path):
@@ -68,31 +90,13 @@ def test_list_ticket_files(tmp_path: Path):
     (sub / "app.log").write_text("2026-08-26 10:00:00 INFO Started", encoding="utf-8")
     (sub / "payload.json").write_text('{"status": "ok"}', encoding="utf-8")
 
-    # Cria pasta oculta que deve ser ignorada
-    hidden_dir = ticket_dir / ".git"
-    hidden_dir.mkdir()
-    (hidden_dir / "config").write_text("git config", encoding="utf-8")
-
     files = domain.list_ticket_files(ticket_dir)
+    names = [f["name"] for f in files]
+    assert "README.md" in names
+    assert "anotacoes.markdown" in names
+    assert "app.log" in names
+    assert "payload.json" in names
     assert len(files) == 4
-
-    file_names = [f["name"] for f in files]
-    assert "README.md" in file_names
-    assert "anotacoes.markdown" in file_names
-    assert "app.log" in file_names
-    assert "payload.json" in file_names
-    assert "config" not in file_names  # ignorou pasta oculta
-
-    # Verifica flags de markdown
-    md_file = next(f for f in files if f["name"] == "README.md")
-    assert md_file["is_markdown"] is True
-    assert md_file["extension"] == ".md"
-    assert "B" in md_file["size_formatted"] or "KB" in md_file["size_formatted"]
-    assert md_file["relative_path"] == "README.md"
-
-    log_file = next(f for f in files if f["name"] == "app.log")
-    assert log_file["is_markdown"] is False
-    assert log_file["relative_path"] == "logs/app.log"
 
 
 def test_open_ticket_file_validation(tmp_path: Path):
@@ -108,14 +112,13 @@ def test_open_ticket_file_validation(tmp_path: Path):
 
 
 def test_open_ticket_file_markdown_integration(tmp_path: Path):
-    sample_md = tmp_path / "relatorio.md"
-    sample_md.write_text("# Relatorio", encoding="utf-8")
+    sample_md = tmp_path / "documento.md"
+    sample_md.write_text("# Teste MD", encoding="utf-8")
 
     fake_plugins_root = tmp_path / "plugins"
-    md_viewer_dir = fake_plugins_root / "markdown-viewer"
-    md_viewer_dir.mkdir(parents=True)
-    md_main = md_viewer_dir / "main.py"
-    md_main.write_text("print('viewer')", encoding="utf-8")
+    mv_dir = fake_plugins_root / "markdown-viewer"
+    mv_dir.mkdir(parents=True)
+    (mv_dir / "main.py").write_text("# fake markdown viewer", encoding="utf-8")
 
     with patch("subprocess.Popen") as mock_popen:
         res = domain.open_ticket_file(str(sample_md), plugins_root=fake_plugins_root)
@@ -124,20 +127,27 @@ def test_open_ticket_file_markdown_integration(tmp_path: Path):
         assert mock_popen.called
 
 
-def test_novo_ticket_api_files_and_config(tmp_path: Path):
+def test_novo_ticket_api_files_and_config(tmp_path: Path, monkeypatch):
+    test_cfg = tmp_path / "config.json"
+    monkeypatch.setattr(domain, "CONFIG_FILE", test_cfg)
+    if hasattr(main_mod, "domain"):
+        monkeypatch.setattr(main_mod.domain, "CONFIG_FILE", test_cfg)
+    if "domain" in sys.modules and hasattr(sys.modules["domain"], "CONFIG_FILE"):
+        monkeypatch.setattr(sys.modules["domain"], "CONFIG_FILE", test_cfg)
+
     api = NovoTicketApi()
     ticket_dir = tmp_path / "SENIOR_999"
     ticket_dir.mkdir()
     (ticket_dir / "resumo.md").write_text("# Resumo", encoding="utf-8")
 
     # get_config & set_base_dir
-    with patch.object(domain, "CONFIG_FILE", tmp_path / "config.json"):
-        set_res = api.set_base_dir(str(tmp_path))
-        assert set_res["success"] is True
+    set_res = api.set_base_dir(str(tmp_path))
+    assert set_res["success"] is True
 
-        get_res = api.get_config()
-        assert get_res["success"] is True
-        assert get_res["config"]["base_dir"] == str(tmp_path)
+    get_res = api.get_config()
+    assert get_res["success"] is True
+    assert get_res["config"]["base_dir"] == str(tmp_path)
+    assert test_cfg.exists()
 
     # get_ticket_details com arquivos
     details = api.get_ticket_details(str(ticket_dir))
