@@ -253,16 +253,99 @@ async function handleSelectExistingTicket() {
   }
 }
 
+let isCopyingBadge = false;
+
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<span data-icon="${type === 'success' ? 'check' : 'alert-circle'}"></span> <span>${message}</span>`;
+  container.appendChild(toast);
+  if (window.renderIcons) window.renderIcons();
+
+  setTimeout(() => {
+    toast.classList.add('toast-fadeout');
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 250);
+  }, 2500);
+}
+
+async function copyToClipboard(text, successLabel = 'Texto copiado!') {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_text) {
+      await window.pywebview.api.copy_text(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    showToast(successLabel, 'success');
+    return true;
+  } catch (err) {
+    console.error('Erro ao copiar para clipboard:', err);
+    showToast('Erro ao copiar para a área de transferência', 'danger');
+    return false;
+  }
+}
+
+async function handleCopyActiveTicketId() {
+  if (!currentTicket || !currentTicket.name) return;
+  const ticketId = currentTicket.name.trim();
+  const badge = document.getElementById('activeTicketBadge');
+
+  const copied = await copyToClipboard(ticketId, `Ticket copiado: ${ticketId}`);
+  if (copied && badge && !isCopyingBadge) {
+    isCopyingBadge = true;
+    const originalText = `Ticket Ativo: ${ticketId}`;
+    badge.className = 'badge badge-success badge-interactive';
+    badge.innerHTML = `<span data-icon="check"></span> Copiado!`;
+    if (window.renderIcons) window.renderIcons();
+
+    setTimeout(() => {
+      if (currentTicket && currentTicket.name === ticketId) {
+        badge.className = 'badge badge-accent badge-interactive';
+        badge.textContent = originalText;
+      }
+      isCopyingBadge = false;
+    }, 1500);
+  }
+}
+
+async function handleCopyActivePath() {
+  if (!currentTicket || !currentTicket.path) return;
+  await copyToClipboard(currentTicket.path, 'Caminho do ticket copiado!');
+}
+
 function setActiveTicket(ticket) {
   currentTicket = ticket;
   currentSubfolders = ticket.subfolders || [];
   currentTicketFiles = ticket.files || [];
   
-  // Atualiza Badge do Header
+  // Atualiza Badge do Header com Acessibilidade e Interatividade
   const badge = document.getElementById('activeTicketBadge');
   if (badge) {
     badge.textContent = `Ticket Ativo: ${ticket.name}`;
-    badge.className = 'badge badge-accent';
+    badge.className = 'badge badge-accent badge-interactive';
+    badge.setAttribute('role', 'button');
+    badge.setAttribute('tabindex', '0');
+    badge.setAttribute('title', `Clique para copiar o código do ticket (${ticket.name})`);
+    badge.setAttribute('aria-label', `Copiar identificador do ticket ativo: ${ticket.name}`);
+    badge.onclick = handleCopyActiveTicketId;
+    badge.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleCopyActiveTicketId();
+      }
+    };
   }
 
   // Atualiza Card de Ticket Ativo
@@ -270,10 +353,20 @@ function setActiveTicket(ticket) {
   if (cardActive) cardActive.style.display = 'flex';
   
   const nameEl = document.getElementById('activeTicketName');
-  if (nameEl) nameEl.textContent = ticket.name;
+  if (nameEl) {
+    nameEl.textContent = ticket.name;
+    nameEl.style.cursor = 'pointer';
+    nameEl.setAttribute('title', 'Clique para copiar o código do ticket');
+    nameEl.onclick = handleCopyActiveTicketId;
+  }
   
   const pathEl = document.getElementById('activeTicketPath');
-  if (pathEl) pathEl.textContent = ticket.path;
+  if (pathEl) {
+    pathEl.textContent = ticket.path;
+    pathEl.style.cursor = 'pointer';
+    pathEl.setAttribute('title', 'Clique para copiar o caminho do ticket');
+    pathEl.onclick = handleCopyActivePath;
+  }
 
   // Atualiza contadores de arquivos
   updateFilesBadges(currentTicketFiles.length);
