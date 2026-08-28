@@ -1,7 +1,29 @@
 {
   "version": "1",
-  "updated_at": "2026-08-26",
+  "updated_at": "2026-08-28",
   "plugins": [
+    {
+      "id": "safe",
+      "name": "Cofre Seguro",
+      "version": "1.0.0",
+      "description": "Cofre de senhas e credenciais com criptografia AES-256-GCM em repouso, Windows Hello e API para outros plugins.",
+      "author": "Rodrigo Lessa",
+      "language": "python",
+      "tags": [
+        "segurança",
+        "senhas",
+        "cofre",
+        "criptografia",
+        "windows hello",
+        "vault"
+      ],
+      "icon": "shield-check",
+      "command": "safe",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/safe-1.0.0/safe.zip",
+      "min_toolbox_version": "1.22.3",
+      "updated_at": "2026-08-28",
+      "theme_version": "material-3"
+    },
     {
       "id": "har-kibana-planner",
       "name": "HAR Kibana Planner",

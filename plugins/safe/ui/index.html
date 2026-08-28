@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cofre Seguro — Toolbox</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="theme-dark">
+
+  <!-- ===================================================================== -->
+  <!-- 1. TELA DE SETUP (PRIMEIRA CONFIGURAÇÃO) -->
+  <!-- ===================================================================== -->
+  <div id="screen-setup" class="app-screen active">
+    <div class="setup-card">
+      <div class="setup-header">
+        <div class="setup-icon"><i data-lucide="shield-check"></i></div>
+        <h2>Configurar Cofre Seguro</h2>
+        <p class="subtitle">Proteja suas credenciais com criptografia AES-256-GCM em repouso e Windows Hello.</p>
+      </div>
+
+      <div class="setup-form">
+        <div class="form-group">
+          <label class="form-label">Modo de Autenticação</label>
+          <div class="auth-modes-grid">
+            <label class="mode-card selected" onclick="selectAuthMode('hybrid', this)">
+              <input type="radio" name="auth_mode" value="hybrid" checked>
+              <i data-lucide="fingerprint"></i>
+              <div class="mode-info">
+                <strong>Híbrido (Recomendado)</strong>
+                <span>Windows Hello (Biometria/PIN) + Senha Mestre de contingência</span>
+              </div>
+            </label>
+
+            <label class="mode-card" onclick="selectAuthMode('windows_hello', this)">
+              <input type="radio" name="auth_mode" value="windows_hello">
+              <i data-lucide="scan-face"></i>
+              <div class="mode-info">
+                <strong>Windows Hello Puro</strong>
+                <span>Desbloqueio biométrico via hardware seguro (TPM)</span>
+              </div>
+            </label>
+
+            <label class="mode-card" onclick="selectAuthMode('master_password', this)">
+              <input type="radio" name="auth_mode" value="master_password">
+              <i data-lucide="key-round"></i>
+              <div class="mode-info">
+                <strong>Senha Mestre</strong>
+                <span>Derivação criptográfica de chave via Argon2id</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div id="setup-password-group" class="form-group">
+          <label class="form-label" for="setup-password">Defina sua Senha Mestre</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="setup-password" class="form-input" placeholder="Digite uma senha forte...">
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('setup-password', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <small class="form-hint">Mínimo de 4 caracteres. Usada para contingência e derivação de chave.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="setup-timeout">Bloqueio Automático por Inatividade</label>
+          <select id="setup-timeout" class="form-select">
+            <option value="60">1 minuto</option>
+            <option value="300" selected>5 minutos (Padrão)</option>
+            <option value="600">10 minutos</option>
+            <option value="1800">30 minutos</option>
+            <option value="0">Desativado</option>
+          </select>
+        </div>
+
+        <button type="button" id="btn-save-setup" class="btn btn-primary btn-block" onclick="handleSetupSubmit()">
+          <i data-lucide="lock"></i> Criar e Inicializar Cofre
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 2. TELA DE DESBLOQUEIO -->
+  <!-- ===================================================================== -->
+  <div id="screen-unlock" class="app-screen">
+    <div class="unlock-card">
+      <div class="unlock-header">
+        <div class="lock-shield-icon"><i data-lucide="lock"></i></div>
+        <h2>Cofre Seguro Bloqueado</h2>
+        <p class="subtitle">Autentique-se para descriptografar suas credenciais</p>
+      </div>
+
+      <div class="unlock-actions">
+        <button type="button" id="btn-unlock-hello" class="btn btn-hello btn-block" onclick="handleUnlockHello()">
+          <i data-lucide="fingerprint"></i> Desbloquear com Windows Hello
+        </button>
+
+        <div class="divider"><span>ou com Senha Mestre</span></div>
+
+        <div class="form-group">
+          <div class="input-password-wrapper">
+            <input type="password" id="unlock-password" class="form-input" placeholder="Digite a Senha Mestre..." onkeydown="if(event.key==='Enter') handleUnlockPassword()">
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('unlock-password', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="button" id="btn-unlock-pwd" class="btn btn-primary btn-block" onclick="handleUnlockPassword()">
+          <i data-lucide="key"></i> Desbloquear Cofre
+        </button>
+
+        <div id="unlock-error" class="error-banner hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- 3. TELA PRINCIPAL (VAULT MANAGER) -->
+  <!-- ===================================================================== -->
+  <div id="screen-vault" class="app-screen">
+    <!-- Topbar -->
+    <header class="vault-topbar">
+      <div class="topbar-brand">
+        <i data-lucide="shield-check" class="brand-icon"></i>
+        <div>
+          <h1>Cofre Seguro</h1>
+          <span class="vault-status-badge"><span class="pulse-dot"></span> Desbloqueado</span>
+        </div>
+      </div>
+
+      <div class="topbar-search">
+        <i data-lucide="search" class="search-icon"></i>
+        <input type="text" id="search-input" placeholder="Buscar por título, usuário ou tag..." oninput="handleSearch(this.value)">
+      </div>
+
+      <div class="topbar-actions">
+        <div class="autolock-timer" title="Tempo restante até bloqueio automático">
+          <i data-lucide="timer"></i> <span id="autolock-countdown">05:00</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openModal('modal-settings')" title="Configurações">
+          <i data-lucide="settings"></i>
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="handleLockVault()" title="Bloquear Cofre">
+          <i data-lucide="lock"></i> Bloquear
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openAddSecretModal()">
+          <i data-lucide="plus"></i> Novo Segredo
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="vault-workspace">
+      <!-- Sidebar de Categorias -->
+      <aside class="vault-sidebar">
+        <nav class="category-nav">
+          <button class="category-item active" onclick="selectCategory('all', this)">
+            <i data-lucide="layers"></i> Todos os Registros
+            <span class="badge" id="count-all">0</span>
+          </button>
+          <button class="category-item" onclick="selectCategory('password', this)">
+            <i data-lucide="key-round"></i> Senhas & Logins
+            <span class="badge" id="count-password">0</span>
+          </button>
+          <button class="category-item" onclick="selectCategory('api_key', this)">
+            <i data-lucide="code-2"></i> Chaves de API
+            <span class="badge" id="count-api_key">0</span>
+          </button>
+          <button class="category-item" onclick="selectCategory('token', this)">
+            <i data-lucide="ticket"></i> Tokens & Acessos
+            <span class="badge" id="count-token">0</span>
+          </button>
+          <button class="category-item" onclick="selectCategory('certificate', this)">
+            <i data-lucide="file-badge"></i> Certificados
+            <span class="badge" id="count-certificate">0</span>
+          </button>
+          <button class="category-item" onclick="selectCategory('note', this)">
+            <i data-lucide="file-text"></i> Notas Seguras
+            <span class="badge" id="count-note">0</span>
+          </button>
+          <hr class="nav-divider">
+          <button class="category-item" onclick="openModal('modal-grants')">
+            <i data-lucide="share-2"></i> Permissões de Plugins
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Grade de Registros -->
+      <main class="vault-content">
+        <div id="secrets-grid" class="secrets-grid">
+          <!-- Inserido dinamicamente via JS -->
+        </div>
+        <div id="empty-state" class="empty-state hidden">
+          <i data-lucide="shield-alert"></i>
+          <h3>Nenhuma credencial encontrada</h3>
+          <p>Adicione um novo segredo para começar a armazenar dados criptografados.</p>
+          <button class="btn btn-primary" onclick="openAddSecretModal()">
+            <i data-lucide="plus"></i> Adicionar Segredo
+          </button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: ADICIONAR / EDITAR SEGREDO -->
+  <!-- ===================================================================== -->
+  <div id="modal-secret" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-secret-title">Novo Registro Seguro</h3>
+        <button class="btn-close" onclick="closeModal('modal-secret')"><i data-lucide="x"></i></button>
+      </div>
+
+      <form id="form-secret" onsubmit="handleSaveSecret(event)">
+        <input type="hidden" id="secret-id">
+
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label class="form-label" for="secret-title-input">Título / Identificador *</label>
+            <input type="text" id="secret-title-input" class="form-input" placeholder="Ex: AWS Produção, GitHub PAT..." required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label" for="secret-category-select">Categoria</label>
+            <select id="secret-category-select" class="form-select">
+              <option value="password">Senha / Login</option>
+              <option value="api_key">Chave de API</option>
+              <option value="token">Token / Acesso</option>
+              <option value="certificate">Certificado</option>
+              <option value="note">Nota Segura</option>
+              <option value="general">Geral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="secret-username-input">Usuário / Email / Client ID</label>
+          <input type="text" id="secret-username-input" class="form-input" placeholder="Ex: admin@empresa.com, AKIA...">
+        </div>
+
+        <div class="form-group">
+          <div class="label-with-action">
+            <label class="form-label" for="secret-payload-input">Segredo / Senha / Payload Sensível *</label>
+            <button type="button" class="btn-link" onclick="togglePasswordGenerator()">
+              <i data-lucide="wand-2"></i> Gerador de Senha
+            </button>
+          </div>
+
+          <div class="input-password-wrapper">
+            <textarea id="secret-payload-input" class="form-input form-textarea" placeholder="Digite a senha ou cole a chave/token..." rows="3" required></textarea>
+          </div>
+        </div>
+
+        <!-- Painel Embutido: Gerador de Senhas -->
+        <div id="generator-panel" class="generator-panel hidden">
+          <div class="gen-header">
+            <span>Gerador de Senha Segura</span>
+            <button type="button" class="btn-sm btn-primary" onclick="generateNewPassword()">
+              <i data-lucide="refresh-cw"></i> Gerar
+            </button>
+          </div>
+          <div class="gen-options">
+            <label class="range-label">
+              Tamanho: <span id="gen-length-val">20</span>
+              <input type="range" id="gen-length" min="8" max="64" value="20" oninput="document.getElementById('gen-length-val').innerText = this.value; generateNewPassword();">
+            </label>
+            <div class="checkbox-grid">
+              <label><input type="checkbox" id="gen-upper" checked onchange="generateNewPassword()"> A-Z</label>
+              <label><input type="checkbox" id="gen-lower" checked onchange="generateNewPassword()"> a-z</label>
+              <label><input type="checkbox" id="gen-digits" checked onchange="generateNewPassword()"> 0-9</label>
+              <label><input type="checkbox" id="gen-symbols" checked onchange="generateNewPassword()"> !@#$</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="secret-tags-input">Tags (separadas por vírgula)</label>
+          <input type="text" id="secret-tags-input" class="form-input" placeholder="dev, aws, producao...">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-secret')">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Salvar Registro Cifrado</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: VISUALIZAR SEGREDO -->
+  <!-- ===================================================================== -->
+  <div id="modal-view" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="view-title">Detalhes da Credencial</h3>
+        <button class="btn-close" onclick="closeModal('modal-view')"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="view-body">
+        <div class="view-meta-row">
+          <span id="view-category-badge" class="category-badge">Senha</span>
+          <span id="view-created-at" class="timestamp">Criado em 28/08/2026</span>
+        </div>
+
+        <div class="view-field" id="view-user-field">
+          <label>Usuário / Identificador:</label>
+          <div class="copy-box">
+            <span id="view-username" class="value-text">-</span>
+            <button class="btn-icon-sm" onclick="copyField('view-username', this)" title="Copiar Usuário"><i data-lucide="copy"></i></button>
+          </div>
+        </div>
+
+        <div class="view-field">
+          <label>Payload Criptografado (AES-256-GCM):</label>
+          <div class="copy-box secret-box">
+            <span id="view-payload" class="value-text masked">••••••••••••••••</span>
+            <div class="box-actions">
+              <button class="btn-icon-sm" id="btn-toggle-secret-view" onclick="toggleSecretMask()" title="Mostrar/Ocultar"><i data-lucide="eye"></i></button>
+              <button class="btn-icon-sm" onclick="copyField('view-payload-raw', this)" title="Copiar Segredo"><i data-lucide="copy"></i></button>
+            </div>
+            <input type="hidden" id="view-payload-raw">
+          </div>
+          <small class="clipboard-notice"><i data-lucide="info"></i> Ao copiar, o segredo é enviado com segurança para a área de transferência.</small>
+        </div>
+
+        <div class="view-field" id="view-tags-field">
+          <label>Tags:</label>
+          <div id="view-tags-container" class="tags-container"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-view')">Fechar</button>
+        <button class="btn btn-primary" id="btn-edit-current-secret"><i data-lucide="edit-3"></i> Editar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: PERMISSÕES CONCEDIDAS A PLUGINS -->
+  <!-- ===================================================================== -->
+  <div id="modal-grants" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Permissões de Outros Plugins</h3>
+        <button class="btn-close" onclick="closeModal('modal-grants')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle">Plugins do Toolbox autorizados a acessar credenciais específicas:</p>
+        <div id="grants-list" class="grants-list">
+          <!-- Inserido dinamicamente -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-grants')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: CONFIGURAÇÕES -->
+  <!-- ===================================================================== -->
+  <div id="modal-settings" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Configurações do Cofre</h3>
+        <button class="btn-close" onclick="closeModal('modal-settings')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="settings-timeout">Tempo de Inatividade para Bloqueio Automático</label>
+          <select id="settings-timeout" class="form-select">
+            <option value="60">1 minuto</option>
+            <option value="300">5 minutos</option>
+            <option value="600">10 minutos</option>
+            <option value="1800">30 minutos</option>
+            <option value="0">Desativado</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-settings')">Cancelar</button>
+        <button class="btn btn-primary" onclick="handleSaveSettings()"><i data-lucide="check"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
