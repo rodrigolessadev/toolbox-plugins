@@ -10,9 +10,17 @@
 <body class="theme-dark">
 
   <!-- ===================================================================== -->
+  <!-- 0. TELA DE CARREGAMENTO INICIAL (SPLASH SEGURO) -->
+  <!-- ===================================================================== -->
+  <div id="screen-loading" class="app-screen active" style="display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; height: 100vh;">
+    <div class="setup-icon" style="width: 64px; height: 64px; font-size: 32px;"><i data-lucide="shield-check"></i></div>
+    <div style="color: var(--fg-secondary); font-size: 14px;">Inicializando Cofre Seguro...</div>
+  </div>
+
+  <!-- ===================================================================== -->
   <!-- 1. TELA DE SETUP (PRIMEIRA CONFIGURAÇÃO) -->
   <!-- ===================================================================== -->
-  <div id="screen-setup" class="app-screen active">
+  <div id="screen-setup" class="app-screen">
     <div class="setup-card">
       <div class="setup-header">
         <div class="setup-icon"><i data-lucide="shield-check"></i></div>

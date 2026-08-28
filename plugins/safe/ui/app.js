@@ -8,6 +8,8 @@ let cachedSecrets = [];
 let autoLockInterval = null;
 let currentSecretBeingViewed = null;
 
+let appInitialized = false;
+
 // ============================================================================
 // Inicialização
 // ============================================================================
@@ -18,7 +20,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   
   // Aguarda pywebview ficar pronto
-  if (window.pywebview) {
+  if (window.pywebview && window.pywebview.api) {
     initApp();
   } else {
     window.addEventListener('pywebviewready', initApp);
@@ -41,8 +43,11 @@ async function callApi(method, ...args) {
 }
 
 async function initApp() {
+  if (appInitialized) return;
+
   const statusRes = await callApi('get_vault_status');
   if (statusRes && statusRes.success) {
+    appInitialized = true;
     const data = statusRes.data;
     if (!data.configured) {
       showScreen('screen-setup');
@@ -55,15 +60,22 @@ async function initApp() {
       startAutoLockTimer(data.auto_lock_remaining);
     }
   } else {
-    showScreen('screen-setup');
+    if (window.pywebview && window.pywebview.api) {
+      appInitialized = true;
+      showScreen('screen-setup');
+    }
   }
 }
 
 function showScreen(screenId) {
-  document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.app-screen').forEach(s => {
+    s.classList.remove('active');
+    s.style.display = 'none';
+  });
   const target = document.getElementById(screenId);
   if (target) {
     target.classList.add('active');
+    target.style.display = (screenId === 'screen-loading') ? 'flex' : 'block';
   }
   if (window.lucide) window.lucide.createIcons();
 }
@@ -129,20 +141,37 @@ function setupUnlockScreen(data) {
 }
 
 async function handleUnlockHello() {
+  const btnHello = document.getElementById('btn-unlock-hello');
   const errBanner = document.getElementById('unlock-error');
   errBanner.classList.add('hidden');
 
-  const res = await callApi('unlock_vault', null, true, 'Desbloquear Cofre Seguro Toolbox');
-  if (res && res.success) {
-    showScreen('screen-vault');
-    loadVaultData();
-    const statusRes = await callApi('get_vault_status');
-    if (statusRes.success) {
-      startAutoLockTimer(statusRes.data.auto_lock_remaining);
+  btnHello.disabled = true;
+  const originalHtml = btnHello.innerHTML;
+  btnHello.innerHTML = '<i data-lucide="loader" class="spin"></i> Aguardando Windows Hello...';
+  if (window.lucide) window.lucide.createIcons();
+
+  try {
+    const res = await callApi('unlock_vault', null, true, 'Desbloquear Cofre Seguro Toolbox');
+    if (res && res.success) {
+      showScreen('screen-vault');
+      loadVaultData();
+      const statusRes = await callApi('get_vault_status');
+      if (statusRes && statusRes.success) {
+        startAutoLockTimer(statusRes.data.auto_lock_remaining);
+      }
+    } else {
+      errBanner.innerText = res.message || 'Falha ao autenticar com Windows Hello.';
+      errBanner.classList.remove('hidden');
+      showScreen('screen-unlock');
     }
-  } else {
-    errBanner.innerText = res.message || 'Falha ao autenticar com Windows Hello.';
+  } catch (err) {
+    errBanner.innerText = String(err);
     errBanner.classList.remove('hidden');
+    showScreen('screen-unlock');
+  } finally {
+    btnHello.disabled = false;
+    btnHello.innerHTML = originalHtml;
+    if (window.lucide) window.lucide.createIcons();
   }
 }
 

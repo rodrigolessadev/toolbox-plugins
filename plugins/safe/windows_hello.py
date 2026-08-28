@@ -48,13 +48,9 @@ def is_windows_hello_available() -> bool:
         )
         out = (res.stdout or "").strip()
         # Valores possíveis: 'Available', 'DeviceNotPresent', 'NotConfiguredForUser', 'DisabledByPolicy', 'DeviceBusy'
-        if "Available" in out:
-            return True
+        return "Available" in out
     except Exception:
-        pass
-
-    # Em ambientes onde WinRT não está disponível diretamente, DPAPI nativo do Windows está sempre disponível
-    return True
+        return False
 
 
 def verify_windows_hello(prompt_message: str = "Confirme sua identidade para acessar o Cofre Seguro") -> Tuple[bool, str]:
@@ -75,7 +71,7 @@ def verify_windows_hello(prompt_message: str = "Confirme sua identidade para ace
         "  $task.Wait(); "
         "  $res = $task.Result.ToString(); "
         "  Write-Output $res "
-        "} else { Write-Output 'VerificationFailed' }"
+        "} else { Write-Output 'Unavailable' }"
     )
 
     try:
@@ -95,9 +91,12 @@ def verify_windows_hello(prompt_message: str = "Confirme sua identidade para ace
             return False, "Windows Hello não está configurado neste computador."
         elif "RetriesExhausted" in out:
             return False, "Tentativas biométricas esgotadas. Utilize o PIN ou senha."
+        elif "DisabledByPolicy" in out:
+            return False, "Windows Hello desabilitado pelas diretivas do sistema."
+        elif "DeviceBusy" in out:
+            return False, "O dispositivo de autenticação biométrica está ocupado."
         else:
-            # Fallback para teste/ambiente com DPAPI
-            return True, "Autenticação confirmada via contexto do usuário do sistema."
+            return False, f"Autenticação não confirmada pelo Windows Hello ({out or 'Falha'})."
     except Exception as e:
         return False, f"Erro ao solicitar verificação do Windows Hello: {e}"
 

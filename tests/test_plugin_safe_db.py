@@ -102,3 +102,57 @@ def test_db_entries_and_grants_crud():
         assert safe_db.delete_entry("entry-1") is True
         assert safe_db.get_entry("entry-1") is None
         assert safe_db.get_grant("plugin-aws", "entry-1") is None
+
+
+def test_get_default_db_path():
+    from safe.db import get_default_db_path
+    path = get_default_db_path()
+    assert path.name == "toolbox.db"
+
+
+def test_legacy_vault_migration():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        legacy_vault = Path(tmpdir) / "vault.db"
+        # Cria e popula banco legado
+        old_db = SafeDatabase(legacy_vault)
+        old_db.save_metadata(
+            auth_mode="master_password",
+            kdf_salt=b"salt_legado_1234",
+            kdf_algorithm="argon2id",
+            kdf_params={"time_cost": 3},
+            wrapped_master_key=b"mk_legada_1234567890",
+            auto_lock_timeout=180,
+        )
+        old_db.insert_entry(
+            entry_id="leg-1",
+            title="Credencial Legada",
+            category="api_key",
+            owner_plugin_id=None,
+            username_or_key="user_legado",
+            encrypted_payload=b"cifrado_legado",
+            iv=b"iv1234567890",
+            auth_tag=b"tag1234567890123",
+        )
+
+        # Novo banco central toolbox.db
+        central_db_path = Path(tmpdir) / "toolbox.db"
+        central_db = SafeDatabase(central_db_path)
+        
+        # Executa migração explícita passando o caminho do legado
+        migrated = central_db.migrate_legacy_vault_if_exists(legacy_path=legacy_vault)
+        assert migrated is True
+
+        # Valida que os dados foram transferidos para o central
+        meta = central_db.get_metadata()
+        assert meta is not None
+        assert meta["auth_mode"] == "master_password"
+        assert meta["kdf_salt"] == b"salt_legado_1234"
+        assert central_db.count_entries() == 1
+        entry = central_db.get_entry("leg-1")
+        assert entry is not None
+        assert entry["title"] == "Credencial Legada"
+
+        # Valida que o legado foi renomeado para .bak
+        assert not legacy_vault.exists()
+        bak_file = Path(tmpdir) / "vault.db.migrated.bak"
+        assert bak_file.exists()
