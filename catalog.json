@@ -230,7 +230,7 @@
       "id": "novo-ticket",
       "name": "Novo Ticket",
       "description": "Criação de tickets (CLIENTE_TICKET) e extrator temporal de logs com interface moderna pywebview e tema dark oficial.",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -244,9 +244,9 @@
       ],
       "icon": "ticket",
       "command": "novo-ticket",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.5.0/novo-ticket.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/novo-ticket-1.5.1/novo-ticket.zip",
       "min_toolbox_version": "1.22.3",
-      "updated_at": "2026-08-26",
+      "updated_at": "2026-08-28",
       "theme_version": "material-3"
     },
     {
