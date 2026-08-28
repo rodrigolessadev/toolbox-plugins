@@ -756,7 +756,12 @@ def load_user_config(config_file: Optional[Path] = None) -> Dict[str, Any]:
     if not target.exists():
         return {"base_dir": ""}
     try:
-        return json.loads(target.read_text(encoding="utf-8"))
+        data = json.loads(target.read_text(encoding="utf-8"))
+        base_dir = data.get("base_dir", "")
+        # Validação defensiva: se o diretório configurado não existir no disco ou não for pasta, redefine para vazio
+        if base_dir and (not Path(base_dir).exists() or not Path(base_dir).is_dir()):
+            data["base_dir"] = ""
+        return data
     except Exception:
         return {"base_dir": ""}
 
