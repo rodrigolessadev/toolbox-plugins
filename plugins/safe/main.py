@@ -54,10 +54,11 @@ class SafePluginApi(BasePluginApi):
 
     def setup_vault(
         self,
-        auth_mode: str = "master_password",
+        auth_mode: str = "hybrid",
         password: Optional[str] = None,
         use_hello: bool = False,
         timeout: int = 300,
+        lock_on_os_lock: bool = True,
     ) -> Dict[str, Any]:
         try:
             res = self.service.setup_vault(
@@ -65,6 +66,7 @@ class SafePluginApi(BasePluginApi):
                 password=password,
                 use_hello=use_hello,
                 auto_lock_timeout=timeout,
+                lock_on_os_lock=lock_on_os_lock,
             )
             return {"success": True, "data": res}
         except Exception as e:
@@ -197,10 +199,70 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
-    def update_settings(self, auto_lock_timeout: int) -> Dict[str, Any]:
+    def set_master_password(self, password: str) -> Dict[str, Any]:
         try:
-            self.service.update_settings(auto_lock_timeout=auto_lock_timeout)
-            return {"success": True, "message": "Configurações atualizadas."}
+            res = self.service.set_master_password(password=password)
+            return {"success": True, "message": res.get("message", "Senha mestre definida com sucesso!")}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def update_security_settings(self, auto_lock_timeout: int, lock_on_os_lock: bool = True) -> Dict[str, Any]:
+        try:
+            res = self.service.update_security_settings(
+                auto_lock_timeout=auto_lock_timeout,
+                lock_on_os_lock=lock_on_os_lock,
+            )
+            return {"success": True, "data": res, "message": "Configurações de segurança salvas com sucesso!"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def update_settings(self, auto_lock_timeout: int) -> Dict[str, Any]:
+        return self.update_security_settings(auto_lock_timeout=auto_lock_timeout, lock_on_os_lock=True)
+
+    def export_secrets(self) -> Dict[str, Any]:
+        try:
+            data = self.service.export_secrets()
+            return {"success": True, "data": data}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def import_secrets(self, items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Dict[str, Any]:
+        try:
+            res = self.service.import_secrets(items_or_payload)
+            return res
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def import_secrets_from_file_path(self, file_path: str) -> Dict[str, Any]:
+        try:
+            import json
+            p = Path(file_path)
+            if not p.exists() or not p.is_file():
+                return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
+            content = p.read_text(encoding="utf-8")
+            data = json.loads(content)
+            return self.service.import_secrets(data)
+        except Exception as e:
+            return {"success": False, "message": f"Erro ao ler arquivo: {e}"}
+
+    def select_and_import_secrets_file(self) -> Dict[str, Any]:
+        """Abre janela para selecionar arquivo JSON (Save in Cloud ou Backup) e importa."""
+        try:
+            if not self._window:
+                return {"success": False, "message": "Janela não inicializada."}
+            
+            import webview
+            file_types = ("Arquivos JSON (*.json)", "Todos os arquivos (*.*)")
+            res = self._window.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=False,
+                file_types=file_types,
+            )
+            if not res or len(res) == 0:
+                return {"success": False, "message": "Nenhum arquivo selecionado."}
+            
+            chosen_file = res[0] if isinstance(res, (list, tuple)) else str(res)
+            return self.import_secrets_from_file_path(chosen_file)
         except Exception as e:
             return {"success": False, "message": str(e)}
 

@@ -59,11 +59,23 @@ async function initApp() {
       showScreen('screen-vault');
       loadVaultData();
       startAutoLockTimer(data.auto_lock_remaining);
+      checkPasswordMigrationBanner(data);
     }
   } else {
     if (window.pywebview && window.pywebview.api) {
       appInitialized = true;
       showScreen('screen-setup');
+    }
+  }
+}
+
+function checkPasswordMigrationBanner(data) {
+  const banner = document.getElementById('banner-password-migration');
+  if (banner) {
+    if (data && data.needs_password_migration) {
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
     }
   }
 }
@@ -87,69 +99,62 @@ function showScreen(screenId) {
 
 function setupSetupScreen(data) {
   const helloAvailable = Boolean(data && data.windows_hello_available);
-  const cardHello = document.querySelector('label[onclick*="windows_hello"]');
-  const cardHybrid = document.querySelector('label[onclick*="hybrid"]');
-  const cardMaster = document.querySelector('label[onclick*="master_password"]');
+  const helloOpt = document.getElementById('setup-hello-option');
+  const helloCheckbox = document.getElementById('setup-enable-hello');
 
-  if (!helloAvailable) {
-    if (cardHello) {
-      cardHello.classList.add('disabled');
-      cardHello.style.opacity = '0.5';
-      cardHello.style.pointerEvents = 'none';
+  if (helloOpt) {
+    if (!helloAvailable) {
+      helloOpt.style.opacity = '0.5';
+      helloOpt.style.pointerEvents = 'none';
+      if (helloCheckbox) helloCheckbox.checked = false;
+    } else {
+      helloOpt.style.opacity = '1';
+      helloOpt.style.pointerEvents = 'auto';
+      if (helloCheckbox) helloCheckbox.checked = true;
     }
-    if (cardHybrid) {
-      cardHybrid.classList.add('disabled');
-      cardHybrid.style.opacity = '0.5';
-      cardHybrid.style.pointerEvents = 'none';
-    }
-    if (cardMaster) {
-      selectAuthMode('master_password', cardMaster);
-    }
-  } else {
-    if (cardHybrid) {
-      selectAuthMode('hybrid', cardHybrid);
-    }
-  }
-}
-
-function selectAuthMode(mode, element) {
-  currentAuthMode = mode;
-  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
-  element.classList.add('selected');
-  const radio = element.querySelector('input[type="radio"]');
-  if (radio) radio.checked = true;
-
-  const pwdGroup = document.getElementById('setup-password-group');
-  if (mode === 'windows_hello') {
-    pwdGroup.style.opacity = '0.5';
-  } else {
-    pwdGroup.style.opacity = '1';
   }
 }
 
 async function handleSetupSubmit() {
-  const password = document.getElementById('setup-password').value;
+  const pwd = document.getElementById('setup-password').value;
+  const pwdConfirm = document.getElementById('setup-password-confirm').value;
   const timeout = parseInt(document.getElementById('setup-timeout').value, 10);
+  const lockOnOs = document.getElementById('setup-lock-on-os').checked;
+  const enableHello = document.getElementById('setup-enable-hello') ? document.getElementById('setup-enable-hello').checked : false;
+  const errBox = document.getElementById('setup-error');
   const btn = document.getElementById('btn-save-setup');
 
-  if (currentAuthMode !== 'windows_hello' && (!password || password.length < 4)) {
-    alert('Por favor, defina uma Senha Mestre de no mínimo 4 caracteres.');
+  errBox.classList.add('hidden');
+
+  if (!pwd || pwd.length < 4) {
+    errBox.innerText = 'A Senha Mestre é obrigatória e deve ter no mínimo 4 caracteres.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  if (pwd !== pwdConfirm) {
+    errBox.innerText = 'A confirmação de senha não confere com a Senha Mestre digitada.';
+    errBox.classList.remove('hidden');
     return;
   }
 
   btn.disabled = true;
-  btn.innerText = 'Inicializando Cofre...';
+  btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Inicializando Cofre...';
+  if (window.lucide) window.lucide.createIcons();
 
-  const res = await callApi('setup_vault', currentAuthMode, password, currentAuthMode !== 'master_password', timeout);
+  const authMode = enableHello ? 'hybrid' : 'master_password';
+  const res = await callApi('setup_vault', authMode, pwd, enableHello, timeout, lockOnOs);
   btn.disabled = false;
-  btn.innerText = 'Criar e Inicializar Cofre';
+  btn.innerHTML = '<i data-lucide="lock"></i> Criar e Inicializar Cofre';
+  if (window.lucide) window.lucide.createIcons();
 
   if (res && res.success) {
     showScreen('screen-vault');
     loadVaultData();
     startAutoLockTimer(timeout);
   } else {
-    alert(res.message || 'Falha ao inicializar o cofre.');
+    errBox.innerText = res.message || 'Falha ao inicializar o cofre.';
+    errBox.classList.remove('hidden');
   }
 }
 
@@ -600,16 +605,162 @@ async function loadGrantsList() {
   }
 }
 
-async function handleRevokeGrant(grantId) {
-  await callApi('revoke_plugin_access', grantId);
-  loadGrantsList();
+async function openSettingsModal() {
+  const statusRes = await callApi('get_vault_status');
+  if (statusRes && statusRes.success) {
+    const data = statusRes.data;
+    document.getElementById('settings-timeout').value = String(data.auto_lock_timeout || 300);
+    document.getElementById('settings-lock-on-os').checked = (data.lock_on_os_lock !== false);
+    
+    const authStatus = document.getElementById('settings-auth-status');
+    const pwdBtnLabel = document.getElementById('settings-btn-pwd-label');
+    if (data.needs_password_migration) {
+      if (authStatus) authStatus.innerText = 'Autenticação: Windows Hello Apenas (Sem Senha)';
+      if (pwdBtnLabel) pwdBtnLabel.innerText = 'Cadastrar Senha Mestre';
+    } else {
+      if (authStatus) authStatus.innerText = `Autenticação: ${data.auth_mode === 'hybrid' ? 'Híbrida (Windows Hello + Senha)' : 'Senha Mestre'}`;
+      if (pwdBtnLabel) pwdBtnLabel.innerText = 'Alterar Senha Mestre';
+    }
+  }
+  openModal('modal-settings');
 }
 
 async function handleSaveSettings() {
   const timeout = parseInt(document.getElementById('settings-timeout').value, 10);
-  await callApi('update_settings', timeout);
+  const lockOnOs = document.getElementById('settings-lock-on-os').checked;
+  const res = await callApi('update_security_settings', timeout, lockOnOs);
+  if (res && res.success) {
+    closeModal('modal-settings');
+    startAutoLockTimer(timeout);
+  } else {
+    alert(res.message || 'Erro ao salvar configurações.');
+  }
+}
+
+// ============================================================================
+// Cadastro / Alteração de Senha Mestre
+// ============================================================================
+
+function openSetPasswordModal() {
   closeModal('modal-settings');
-  startAutoLockTimer(timeout);
+  document.getElementById('new-master-pwd').value = '';
+  document.getElementById('new-master-pwd-confirm').value = '';
+  const errBox = document.getElementById('set-pwd-error');
+  if (errBox) errBox.classList.add('hidden');
+  openModal('modal-set-password');
+}
+
+async function handleSetMasterPasswordSubmit() {
+  const pwd = document.getElementById('new-master-pwd').value;
+  const pwdConfirm = document.getElementById('new-master-pwd-confirm').value;
+  const errBox = document.getElementById('set-pwd-error');
+
+  errBox.classList.add('hidden');
+
+  if (!pwd || pwd.length < 4) {
+    errBox.innerText = 'A Senha Mestre deve ter pelo menos 4 caracteres.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  if (pwd !== pwdConfirm) {
+    errBox.innerText = 'A confirmação não confere com a Senha Mestre informada.';
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const res = await callApi('set_master_password', pwd);
+  if (res && res.success) {
+    closeModal('modal-set-password');
+    const banner = document.getElementById('banner-password-migration');
+    if (banner) banner.classList.add('hidden');
+    alert('Senha Mestre configurada com sucesso!');
+  } else {
+    errBox.innerText = res.message || 'Falha ao definir a Senha Mestre.';
+    errBox.classList.remove('hidden');
+  }
+}
+
+// ============================================================================
+// Importação & Exportação de Segredos (Save in Cloud / Backup)
+// ============================================================================
+
+function openImportModal() {
+  document.getElementById('import-json-text').value = '';
+  const statusMsg = document.getElementById('import-status-msg');
+  if (statusMsg) {
+    statusMsg.className = 'hidden';
+    statusMsg.innerText = '';
+  }
+  openModal('modal-import');
+}
+
+async function handleSelectImportFile() {
+  const statusMsg = document.getElementById('import-status-msg');
+  statusMsg.className = 'hidden';
+  
+  const res = await callApi('select_and_import_secrets_file');
+  if (res && res.success) {
+    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
+    statusMsg.style.color = 'var(--success)';
+    statusMsg.innerText = res.message || `${res.imported} registros importados com sucesso.`;
+    statusMsg.classList.remove('hidden');
+    loadVaultData();
+  } else {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = res.message || 'Nenhum registro importado.';
+    statusMsg.classList.remove('hidden');
+  }
+}
+
+async function handleImportJsonText() {
+  const text = document.getElementById('import-json-text').value;
+  const statusMsg = document.getElementById('import-status-msg');
+
+  if (!text || !text.trim()) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = 'Insira o JSON de credenciais para importar.';
+    statusMsg.classList.remove('hidden');
+    return;
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = `JSON inválido: ${e.message}`;
+    statusMsg.classList.remove('hidden');
+    return;
+  }
+
+  const res = await callApi('import_secrets', parsed);
+  if (res && res.success) {
+    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
+    statusMsg.style.color = 'var(--success)';
+    statusMsg.innerText = res.message || `${res.imported} registros importados com sucesso!`;
+    statusMsg.classList.remove('hidden');
+    loadVaultData();
+  } else {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = res.message || 'Erro ao importar credenciais.';
+    statusMsg.classList.remove('hidden');
+  }
+}
+
+async function handleExportSecrets() {
+  const res = await callApi('export_secrets');
+  if (res && res.success && res.data) {
+    const jsonStr = JSON.stringify(res.data, null, 2);
+    await callApi('copy_secret_to_clipboard', jsonStr);
+    alert(`${res.data.length} credenciais exportadas e copiadas para a área de transferência em formato JSON!`);
+  } else {
+    alert(res.message || 'Falha ao exportar credenciais.');
+  }
 }
 
 function togglePasswordVisibility(inputId, btn) {
@@ -633,3 +784,4 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+

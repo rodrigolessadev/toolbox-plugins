@@ -25,63 +25,61 @@
       <div class="setup-header">
         <div class="setup-icon"><i data-lucide="shield-check"></i></div>
         <h2>Configurar Cofre Seguro</h2>
-        <p class="subtitle">Proteja suas credenciais com criptografia AES-256-GCM em repouso e Windows Hello.</p>
+        <p class="subtitle">Proteja suas credenciais com criptografia AES-256-GCM em repouso e chave derivada por Argon2id.</p>
       </div>
 
       <div class="setup-form">
         <div class="form-group">
-          <label class="form-label">Modo de Autenticação</label>
-          <div class="auth-modes-grid">
-            <label class="mode-card selected" onclick="selectAuthMode('hybrid', this)">
-              <input type="radio" name="auth_mode" value="hybrid" checked>
-              <i data-lucide="fingerprint"></i>
-              <div class="mode-info">
-                <strong>Híbrido (Recomendado)</strong>
-                <span>Windows Hello (Biometria/PIN) + Senha Mestre de contingência</span>
-              </div>
-            </label>
-
-            <label class="mode-card" onclick="selectAuthMode('windows_hello', this)">
-              <input type="radio" name="auth_mode" value="windows_hello">
-              <i data-lucide="scan-face"></i>
-              <div class="mode-info">
-                <strong>Windows Hello Puro</strong>
-                <span>Desbloqueio biométrico via hardware seguro (TPM)</span>
-              </div>
-            </label>
-
-            <label class="mode-card" onclick="selectAuthMode('master_password', this)">
-              <input type="radio" name="auth_mode" value="master_password">
-              <i data-lucide="key-round"></i>
-              <div class="mode-info">
-                <strong>Senha Mestre</strong>
-                <span>Derivação criptográfica de chave via Argon2id</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div id="setup-password-group" class="form-group">
-          <label class="form-label" for="setup-password">Defina sua Senha Mestre</label>
+          <label class="form-label" for="setup-password">Defina sua Senha Mestre *</label>
           <div class="input-password-wrapper">
-            <input type="password" id="setup-password" class="form-input" placeholder="Digite uma senha forte...">
+            <input type="password" id="setup-password" class="form-input" placeholder="Digite uma senha forte..." required>
             <button type="button" class="btn-icon" onclick="togglePasswordVisibility('setup-password', this)">
               <i data-lucide="eye"></i>
             </button>
           </div>
-          <small class="form-hint">Mínimo de 4 caracteres. Usada para contingência e derivação de chave.</small>
+          <small class="form-hint">Mínimo de 4 caracteres. Usada como raiz criptográfica e contingência de recuperação.</small>
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="setup-timeout">Bloqueio Automático por Inatividade</label>
-          <select id="setup-timeout" class="form-select">
-            <option value="60">1 minuto</option>
-            <option value="300" selected>5 minutos (Padrão)</option>
-            <option value="600">10 minutos</option>
-            <option value="1800">30 minutos</option>
-            <option value="0">Desativado</option>
-          </select>
+          <label class="form-label" for="setup-password-confirm">Confirme sua Senha Mestre *</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="setup-password-confirm" class="form-input" placeholder="Confirme a senha..." required>
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('setup-password-confirm', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
         </div>
+
+        <div id="setup-hello-option" class="form-group">
+          <label class="checkbox-label" style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 10px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <input type="checkbox" id="setup-enable-hello" checked style="margin-top: 4px;">
+            <div>
+              <strong style="color: var(--fg); display: flex; align-items: center; gap: 6px;"><i data-lucide="fingerprint" style="width: 16px; height: 16px; color: var(--accent);"></i> Habilitar Windows Hello (Biometria / PIN)</strong>
+              <span style="font-size: 11px; color: var(--fg-muted); display: block; margin-top: 2px;">Desbloqueio rápido e conveniente no dia a dia, mantendo a Senha Mestre como segurança.</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label" for="setup-timeout">Auto-Lock por Inatividade</label>
+            <select id="setup-timeout" class="form-select">
+              <option value="60">1 minuto</option>
+              <option value="300" selected>5 minutos (Padrão)</option>
+              <option value="600">10 minutos</option>
+              <option value="1800">30 minutos</option>
+              <option value="0">Desativado</option>
+            </select>
+          </div>
+          <div class="form-group flex-1" style="display: flex; align-items: flex-end;">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; cursor: pointer;">
+              <input type="checkbox" id="setup-lock-on-os" checked>
+              <span>Bloquear ao travar Windows (<kbd>Win+L</kbd>)</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="setup-error" class="error-banner hidden"></div>
 
         <button type="button" id="btn-save-setup" class="btn btn-primary btn-block" onclick="handleSetupSubmit()">
           <i data-lucide="lock"></i> Criar e Inicializar Cofre
@@ -132,6 +130,15 @@
   <!-- 3. TELA PRINCIPAL (VAULT MANAGER) -->
   <!-- ===================================================================== -->
   <div id="screen-vault" class="app-screen">
+    <!-- Banner de Recomendação de Senha (Contas Legadas) -->
+    <div id="banner-password-migration" class="warning-banner hidden" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #2b2010; border-bottom: 1px solid #f5a524; color: #fce8cc; font-size: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="alert-triangle" style="color: #f5a524;"></i>
+        <span><strong>Aviso de Segurança:</strong> Sua conta utiliza apenas Windows Hello. Cadastre uma Senha Mestre para garantir contingência e recuperação.</span>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="openSetPasswordModal()" style="font-size: 11px; padding: 4px 10px;">Cadastrar Senha</button>
+    </div>
+
     <!-- Topbar -->
     <header class="vault-topbar">
       <div class="topbar-brand">
@@ -151,7 +158,13 @@
         <div class="autolock-timer" title="Tempo restante até bloqueio automático">
           <i data-lucide="timer"></i> <span id="autolock-countdown">05:00</span>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="openModal('modal-settings')" title="Configurações">
+        <button class="btn btn-secondary btn-sm" onclick="openImportModal()" title="Importar do Save in Cloud / Arquivo JSON">
+          <i data-lucide="upload-cloud"></i> Importar
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="handleExportSecrets()" title="Exportar Backup de Segredos">
+          <i data-lucide="download"></i>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openSettingsModal()" title="Configurações">
           <i data-lucide="settings"></i>
         </button>
         <button class="btn btn-danger btn-sm" onclick="handleLockVault()" title="Bloquear Cofre">
@@ -207,10 +220,15 @@
         <div id="empty-state" class="empty-state hidden">
           <i data-lucide="shield-alert"></i>
           <h3>Nenhuma credencial encontrada</h3>
-          <p>Adicione um novo segredo para começar a armazenar dados criptografados.</p>
-          <button class="btn btn-primary" onclick="openAddSecretModal()">
-            <i data-lucide="plus"></i> Adicionar Segredo
-          </button>
+          <p>Adicione um novo segredo ou importe registros do Save in Cloud.</p>
+          <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
+            <button class="btn btn-secondary" onclick="openImportModal()">
+              <i data-lucide="upload-cloud"></i> Importar Registros
+            </button>
+            <button class="btn btn-primary" onclick="openAddSecretModal()">
+              <i data-lucide="plus"></i> Adicionar Segredo
+            </button>
+          </div>
         </div>
       </main>
     </div>
@@ -377,7 +395,7 @@
   <div id="modal-settings" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Configurações do Cofre</h3>
+        <h3>Configurações de Segurança</h3>
         <button class="btn-close" onclick="closeModal('modal-settings')"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
@@ -391,10 +409,108 @@
             <option value="0">Desativado</option>
           </select>
         </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <input type="checkbox" id="settings-lock-on-os">
+            <div>
+              <strong style="color: var(--fg); display: block; font-size: 13px;">Bloquear ao travar o computador (<kbd>Win + L</kbd>)</strong>
+              <span style="font-size: 11px; color: var(--fg-muted);">Transiciona automaticamente para o estado bloqueado e limpa chaves da memória.</span>
+            </div>
+          </label>
+        </div>
+
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+
+        <div class="form-group">
+          <label class="form-label">Segurança da Conta & Senha Mestre</label>
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <div>
+              <span id="settings-auth-status" style="font-size: 12px; color: var(--fg); font-weight: 600;">Autenticação: Híbrida</span>
+              <span style="display: block; font-size: 11px; color: var(--fg-muted);">Proteção combinada de biometria e criptografia.</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="openSetPasswordModal()">
+              <i data-lucide="key"></i> <span id="settings-btn-pwd-label">Alterar Senha</span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modal-settings')">Cancelar</button>
-        <button class="btn btn-primary" onclick="handleSaveSettings()"><i data-lucide="check"></i> Salvar</button>
+        <button class="btn btn-primary" onclick="handleSaveSettings()"><i data-lucide="check"></i> Salvar Configurações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: CADASTRAR / ALTERAR SENHA MESTRE -->
+  <!-- ===================================================================== -->
+  <div id="modal-set-password" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="set-pwd-modal-title">Definir Senha Mestre</h3>
+        <button class="btn-close" onclick="closeModal('modal-set-password')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle">Defina uma senha mestre forte para derivar a chave criptográfica e garantir contingência.</p>
+
+        <div class="form-group">
+          <label class="form-label" for="new-master-pwd">Nova Senha Mestre *</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="new-master-pwd" class="form-input" placeholder="Mínimo 4 caracteres..." required>
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('new-master-pwd', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="new-master-pwd-confirm">Confirmar Nova Senha *</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="new-master-pwd-confirm" class="form-input" placeholder="Repita a nova senha..." required>
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('new-master-pwd-confirm', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="set-pwd-error" class="error-banner hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-set-password')">Cancelar</button>
+        <button class="btn btn-primary" onclick="handleSetMasterPasswordSubmit()"><i data-lucide="check"></i> Salvar Senha Mestre</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: IMPORTAR REGISTROS (Save in Cloud / JSON) -->
+  <!-- ===================================================================== -->
+  <div id="modal-import" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Importar Registros (Save in Cloud / Backup)</h3>
+        <button class="btn-close" onclick="closeModal('modal-import')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle">Importe credenciais transferidas pelo Save in Cloud ou arquivos de backup JSON:</p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button class="btn btn-primary" onclick="handleSelectImportFile()">
+            <i data-lucide="folder-open"></i> Selecionar Arquivo JSON
+          </button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="import-json-text">Ou Cole o Conteúdo JSON:</label>
+          <textarea id="import-json-text" class="form-input form-textarea" placeholder='[{"title": "Meu Segredo", "payload": "minhasenha", "category": "password"}]' rows="6"></textarea>
+        </div>
+
+        <div id="import-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 8px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-import')">Fechar</button>
+        <button class="btn btn-primary" onclick="handleImportJsonText()"><i data-lucide="upload"></i> Processar e Importar</button>
       </div>
     </div>
   </div>
