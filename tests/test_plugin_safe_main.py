@@ -75,3 +75,11 @@ print('SERVICE_SUCCESS')
     )
     assert res.returncode == 0, f"Erro na execução do service: {res.stderr}"
     assert "SERVICE_SUCCESS" in res.stdout
+
+
+def test_safe_taskbar_icon_exists():
+    """Valida que o ícone oficial shield-check.ico existe no diretório de assets."""
+    assert safe_main.SHIELD_CHECK_ICON_PATH.exists()
+    assert safe_main.SHIELD_CHECK_ICON_PATH.is_file()
+    assert safe_main.SHIELD_CHECK_ICON_PATH.stat().st_size > 0
+

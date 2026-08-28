@@ -212,8 +212,81 @@ class SafePluginApi(BasePluginApi):
             return {"success": False, "message": str(e)}
 
 
+SHIELD_CHECK_ICON_PATH = PLUGIN_DIR / "ui" / "assets" / "shield-check.ico"
+
+
+def set_window_taskbar_icon(icon_path: Optional[Path] = None, hwnd: Optional[int] = None) -> bool:
+    """Atualiza o ícone da janela e da barra de tarefas no Windows para o ícone do cofre seguro."""
+    if sys.platform != "win32":
+        return False
+
+    target_icon = Path(icon_path) if icon_path else SHIELD_CHECK_ICON_PATH
+    if not target_icon.exists():
+        return False
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+        import os
+
+        user32 = ctypes.windll.user32
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x00000010
+        WM_SETICON = 0x0080
+        ICON_SMALL = 0
+        ICON_BIG = 1
+
+        h_icon_big = user32.LoadImageW(
+            None,
+            str(target_icon),
+            IMAGE_ICON,
+            32,
+            32,
+            LR_LOADFROMFILE,
+        )
+        h_icon_small = user32.LoadImageW(
+            None,
+            str(target_icon),
+            IMAGE_ICON,
+            16,
+            16,
+            LR_LOADFROMFILE,
+        )
+
+        if not h_icon_big and not h_icon_small:
+            return False
+
+        if hwnd:
+            target_hwnds = [hwnd]
+        else:
+            current_pid = os.getpid()
+            target_hwnds = []
+
+            def _enum_windows_cb(handle: int, _: Any) -> bool:
+                lpdw_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(handle, ctypes.byref(lpdw_pid))
+                if lpdw_pid.value == current_pid and user32.IsWindowVisible(handle):
+                    target_hwnds.append(handle)
+                return True
+
+            enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(_enum_windows_cb)
+            user32.EnumWindows(enum_proc, 0)
+
+        for h in target_hwnds:
+            if h_icon_big:
+                user32.SendMessageW(h, WM_SETICON, ICON_BIG, h_icon_big)
+            if h_icon_small:
+                user32.SendMessageW(h, WM_SETICON, ICON_SMALL, h_icon_small)
+
+        return len(target_hwnds) > 0
+    except Exception:
+        return False
+
+
 def main():
     import webview
+    import threading
+
     api = SafePluginApi()
     ui_path = PLUGIN_DIR / "ui" / "index.html"
     window = create_plugin_window(
@@ -224,7 +297,14 @@ def main():
         height=760,
         min_size=(800, 600),
     )
-    webview.start()
+    if webview and window:
+        def on_shown():
+            set_window_taskbar_icon()
+            threading.Timer(0.5, set_window_taskbar_icon).start()
+
+        window.events.shown += on_shown
+
+    webview.start(debug=False)
 
 
 if __name__ == "__main__":
