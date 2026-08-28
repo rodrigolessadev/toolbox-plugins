@@ -15,18 +15,24 @@ from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
 
+try:
+    from shared.db_utils import get_central_db_path
+except ImportError:
+    def get_central_db_path() -> Path:
+        if sys.platform == "win32" and "APPDATA" in os.environ:
+            base_dir = Path(os.environ["APPDATA"]) / "com.toolbox.desktop"
+        else:
+            base_dir = Path.home() / ".toolbox"
+        base_dir.mkdir(parents=True, exist_ok=True)
+        return base_dir / "toolbox.db"
+
+
 def get_default_db_path() -> Path:
     """
     Retorna o caminho padrão para a base SQLite central do Toolbox (toolbox.db).
     Conforme Abordagem B (Toolbox #96 e #97).
     """
-    app_data = os.environ.get("APPDATA")
-    if app_data:
-        base_dir = Path(app_data) / "Toolbox"
-    else:
-        base_dir = Path.home() / ".toolbox"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return base_dir / "toolbox.db"
+    return get_central_db_path()
 
 
 def get_legacy_db_path() -> Path:
@@ -37,6 +43,22 @@ def get_legacy_db_path() -> Path:
     if app_data:
         return Path(app_data) / "Toolbox" / "safe" / "vault.db"
     return Path.home() / ".toolbox" / "safe" / "vault.db"
+
+
+def get_legacy_db_paths() -> List[Path]:
+    """
+    Retorna os caminhos de possíveis bancos legados/órfãos para migração:
+    1. %APPDATA%/Toolbox/toolbox.db (legado de pasta divergente)
+    2. %APPDATA%/Toolbox/safe/vault.db (legado inicial do plugin)
+    3. ~/.toolbox/safe/vault.db
+    """
+    paths = []
+    app_data = os.environ.get("APPDATA")
+    if app_data:
+        paths.append(Path(app_data) / "Toolbox" / "toolbox.db")
+        paths.append(Path(app_data) / "Toolbox" / "safe" / "vault.db")
+    paths.append(Path.home() / ".toolbox" / "safe" / "vault.db")
+    return paths
 
 
 class SafeDatabase:
@@ -65,101 +87,109 @@ class SafeDatabase:
 
     def migrate_legacy_vault_if_exists(self, legacy_path: Optional[Path] = None) -> bool:
         """
-        Migra registros do banco legado vault.db para o toolbox.db caso exista.
+        Migra registros do banco legado (vault.db ou Toolbox/toolbox.db) para o toolbox.db oficial caso existam.
         """
-        old_db = legacy_path or get_legacy_db_path()
-        if not old_db.exists() or not old_db.is_file():
-            return False
+        targets = [legacy_path] if legacy_path else get_legacy_db_paths()
+        any_migrated = False
 
-        try:
-            # Conecta ao banco antigo para ler os dados
-            old_conn = sqlite3.connect(str(old_db), timeout=5.0)
-            old_conn.row_factory = sqlite3.Row
-            old_cursor = old_conn.cursor()
+        for old_db in targets:
+            if not old_db or not old_db.exists() or not old_db.is_file():
+                continue
+            # Não migra a si mesmo
+            if old_db.resolve() == self.db_path.resolve():
+                continue
 
-            # Verifica se existem tabelas no banco antigo
-            old_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='safe_metadata';")
-            if not old_cursor.fetchone():
-                old_conn.close()
-                return False
-
-            old_cursor.execute("SELECT * FROM safe_metadata LIMIT 1;")
-            old_meta = old_cursor.fetchone()
-
-            old_cursor.execute("SELECT * FROM safe_entries;")
-            old_entries = old_cursor.fetchall()
-
-            old_cursor.execute("SELECT * FROM safe_plugin_grants;")
-            old_grants = old_cursor.fetchall()
-            old_conn.close()
-
-            with self.connect() as conn:
-                cursor = conn.cursor()
-                # Verifica se o banco atual já possui metadados configurados
-                cursor.execute("SELECT COUNT(*) as cnt FROM safe_metadata;")
-                row = cursor.fetchone()
-                has_current_meta = row and row["cnt"] > 0
-
-                # Se o banco atual estiver sem metadados e o legado tiver, migra
-                if not has_current_meta and old_meta:
-                    cursor.execute("""
-                        INSERT OR REPLACE INTO safe_metadata (
-                            id, auth_mode, kdf_salt, kdf_algorithm, kdf_params,
-                            wrapped_master_key, hello_credential_id, auto_lock_timeout,
-                            created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-                    """, (
-                        old_meta["id"],
-                        old_meta["auth_mode"],
-                        old_meta["kdf_salt"],
-                        old_meta["kdf_algorithm"],
-                        old_meta["kdf_params"],
-                        old_meta["wrapped_master_key"],
-                        old_meta["hello_credential_id"],
-                        old_meta["auto_lock_timeout"],
-                        old_meta["created_at"],
-                        old_meta["updated_at"],
-                    ))
-
-                # Migra entradas não existentes
-                for e in old_entries:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO safe_entries (
-                            id, title, category, owner_plugin_id, username_or_key,
-                            encrypted_payload, iv, auth_tag, tags, metadata,
-                            is_locked, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-                    """, (
-                        e["id"], e["title"], e["category"], e["owner_plugin_id"],
-                        e["username_or_key"], e["encrypted_payload"], e["iv"],
-                        e["auth_tag"], e["tags"], e["metadata"], e["is_locked"],
-                        e["created_at"], e["updated_at"],
-                    ))
-
-                # Migra permissões
-                for g in old_grants:
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO safe_plugin_grants (
-                            id, plugin_id, entry_id, access_level, granted_at, expires_at
-                        ) VALUES (?, ?, ?, ?, ?, ?);
-                    """, (
-                        g["id"], g["plugin_id"], g["entry_id"], g["access_level"],
-                        g["granted_at"], g["expires_at"],
-                    ))
-
-                conn.commit()
-
-            # Renomeia o banco antigo para backup
-            backup_path = old_db.with_suffix(".db.migrated.bak")
             try:
-                if backup_path.exists():
-                    backup_path.unlink()
-                old_db.rename(backup_path)
+                # Conecta ao banco antigo para ler os dados
+                old_conn = sqlite3.connect(str(old_db), timeout=5.0)
+                old_conn.row_factory = sqlite3.Row
+                old_cursor = old_conn.cursor()
+
+                # Verifica se existem tabelas no banco antigo
+                old_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='safe_metadata';")
+                if not old_cursor.fetchone():
+                    old_conn.close()
+                    continue
+
+                old_cursor.execute("SELECT * FROM safe_metadata LIMIT 1;")
+                old_meta = old_cursor.fetchone()
+
+                old_cursor.execute("SELECT * FROM safe_entries;")
+                old_entries = old_cursor.fetchall()
+
+                old_cursor.execute("SELECT * FROM safe_plugin_grants;")
+                old_grants = old_cursor.fetchall()
+                old_conn.close()
+
+                with self.connect() as conn:
+                    cursor = conn.cursor()
+                    # Verifica se o banco atual já possui metadados configurados
+                    cursor.execute("SELECT COUNT(*) as cnt FROM safe_metadata;")
+                    row = cursor.fetchone()
+                    has_current_meta = row and row["cnt"] > 0
+
+                    # Se o banco atual estiver sem metadados e o legado tiver, migra
+                    if not has_current_meta and old_meta:
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO safe_metadata (
+                                id, auth_mode, kdf_salt, kdf_algorithm, kdf_params,
+                                wrapped_master_key, hello_credential_id, auto_lock_timeout,
+                                created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """, (
+                            old_meta["id"],
+                            old_meta["auth_mode"],
+                            old_meta["kdf_salt"],
+                            old_meta["kdf_algorithm"],
+                            old_meta["kdf_params"],
+                            old_meta["wrapped_master_key"],
+                            old_meta["hello_credential_id"],
+                            old_meta["auto_lock_timeout"],
+                            old_meta["created_at"],
+                            old_meta["updated_at"],
+                        ))
+
+                    # Migra entradas não existentes
+                    for e in old_entries:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO safe_entries (
+                                id, title, category, owner_plugin_id, username_or_key,
+                                encrypted_payload, iv, auth_tag, tags, metadata,
+                                is_locked, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """, (
+                            e["id"], e["title"], e["category"], e["owner_plugin_id"],
+                            e["username_or_key"], e["encrypted_payload"], e["iv"],
+                            e["auth_tag"], e["tags"], e["metadata"], e["is_locked"],
+                            e["created_at"], e["updated_at"],
+                        ))
+
+                    # Migra permissões
+                    for g in old_grants:
+                        cursor.execute("""
+                            INSERT OR IGNORE INTO safe_plugin_grants (
+                                id, plugin_id, entry_id, access_level, granted_at, expires_at
+                            ) VALUES (?, ?, ?, ?, ?, ?);
+                        """, (
+                            g["id"], g["plugin_id"], g["entry_id"], g["access_level"],
+                            g["granted_at"], g["expires_at"],
+                        ))
+
+                    conn.commit()
+
+                # Renomeia o banco antigo para backup
+                backup_path = old_db.with_suffix(".db.migrated.bak")
+                try:
+                    if backup_path.exists():
+                        backup_path.unlink()
+                    old_db.rename(backup_path)
+                except Exception:
+                    pass
+                any_migrated = True
             except Exception:
-                pass
-            return True
-        except Exception:
-            return False
+                continue
+
+        return any_migrated
 
     def init_schema(self) -> None:
         """Executa as migrations para inicializar ou atualizar a estrutura do banco."""
