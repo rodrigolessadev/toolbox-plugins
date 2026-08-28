@@ -205,6 +205,7 @@ class SafeDatabase:
                 kdf_algorithm TEXT DEFAULT 'argon2id',
                 kdf_params TEXT,
                 wrapped_master_key BLOB,
+                wrapped_hello_key BLOB,
                 hello_credential_id TEXT,
                 auto_lock_timeout INTEGER DEFAULT 300,
                 lock_on_os_lock BOOLEAN DEFAULT 1,
@@ -213,12 +214,17 @@ class SafeDatabase:
             );
             """)
 
-            # Migration defensiva para bases existentes sem lock_on_os_lock
+            # Migration defensiva para bases existentes sem lock_on_os_lock ou wrapped_hello_key
             cursor.execute("PRAGMA table_info(safe_metadata);")
             cols = [c[1] for c in cursor.fetchall()]
             if "lock_on_os_lock" not in cols:
                 try:
                     cursor.execute("ALTER TABLE safe_metadata ADD COLUMN lock_on_os_lock BOOLEAN DEFAULT 1;")
+                except Exception:
+                    pass
+            if "wrapped_hello_key" not in cols:
+                try:
+                    cursor.execute("ALTER TABLE safe_metadata ADD COLUMN wrapped_hello_key BLOB;")
                 except Exception:
                     pass
 
@@ -289,6 +295,7 @@ class SafeDatabase:
         kdf_algorithm: str,
         kdf_params: Dict[str, Any],
         wrapped_master_key: Optional[bytes],
+        wrapped_hello_key: Optional[bytes] = None,
         hello_credential_id: Optional[str] = None,
         auto_lock_timeout: int = 300,
         lock_on_os_lock: bool = True,
@@ -299,14 +306,15 @@ class SafeDatabase:
             cursor.execute("""
             INSERT INTO safe_metadata (
                 id, auth_mode, kdf_salt, kdf_algorithm, kdf_params,
-                wrapped_master_key, hello_credential_id, auto_lock_timeout, lock_on_os_lock, updated_at
-            ) VALUES ('default_vault', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                wrapped_master_key, wrapped_hello_key, hello_credential_id, auto_lock_timeout, lock_on_os_lock, updated_at
+            ) VALUES ('default_vault', ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 auth_mode = excluded.auth_mode,
                 kdf_salt = excluded.kdf_salt,
                 kdf_algorithm = excluded.kdf_algorithm,
                 kdf_params = excluded.kdf_params,
                 wrapped_master_key = excluded.wrapped_master_key,
+                wrapped_hello_key = excluded.wrapped_hello_key,
                 hello_credential_id = excluded.hello_credential_id,
                 auto_lock_timeout = excluded.auto_lock_timeout,
                 lock_on_os_lock = excluded.lock_on_os_lock,
@@ -317,6 +325,7 @@ class SafeDatabase:
                 kdf_algorithm,
                 params_json,
                 wrapped_master_key,
+                wrapped_hello_key,
                 hello_credential_id,
                 auto_lock_timeout,
                 1 if lock_on_os_lock else 0,
