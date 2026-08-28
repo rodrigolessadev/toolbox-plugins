@@ -1,0 +1,104 @@
+"""
+Testes unitários para a camada de banco de dados SQLite do plugin Safe.
+"""
+
+import tempfile
+import sys
+from pathlib import Path
+
+PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
+if str(PLUGINS_DIR) not in sys.path:
+    sys.path.insert(0, str(PLUGINS_DIR))
+
+from safe.db import SafeDatabase
+
+
+def test_db_schema_initialization():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test_vault.db"
+        safe_db = SafeDatabase(db_path)
+        assert db_path.exists()
+
+        # Verifica se as tabelas existem
+        with safe_db.connect() as conn:
+            tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+            assert "safe_metadata" in tables
+            assert "safe_entries" in tables
+            assert "safe_plugin_grants" in tables
+
+
+def test_db_metadata_crud():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        safe_db = SafeDatabase(Path(tmpdir) / "test_vault.db")
+        assert safe_db.get_metadata() is None
+
+        safe_db.save_metadata(
+            auth_mode="hybrid",
+            kdf_salt=b"1234567890123456",
+            kdf_algorithm="argon2id",
+            kdf_params={"iterations": 3},
+            wrapped_master_key=b"wrapped_mk_blob",
+            hello_credential_id="cred-123",
+            auto_lock_timeout=600,
+        )
+
+        meta = safe_db.get_metadata()
+        assert meta is not None
+        assert meta["auth_mode"] == "hybrid"
+        assert meta["kdf_salt"] == b"1234567890123456"
+        assert meta["auto_lock_timeout"] == 600
+        assert meta["kdf_params"] == {"iterations": 3}
+
+        safe_db.update_auto_lock_timeout(120)
+        meta2 = safe_db.get_metadata()
+        assert meta2["auto_lock_timeout"] == 120
+
+
+def test_db_entries_and_grants_crud():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        safe_db = SafeDatabase(Path(tmpdir) / "test_vault.db")
+
+        # Inserir entry
+        safe_db.insert_entry(
+            entry_id="entry-1",
+            title="AWS Root Account",
+            category="password",
+            owner_plugin_id=None,
+            username_or_key="root@company.com",
+            encrypted_payload=b"encrypted_bytes_payload",
+            iv=b"123456789012",
+            auth_tag=b"1234567890123456",
+            tags=["aws", "cloud"],
+            metadata={"env": "prod"},
+        )
+
+        assert safe_db.count_entries() == 1
+        entry = safe_db.get_entry("entry-1")
+        assert entry is not None
+        assert entry["title"] == "AWS Root Account"
+        assert entry["tags"] == ["aws", "cloud"]
+        assert entry["metadata"] == {"env": "prod"}
+        assert entry["encrypted_payload"] == b"encrypted_bytes_payload"
+
+        # List summary (sem payload)
+        summary = safe_db.list_entries_summary(category="password")
+        assert len(summary) == 1
+        assert summary[0]["title"] == "AWS Root Account"
+        assert "encrypted_payload" not in summary[0]
+
+        # Inserir grant
+        safe_db.add_grant(
+            grant_id="grant-1",
+            plugin_id="plugin-aws",
+            entry_id="entry-1",
+            access_level="read",
+        )
+
+        grant = safe_db.get_grant("plugin-aws", "entry-1")
+        assert grant is not None
+        assert grant["access_level"] == "read"
+
+        # Deletar entry deve deletar grants em cascata (FK CASCADE)
+        assert safe_db.delete_entry("entry-1") is True
+        assert safe_db.get_entry("entry-1") is None
+        assert safe_db.get_grant("plugin-aws", "entry-1") is None
