@@ -21,7 +21,13 @@ except ImportError:
     # Fallback se importado diretamente
     from plugins.shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard
 
-from .service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
+try:
+    from service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
+except ImportError:
+    try:
+        from .service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
+    except ImportError:
+        from safe.service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
 
 if sys.platform == "win32":
     try:

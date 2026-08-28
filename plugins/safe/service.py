@@ -15,9 +15,19 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from . import crypto
-from . import db
-from . import windows_hello
+try:
+    import crypto
+    import db
+    import windows_hello
+except ImportError:
+    try:
+        from . import crypto
+        from . import db
+        from . import windows_hello
+    except ImportError:
+        from safe import crypto
+        from safe import db
+        from safe import windows_hello
 
 
 class SafeAccessDeniedError(Exception):
