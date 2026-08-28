@@ -34,21 +34,38 @@ class MarkdownViewerApi(BasePluginApi):
         return {"success": False}
 
     def open_file_dialog(self) -> dict:
-        """Abre caixa de diálogo para seleção de arquivo Markdown."""
+        """Abre caixa de diálogo para seleção de um ou múltiplos arquivos Markdown."""
         try:
             if not webview.windows:
                 return {"success": False, "error": "Janela principal não encontrada."}
             win = webview.windows[0]
             result = win.create_file_dialog(
                 webview.OPEN_DIALOG,
-                allow_multiple=False,
+                allow_multiple=True,
                 file_types=("Markdown (*.md;*.markdown;*.mdown;*.mkd)", "Todos os arquivos (*.*)")
             )
             if not result:
                 return {"success": False, "cancelled": True}
 
-            selected_path = result[0] if isinstance(result, (list, tuple)) else result
-            return domain.read_markdown_file(selected_path)
+            file_paths = result if isinstance(result, (list, tuple)) else [result]
+            docs = []
+            for p in file_paths:
+                res = domain.read_markdown_file(p)
+                if res.get("success"):
+                    docs.append(res)
+
+            if not docs:
+                return {"success": False, "error": "Nenhum arquivo válido pôde ser lido."}
+
+            return {
+                "success": True,
+                "files": docs,
+                "data": docs[0],
+                "path": docs[0].get("path", ""),
+                "filename": docs[0].get("filename", ""),
+                "content": docs[0].get("content", ""),
+                "mtime": docs[0].get("mtime", 0),
+            }
         except Exception as exc:
             return {"success": False, "error": f"Erro ao abrir arquivo: {str(exc)}"}
 
