@@ -158,3 +158,53 @@ def test_service_logs_sanitization():
             safe_logger.close_logger(l2)
             safe_logger.close_logger("safe.service")
             safe_logger.close_logger("safe.db")
+
+
+def test_log_frontend_error_bridge():
+    """
+    Testa se erros relatados pelo JavaScript via SafePluginApi.log_frontend_error são registrados no log.
+    """
+    from safe.main import SafePluginApi
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_dir = Path(tmpdir) / "log"
+        test_log = safe_logger.setup_logger(log_dir=log_dir, logger_name="safe.main")
+
+        try:
+            api = SafePluginApi()
+            res = api.log_frontend_error(
+                message="ReferenceError: appInitialized is not defined",
+                stack="at initApp (app.js:25:5)"
+            )
+            assert res.get("success") is True
+
+            for h in test_log.handlers:
+                h.flush()
+
+            log_file = log_dir / safe_logger.get_safe_log_filename()
+            assert log_file.exists()
+            content = log_file.read_text(encoding="utf-8")
+            assert "[ERROR]" in content
+            assert "[safe.main]" in content
+            assert "ReferenceError: appInitialized is not defined" in content
+            assert "Stack: at initApp (app.js:25:5)" in content
+        finally:
+            safe_logger.close_logger(test_log)
+            safe_logger.close_logger("safe.main")
+
+
+def test_logger_resilience_to_invalid_or_restricted_dir():
+    """
+    Testa se o setup_logger continua retornando um logger funcional com StreamHandler
+    mesmo que o diretório de destino não possa ser criado.
+    """
+    invalid_path = Path("N:/non_existent_drive_9999/log_dir_xyz")
+    logger_instance = safe_logger.setup_logger(log_dir=invalid_path, logger_name="test_resilience")
+    try:
+        assert logger_instance is not None
+        # Deve ter pelo menos o StreamHandler
+        assert len(logger_instance.handlers) >= 1
+        logger_instance.info("Log de fallback sem quebrar execução.")
+    finally:
+        safe_logger.close_logger(logger_instance)
+

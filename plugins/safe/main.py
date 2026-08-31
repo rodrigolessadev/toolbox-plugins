@@ -46,10 +46,21 @@ class SafePluginApi(BasePluginApi):
         super().__init__()
         self.service = service or SafeService()
 
+    def log_frontend_error(self, message: str, stack: Optional[str] = None) -> Dict[str, Any]:
+        """Recebe e registra erros e exceções capturados no frontend JavaScript."""
+        log_msg = f"[Frontend] {message}"
+        if stack:
+            log_msg += f"\nStack: {stack}"
+        logger.error(log_msg)
+        return {"success": True}
+
     def get_vault_status(self) -> Dict[str, Any]:
         try:
-            return {"success": True, "data": self.service.get_status()}
+            status = self.service.get_status()
+            logger.debug(f"Status do cofre consultado pela UI: configured={status.get('configured')}, status={status.get('status')}")
+            return {"success": True, "data": status}
         except Exception as e:
+            logger.error(f"Erro ao obter status do cofre: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
 
     def setup_vault(
@@ -358,31 +369,46 @@ except ImportError:
 logger = get_logger("safe.main")
 
 
+def _handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    """Gancho global para registrar exceções não tratadas no processo Python."""
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Exceção não tratada capturada no processo Safe:", exc_info=(exc_type, exc_value, exc_traceback))
+
+
+sys.excepthook = _handle_uncaught_exception
+
+
 def main():
     import webview
     import threading
 
     logger.info("Iniciando aplicação Cofre Seguro (UI)...")
-    api = SafePluginApi()
-    ui_path = PLUGIN_DIR / "ui" / "index.html"
-    window = create_plugin_window(
-        title="Cofre Seguro",
-        entry_html=ui_path,
-        js_api=api,
-        width=920,
-        height=760,
-        min_size=(800, 600),
-    )
-    if webview and window:
-        def on_shown():
-            set_window_taskbar_icon()
-            threading.Timer(0.5, set_window_taskbar_icon).start()
+    try:
+        api = SafePluginApi()
+        ui_path = PLUGIN_DIR / "ui" / "index.html"
+        window = create_plugin_window(
+            title="Cofre Seguro",
+            entry_html=ui_path,
+            js_api=api,
+            width=920,
+            height=760,
+            min_size=(800, 600),
+        )
+        if webview and window:
+            def on_shown():
+                set_window_taskbar_icon()
+                threading.Timer(0.5, set_window_taskbar_icon).start()
 
-        window.events.shown += on_shown
+            window.events.shown += on_shown
 
-    logger.info("Janela pywebview inicializada. Abrindo loop de eventos.")
-    webview.start(debug=False)
-    logger.info("Aplicação Cofre Seguro finalizada.")
+        logger.info("Janela pywebview inicializada. Abrindo loop de eventos.")
+        webview.start(debug=False)
+        logger.info("Aplicação Cofre Seguro finalizada.")
+    except Exception as e:
+        logger.critical(f"Falha fatal ao iniciar pywebview para o Cofre: {e}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

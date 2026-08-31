@@ -12,9 +12,21 @@
   <!-- ===================================================================== -->
   <!-- 0. TELA DE CARREGAMENTO INICIAL (SPLASH SEGURO) -->
   <!-- ===================================================================== -->
-  <div id="screen-loading" class="app-screen active" style="display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; height: 100vh;">
-    <div class="setup-icon" style="width: 64px; height: 64px; font-size: 32px;"><i data-lucide="shield-check"></i></div>
-    <div style="color: var(--fg-secondary); font-size: 14px;">Inicializando Cofre Seguro...</div>
+  <div id="screen-loading" class="app-screen active" style="display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; height: 100vh; text-align: center; padding: 24px;">
+    <div id="loading-spinner-container" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <div class="setup-icon" style="width: 64px; height: 64px; font-size: 32px;"><i data-lucide="shield-check"></i></div>
+      <div style="color: var(--fg-secondary); font-size: 14px;">Inicializando Cofre Seguro...</div>
+    </div>
+    <div id="loading-error-container" class="hidden" style="display: none; flex-direction: column; align-items: center; gap: 16px; max-width: 480px;">
+      <div class="setup-icon" style="width: 64px; height: 64px; font-size: 32px; background: var(--danger-bg); color: var(--danger);"><i data-lucide="alert-triangle"></i></div>
+      <h3 style="color: var(--fg-primary); font-size: 18px; margin-bottom: 4px;">Falha na Inicialização</h3>
+      <div id="loading-error-message" style="color: var(--fg-secondary); font-size: 13px; line-height: 1.5; background: var(--bg-elev); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+        Ocorreu um erro ao carregar os serviços do Cofre Seguro.
+      </div>
+      <button type="button" class="btn btn-primary" onclick="retryAppInit()" style="margin-top: 8px;">
+        <i data-lucide="rotate-cw"></i> Tentar Novamente
+      </button>
+    </div>
   </div>
 
   <!-- ===================================================================== -->
