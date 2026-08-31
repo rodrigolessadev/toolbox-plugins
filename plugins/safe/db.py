@@ -468,6 +468,51 @@ class SafeDatabase:
             conn.commit()
             return cursor.rowcount > 0
 
+    def save_entries_batch(self, entries: List[Dict[str, Any]]) -> int:
+        """
+        Insere ou atualiza múltiplos registros de forma atômica em transação única.
+        Cada dict em entries deve conter:
+          - id, title, category, owner_plugin_id, username_or_key,
+            encrypted_payload, iv, auth_tag, tags (list), metadata (dict)
+        """
+        if not entries:
+            return 0
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            params_list = []
+            for item in entries:
+                params_list.append((
+                    item["id"],
+                    item["title"],
+                    item.get("category", "password"),
+                    item.get("owner_plugin_id"),
+                    item.get("username_or_key"),
+                    item["encrypted_payload"],
+                    item["iv"],
+                    item["auth_tag"],
+                    json.dumps(item.get("tags") or []),
+                    json.dumps(item.get("metadata") or {}),
+                ))
+            cursor.executemany("""
+            INSERT INTO safe_entries (
+                id, title, category, owner_plugin_id, username_or_key,
+                encrypted_payload, iv, auth_tag, tags, metadata, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                category = excluded.category,
+                owner_plugin_id = excluded.owner_plugin_id,
+                username_or_key = excluded.username_or_key,
+                encrypted_payload = excluded.encrypted_payload,
+                iv = excluded.iv,
+                auth_tag = excluded.auth_tag,
+                tags = excluded.tags,
+                metadata = excluded.metadata,
+                updated_at = CURRENT_TIMESTAMP;
+            """, params_list)
+            conn.commit()
+            return cursor.rowcount
+
     def get_entry(self, entry_id: str) -> Optional[Dict[str, Any]]:
         with self.connect() as conn:
             cursor = conn.cursor()

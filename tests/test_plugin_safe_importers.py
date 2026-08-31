@@ -219,3 +219,48 @@ def test_service_preview_and_conflict_policies():
 
         all_titles = [e["title"] for e in service.list_secrets()]
         assert "AWS Produção (Importado)" in all_titles
+
+
+def test_service_batch_import_large_dataset_performance():
+    """Valida a atomicidade, integridade e performance do import_secrets em lote único."""
+    import json
+    import time
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault_perf.db"
+        service = SafeService(db_path)
+        service.setup_vault(password="MasterPassword123!")
+
+        # Gera dataset sintético de 250 credenciais
+        items = []
+        for i in range(250):
+            items.append({
+                "title": f"Serviço Corporativo {i}",
+                "category": "password" if i % 2 == 0 else "token",
+                "username_or_key": f"user_{i}@company.com",
+                "payload": f"SecretValue_P@ss_{i}",
+                "tags": ["corp", f"tag_{i % 5}"],
+                "metadata": {"index": i, "server": f"srv-{i}.internal"},
+            })
+
+        json_data = json.dumps(items)
+
+        start_time = time.time()
+        res = service.import_secrets(json_data, conflict_policy="duplicate", filename="export.json")
+        duration = time.time() - start_time
+
+        assert res["success"] is True
+        assert res["imported"] == 250
+        assert res["updated"] == 0
+        assert res["skipped"] == 0
+        assert duration < 2.0  # Em lote único com SQLite deve concluir muito rápido
+
+        # Valida que todos os registros foram inseridos e decriptam perfeitamente
+        all_entries = service.list_secrets()
+        assert len(all_entries) == 250
+
+        # Amostra aleatória para checagem de decriptação
+        sample = service.get_secret(all_entries[42]["id"])
+        assert sample["payload"].startswith("SecretValue_P@ss_")
+        assert "corp" in sample["tags"]
+        assert "tag_2" in sample["tags"]

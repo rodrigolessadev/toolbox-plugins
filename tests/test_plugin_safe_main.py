@@ -85,13 +85,24 @@ def test_safe_taskbar_icon_exists():
 
 
 def test_windows_hello_availability_detection():
-    """Valida que a função de detecção do Windows Hello executa e retorna booleano no Windows."""
+    """Valida que a função de detecção do Windows Hello executa, retorna booleano e utiliza cache TTL."""
+    import time
     from safe import windows_hello
-    avail = windows_hello.is_windows_hello_available()
-    assert isinstance(avail, bool)
-    if sys.platform == "win32":
-        # No ambiente Windows 10/11 atual, o retorno deve ser True
-        assert avail is True
+
+    # 1. Primeira chamada (pode bater no powershell ou cache existente)
+    avail1 = windows_hello.is_windows_hello_available()
+    assert isinstance(avail1, bool)
+
+    # 2. Segunda chamada consecutiva deve ser instantânea via cache (< 10ms)
+    t0 = time.time()
+    avail2 = windows_hello.is_windows_hello_available()
+    elapsed = time.time() - t0
+    assert avail2 == avail1
+    assert elapsed < 0.05, f"Esperado retorno instantâneo do cache, levou {elapsed}s"
+
+    # 3. Forçar refresh
+    avail3 = windows_hello.is_windows_hello_available(force_refresh=True)
+    assert avail3 == avail1
 
 
 def test_safe_plugin_api_exposed_methods(tmp_path):

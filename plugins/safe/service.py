@@ -720,7 +720,7 @@ class SafeService:
           - 'overwrite': Se o item já existir, atualiza os dados do registro existente.
           - 'duplicate': Se o item já existir, cria um novo registro com sufixo '(Importado)'.
         """
-        self._require_unlocked()
+        mk = self._require_unlocked()
 
         raw_list: List[Dict[str, Any]] = []
 
@@ -750,6 +750,8 @@ class SafeService:
         updated_count = 0
         skipped_count = 0
         errors: List[str] = []
+
+        entries_to_batch: List[Dict[str, Any]] = []
 
         for item in raw_list:
             if not isinstance(item, dict):
@@ -790,24 +792,36 @@ class SafeService:
                         candidate = f"{title} (Importado {suffix_idx})"
                     final_title = candidate
 
+            entry_id = secret_id_to_use or str(uuid.uuid4())
+
             try:
-                save_res = self.save_secret(
-                    entry_id=secret_id_to_use,
-                    title=final_title,
-                    secret_payload=payload,
-                    category=category,
-                    username_or_key=str(username_or_key).strip() if username_or_key else None,
-                    tags=tags if isinstance(tags, list) else [],
-                    metadata=metadata if isinstance(metadata, dict) else {},
-                )
+                ciphertext, iv, auth_tag = crypto.encrypt_payload(payload, mk)
+                entries_to_batch.append({
+                    "id": entry_id,
+                    "title": final_title,
+                    "category": category,
+                    "owner_plugin_id": None,
+                    "username_or_key": str(username_or_key).strip() if username_or_key else None,
+                    "encrypted_payload": ciphertext,
+                    "iv": iv,
+                    "auth_tag": auth_tag,
+                    "tags": tags if isinstance(tags, list) else [],
+                    "metadata": metadata if isinstance(metadata, dict) else {},
+                })
                 if existing and conflict_policy == "overwrite":
                     updated_count += 1
                 else:
                     imported_count += 1
-                    # Atualiza o mapa para detectar duplicatas dentro do próprio arquivo
-                    existing_map[final_title.lower()] = {"id": save_res["id"], "title": final_title}
+                existing_map[final_title.lower()] = {"id": entry_id, "title": final_title}
             except Exception as e:
-                errors.append(f"Erro ao processar item: {e}")
+                errors.append(f"Erro ao processar item '{title}': {e}")
+
+        if entries_to_batch:
+            try:
+                self.db.save_entries_batch(entries_to_batch)
+            except Exception as e:
+                logger.error(f"Falha ao persistir lote de credenciais importadas: {e}")
+                raise
 
         logger.info(
             f"Importação de credenciais concluída: {imported_count} criadas, "

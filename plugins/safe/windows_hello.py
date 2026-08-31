@@ -10,22 +10,33 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from typing import Optional, Tuple
 
 # Flags DPAPI
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
+
+_hello_cache_result: Optional[bool] = None
+_hello_cache_timestamp: float = 0.0
 
 
 def _is_windows() -> bool:
     return sys.platform == "win32"
 
 
-def is_windows_hello_available() -> bool:
+def is_windows_hello_available(force_refresh: bool = False) -> bool:
     """
     Verifica se o Windows Hello (biometria ou PIN) está disponível e configurado no dispositivo.
+    Utiliza cache em memória com TTL de 60 segundos para evitar invocações lentas do PowerShell.
     """
+    global _hello_cache_result, _hello_cache_timestamp
+
     if not _is_windows():
         return False
+
+    now = time.time()
+    if not force_refresh and _hello_cache_result is not None and (now - _hello_cache_timestamp < 60.0):
+        return _hello_cache_result
 
     # Testa via PowerShell usando Windows.Security.Credentials.UI.UserConsentVerifier com reflexão para AsTask
     ps_cmd = (
@@ -52,8 +63,13 @@ def is_windows_hello_available() -> bool:
         )
         out = (res.stdout or "").strip()
         # Valores possíveis: 'Available', 'DeviceNotPresent', 'NotConfiguredForUser', 'DisabledByPolicy', 'DeviceBusy'
-        return "Available" in out
+        is_available = "Available" in out
+        _hello_cache_result = is_available
+        _hello_cache_timestamp = now
+        return is_available
     except Exception:
+        _hello_cache_result = False
+        _hello_cache_timestamp = now
         return False
 
 
