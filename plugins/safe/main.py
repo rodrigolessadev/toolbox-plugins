@@ -345,10 +345,24 @@ def set_window_taskbar_icon(icon_path: Optional[Path] = None, hwnd: Optional[int
         return False
 
 
+try:
+    from logger import get_logger
+except ImportError:
+    try:
+        from .logger import get_logger
+    except ImportError:
+        import logging
+        def get_logger(name="safe"):
+            return logging.getLogger(name)
+
+logger = get_logger("safe.main")
+
+
 def main():
     import webview
     import threading
 
+    logger.info("Iniciando aplicação Cofre Seguro (UI)...")
     api = SafePluginApi()
     ui_path = PLUGIN_DIR / "ui" / "index.html"
     window = create_plugin_window(
@@ -366,7 +380,9 @@ def main():
 
         window.events.shown += on_shown
 
+    logger.info("Janela pywebview inicializada. Abrindo loop de eventos.")
     webview.start(debug=False)
+    logger.info("Aplicação Cofre Seguro finalizada.")
 
 
 if __name__ == "__main__":

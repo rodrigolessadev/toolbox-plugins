@@ -40,6 +40,18 @@ if sys.platform == "win32":
         ]
 
 
+try:
+    from logger import get_logger
+except ImportError:
+    try:
+        from .logger import get_logger
+    except ImportError:
+        import logging
+        def get_logger(name="safe"):
+            return logging.getLogger(name)
+
+logger = get_logger("safe.windows_session")
+
 _listener_thread: Optional[threading.Thread] = None
 _registered_callback: Optional[Callable[[], None]] = None
 _global_proc_ref: Any = None
@@ -52,8 +64,9 @@ def _cleanup_session_listener() -> None:
     if _listener_hwnd and sys.platform == "win32":
         try:
             ctypes.windll.user32.PostMessageW(_listener_hwnd, 0x0012, 0, 0)  # WM_QUIT = 0x0012
-        except Exception:
-            pass
+            logger.debug("Session listener finalizado com sucesso via WM_QUIT.")
+        except Exception as e:
+            logger.debug(f"Erro ao enviar WM_QUIT para session listener: {e}")
 
 
 import atexit

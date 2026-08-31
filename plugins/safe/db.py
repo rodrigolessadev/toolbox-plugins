@@ -26,6 +26,18 @@ except ImportError:
         base_dir.mkdir(parents=True, exist_ok=True)
         return base_dir / "toolbox.db"
 
+try:
+    from .logger import get_logger
+except ImportError:
+    try:
+        from logger import get_logger
+    except ImportError:
+        import logging
+        def get_logger(name="safe"):
+            return logging.getLogger(name)
+
+logger = get_logger("safe.db")
+
 
 def get_default_db_path() -> Path:
     """
@@ -69,6 +81,7 @@ class SafeDatabase:
     def __init__(self, db_path: Optional[Union[str, Path]] = None):
         self.db_path = Path(db_path) if db_path else get_default_db_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Inicializando SafeDatabase em {self.db_path}")
         self.init_schema()
         # Se estiver usando o banco central padrão, executa migração de base legada se existir
         if db_path is None or Path(db_path) == get_default_db_path():
