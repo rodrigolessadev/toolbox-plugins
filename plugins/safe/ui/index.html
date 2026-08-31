@@ -500,33 +500,62 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAL: IMPORTAR REGISTROS (Save in Cloud / JSON) -->
+  <!-- MODAL: IMPORTAR REGISTROS (Microsoft Safe / Backup) -->
   <!-- ===================================================================== -->
   <div id="modal-import" class="modal-overlay hidden">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
-        <h3>Importar Registros (Save in Cloud / Backup)</h3>
+        <h3><i data-lucide="download" style="width: 20px; height: 20px; color: var(--accent);"></i> Importar do Microsoft Safe / Backup</h3>
         <button class="btn-close" onclick="closeModal('modal-import')"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
-        <p class="subtitle">Importe credenciais transferidas pelo Save in Cloud ou arquivos de backup JSON:</p>
+        <p class="subtitle" style="margin-bottom: 12px;">Importe suas credenciais do Microsoft Safe (XML, CSV, TXT) ou backups em JSON:</p>
 
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <button class="btn btn-primary" onclick="handleSelectImportFile()">
-            <i data-lucide="folder-open"></i> Selecionar Arquivo JSON
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary" onclick="handleSelectImportFile()" id="btn-select-file">
+            <i data-lucide="folder-open"></i> Selecionar Arquivo (.xml, .csv, .txt, .json)
           </button>
+          <span id="import-selected-file-label" style="font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">Nenhum arquivo selecionado</span>
         </div>
 
-        <div class="form-group">
-          <label class="form-label" for="import-json-text">Ou Cole o Conteúdo JSON:</label>
-          <textarea id="import-json-text" class="form-input form-textarea" placeholder='[{"title": "Meu Segredo", "payload": "minhasenha", "category": "password"}]' rows="6"></textarea>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="import-conflict-policy">Tratamento de Itens Duplicados (Mesmo Título):</label>
+          <select id="import-conflict-policy" class="form-select">
+            <option value="skip" selected>Ignorar duplicados (Manter os existentes no cofre)</option>
+            <option value="overwrite">Sobrescrever dados existentes no cofre</option>
+            <option value="duplicate">Criar como novos registros (com sufixo)</option>
+          </select>
         </div>
 
-        <div id="import-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 8px;"></div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="import-raw-text">Ou Cole o Conteúdo (XML, CSV, TXT ou JSON):</label>
+          <textarea id="import-raw-text" class="form-input form-textarea" placeholder="Cole aqui o texto exportado pelo Microsoft Safe ou JSON..." rows="4"></textarea>
+          <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handlePreviewPastedText()">
+              <i data-lucide="search"></i> Analisar Texto Colado
+            </button>
+          </div>
+        </div>
+
+        <!-- Painel de Preview -->
+        <div id="import-preview-box" class="hidden" style="margin-top: 10px; padding: 12px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="font-size: 13px; color: var(--fg);">Pré-visualização da Importação</strong>
+            <div style="display: flex; gap: 6px;" id="import-preview-badges"></div>
+          </div>
+          <div id="import-preview-list" style="max-height: 140px; overflow-y: auto; font-size: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg);"></div>
+        </div>
+
+        <div id="import-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 10px;"></div>
+
+        <div style="margin-top: 14px; padding: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); display: flex; align-items: flex-start; gap: 8px;">
+          <i data-lucide="shield-alert" style="width: 18px; height: 18px; color: var(--warning); flex-shrink: 0; margin-top: 1px;"></i>
+          <span style="font-size: 11px; color: var(--fg-muted);"><strong>Recomendação de Segurança:</strong> Arquivos exportados pelo Microsoft Safe não são criptografados. Exclua permanentemente o arquivo do disco após concluir a importação.</span>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modal-import')">Fechar</button>
-        <button class="btn btn-primary" onclick="handleImportJsonText()"><i data-lucide="upload"></i> Processar e Importar</button>
+        <button class="btn btn-primary" id="btn-confirm-import" onclick="handleConfirmImport()"><i data-lucide="upload"></i> Importar Credenciais</button>
       </div>
     </div>
   </div>

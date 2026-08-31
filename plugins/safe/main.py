@@ -251,34 +251,103 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
-    def import_secrets(self, items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Dict[str, Any]:
+    def preview_import_data(
+        self,
+        raw_text: Optional[str] = None,
+        file_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Gera preview da importação a partir de texto bruto ou caminho de arquivo."""
         try:
-            res = self.service.import_secrets(items_or_payload)
-            return res
+            if file_path:
+                p = Path(file_path)
+                if not p.exists() or not p.is_file():
+                    return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
+                raw_bytes = p.read_bytes()
+                res = self.service.preview_import(raw_bytes, filename=p.name)
+                res["file_path"] = str(p.resolve())
+                res["file_name"] = p.name
+                return res
+            elif raw_text:
+                return self.service.preview_import(raw_text)
+            else:
+                return {"success": False, "message": "Nenhum dado fornecido para pré-visualização."}
         except Exception as e:
+            logger.error(f"Erro ao gerar preview de importação: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
 
-    def import_secrets_from_file_path(self, file_path: str) -> Dict[str, Any]:
+    def import_secrets(
+        self,
+        items_or_payload: Any,
+        conflict_policy: str = "skip",
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
         try:
-            import json
+            res = self.service.import_secrets(items_or_payload, conflict_policy=conflict_policy, filename=filename)
+            return res
+        except Exception as e:
+            logger.error(f"Erro ao importar segredos: {e}", exc_info=True)
+            return {"success": False, "message": str(e)}
+
+    def import_secrets_from_file_path(
+        self,
+        file_path: str,
+        conflict_policy: str = "skip",
+    ) -> Dict[str, Any]:
+        try:
             p = Path(file_path)
             if not p.exists() or not p.is_file():
                 return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
-            content = p.read_text(encoding="utf-8")
-            data = json.loads(content)
-            return self.service.import_secrets(data)
+            raw_bytes = p.read_bytes()
+            return self.service.import_secrets(raw_bytes, conflict_policy=conflict_policy, filename=p.name)
         except Exception as e:
-            return {"success": False, "message": f"Erro ao ler arquivo: {e}"}
+            return {"success": False, "message": f"Erro ao ler/importar arquivo: {e}"}
 
-    def select_and_import_secrets_file(self) -> Dict[str, Any]:
-        """Abre janela para selecionar arquivo JSON (Save in Cloud ou Backup) e importa."""
+    def select_file_for_import(self) -> Dict[str, Any]:
+        """Abre janela de seleção de arquivo (.xml, .csv, .txt, .json) e retorna os dados para preview."""
         try:
-            if not self._window:
+            win = self.window or self._window
+            if not win:
+                return {"success": False, "message": "Janela não inicializada."}
+
+            import webview
+            file_types = (
+                "Arquivos Suportados (*.xml;*.csv;*.txt;*.json)",
+                "Microsoft Safe XML (*.xml)",
+                "Valores Separados por Vírgula (*.csv)",
+                "Texto Simples (*.txt)",
+                "Arquivos JSON / Backup (*.json)",
+                "Todos os arquivos (*.*)",
+            )
+            res = win.create_file_dialog(
+                webview.OPEN_DIALOG,
+                allow_multiple=False,
+                file_types=file_types,
+            )
+            if not res or len(res) == 0:
+                return {"success": False, "message": "Nenhum arquivo selecionado."}
+
+            chosen_file = res[0] if isinstance(res, (list, tuple)) else str(res)
+            return self.preview_import_data(file_path=chosen_file)
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def select_and_import_secrets_file(self, conflict_policy: str = "skip") -> Dict[str, Any]:
+        """Abre janela para selecionar arquivo (.xml, .csv, .txt, .json) e importa diretamente."""
+        try:
+            win = self.window or self._window
+            if not win:
                 return {"success": False, "message": "Janela não inicializada."}
             
             import webview
-            file_types = ("Arquivos JSON (*.json)", "Todos os arquivos (*.*)")
-            res = self._window.create_file_dialog(
+            file_types = (
+                "Arquivos Suportados (*.xml;*.csv;*.txt;*.json)",
+                "Microsoft Safe XML (*.xml)",
+                "Valores Separados por Vírgula (*.csv)",
+                "Texto Simples (*.txt)",
+                "Arquivos JSON (*.json)",
+                "Todos os arquivos (*.*)",
+            )
+            res = win.create_file_dialog(
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
                 file_types=file_types,
@@ -287,7 +356,7 @@ class SafePluginApi(BasePluginApi):
                 return {"success": False, "message": "Nenhum arquivo selecionado."}
             
             chosen_file = res[0] if isinstance(res, (list, tuple)) else str(res)
-            return self.import_secrets_from_file_path(chosen_file)
+            return self.import_secrets_from_file_path(chosen_file, conflict_policy=conflict_policy)
         except Exception as e:
             return {"success": False, "message": str(e)}
 
