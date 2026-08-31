@@ -16,8 +16,16 @@ NOVO_TICKET_DIR = PLUGINS_DIR / "novo-ticket"
 if str(NOVO_TICKET_DIR) not in sys.path:
     sys.path.insert(0, str(NOVO_TICKET_DIR))
 
-import domain as novo_ticket_domain
-import main as novo_ticket_main
+import importlib.util
+
+def _load_module(mod_name: str, file_path: Path):
+    spec = importlib.util.spec_from_file_location(mod_name, str(file_path))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+novo_ticket_domain = _load_module("plugins_novo_ticket_domain", NOVO_TICKET_DIR / "domain.py")
+novo_ticket_main = _load_module("plugins_novo_ticket_main", NOVO_TICKET_DIR / "main.py")
 
 
 @pytest.fixture(autouse=True)
@@ -25,10 +33,8 @@ def isolate_config(tmp_path: Path, monkeypatch):
     """Garante que nenhum teste persista dados em ~/.toolbox/novo_ticket_config.json real."""
     test_cfg = tmp_path / "novo_ticket_test_config.json"
     monkeypatch.setattr(novo_ticket_domain, "CONFIG_FILE", test_cfg)
-    if hasattr(novo_ticket_main, "domain"):
+    if hasattr(novo_ticket_main, "domain") and hasattr(novo_ticket_main.domain, "CONFIG_FILE"):
         monkeypatch.setattr(novo_ticket_main.domain, "CONFIG_FILE", test_cfg)
-    if "domain" in sys.modules and hasattr(sys.modules["domain"], "CONFIG_FILE"):
-        monkeypatch.setattr(sys.modules["domain"], "CONFIG_FILE", test_cfg)
 
 
 def test_novo_ticket_default_config_empty(tmp_path: Path):

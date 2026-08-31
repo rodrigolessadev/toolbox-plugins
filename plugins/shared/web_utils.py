@@ -7,10 +7,11 @@ diálogos nativos do sistema operacional e tokens do Toolbox.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 try:
     import webview
@@ -137,6 +138,23 @@ class BasePluginApi:
                 return str(Path(res[0]).resolve())
         return ""
 
+def sanitize_file_types(file_types: Sequence[str]) -> Tuple[str, ...]:
+    """Sanitiza strings de filtros para garantir compatibilidade estrita com a regex do pywebview."""
+    sanitized = []
+    for ft in file_types:
+        ft_str = str(ft).strip()
+        m = re.match(r"^(.*?)\s*(\(\*.*?\))$", ft_str)
+        if m:
+            desc, ext = m.group(1), m.group(2)
+            clean_desc = desc.replace("/", " ou ")
+            clean_desc = re.sub(r"[^\w\s]", "", clean_desc)
+            clean_desc = re.sub(r"\s+", " ", clean_desc).strip()
+            sanitized.append(f"{clean_desc} {ext}")
+        else:
+            sanitized.append(ft_str)
+    return tuple(sanitized)
+
+
     def select_file(
         self,
         file_types: Optional[List[str]] = None,
@@ -145,7 +163,7 @@ class BasePluginApi:
         """Abre diálogo nativo para seleção de arquivo."""
         if webview and webview.windows:
             win = webview.windows[0]
-            types = tuple(file_types) if file_types else ("Todos os Arquivos (*.*)",)
+            types = sanitize_file_types(file_types) if file_types else ("Todos os Arquivos (*.*)",)
             directory = initial_dir if initial_dir and Path(initial_dir).exists() else ""
             res = win.create_file_dialog(webview.OPEN_DIALOG, directory=directory, file_types=types)
             if res and len(res) > 0:

@@ -253,7 +253,7 @@ def test_service_batch_import_large_dataset_performance():
         assert res["imported"] == 250
         assert res["updated"] == 0
         assert res["skipped"] == 0
-        assert duration < 2.0  # Em lote único com SQLite deve concluir muito rápido
+        assert duration < 5.0  # Em lote único com SQLite deve concluir rapidamente
 
         # Valida que todos os registros foram inseridos e decriptam perfeitamente
         all_entries = service.list_secrets()

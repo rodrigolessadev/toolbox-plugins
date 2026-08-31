@@ -17,10 +17,10 @@ if str(PLUGINS_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGINS_ROOT))
 
 try:
-    from shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard
+    from shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard, sanitize_file_types
 except ImportError:
     # Fallback se importado diretamente
-    from plugins.shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard
+    from plugins.shared.web_utils import BasePluginApi, create_plugin_window, copy_to_clipboard, sanitize_file_types
 
 try:
     from service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
@@ -77,10 +77,10 @@ class SafePluginApi(BasePluginApi):
     API exposta ao JavaScript (window.pywebview.api) para a interface do Cofre Seguro.
     """
 
-    def __init__(self, service: Optional[SafeService] = None):
+    def __init__(self, service: Optional[SafeService] = None, window: Optional[Any] = None):
         super().__init__()
         self.service = service or SafeService()
-        self.window = None
+        self.window = window
         self.service.add_on_lock_listener(self._on_service_lock)
 
     def set_window(self, window: Any) -> None:
@@ -394,15 +394,15 @@ class SafePluginApi(BasePluginApi):
                 return {"success": False, "message": "Janela não inicializada."}
 
             import webview
-            file_types = (
+            file_types = sanitize_file_types((
                 "Arquivos Suportados (*.safepack;*.xml;*.csv;*.txt;*.json)",
                 "SafePack Criptografado (*.safepack)",
                 "Microsoft Safe XML (*.xml)",
                 "Valores Separados por Vírgula (*.csv)",
                 "Texto Simples (*.txt)",
-                "Arquivos JSON / Backup (*.json)",
+                "Arquivos JSON ou Backup (*.json)",
                 "Todos os arquivos (*.*)",
-            )
+            ))
             res = win.create_file_dialog(
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
@@ -424,15 +424,15 @@ class SafePluginApi(BasePluginApi):
                 return {"success": False, "message": "Janela não inicializada."}
             
             import webview
-            file_types = (
+            file_types = sanitize_file_types((
                 "Arquivos Suportados (*.safepack;*.xml;*.csv;*.txt;*.json)",
                 "SafePack Criptografado (*.safepack)",
                 "Microsoft Safe XML (*.xml)",
                 "Valores Separados por Vírgula (*.csv)",
                 "Texto Simples (*.txt)",
-                "Arquivos JSON (*.json)",
+                "Arquivos JSON ou Backup (*.json)",
                 "Todos os arquivos (*.*)",
-            )
+            ))
             res = win.create_file_dialog(
                 webview.OPEN_DIALOG,
                 allow_multiple=False,
