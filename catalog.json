@@ -5,7 +5,7 @@
     {
       "id": "safe",
       "name": "Cofre Seguro",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "description": "Cofre de senhas e credenciais com criptografia AES-256-GCM em repouso, Windows Hello e API para outros plugins.",
       "author": "Rodrigo Lessa",
       "language": "python",
@@ -19,7 +19,7 @@
       ],
       "icon": "shield-check",
       "command": "safe",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/safe-1.6.1/safe.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/safe-1.7.0/safe.zip",
       "min_toolbox_version": "1.22.3",
       "updated_at": "2026-08-31",
       "theme_version": "material-3"
