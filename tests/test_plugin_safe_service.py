@@ -111,6 +111,33 @@ def test_service_auto_lock():
         assert service.get_status()["status"] == "LOCKED"
 
 
+def test_service_touch_activity_prevents_autolock():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+        # Timeout de 2 segundos
+        service.setup_vault(password="SecretMasterPassword!", auto_lock_timeout=2)
+        assert service.get_status()["status"] == "UNLOCKED"
+
+        # Simula 1 segundo de tempo passado
+        service._last_activity_time = time.time() - 1
+        assert service.check_auto_lock() is False
+        assert service.get_status()["status"] == "UNLOCKED"
+
+        # Usuário interage -> touch_activity()
+        service.touch_activity()
+
+        # Mais 1 segundo se passa (total de 2 segundos desde o setup, mas apenas 1s desde a última atividade)
+        service._last_activity_time = time.time() - 1
+        assert service.check_auto_lock() is False
+        assert service.get_status()["status"] == "UNLOCKED"
+
+        # Agora deixa 3 segundos inativo
+        service._last_activity_time = time.time() - 3
+        assert service.check_auto_lock() is True
+        assert service.get_status()["status"] == "LOCKED"
+
+
 def test_password_generator():
     service = SafeService()
     pwd = service.generate_secure_password(length=24, use_upper=True, use_lower=True, use_digits=True, use_symbols=True)
@@ -289,11 +316,11 @@ def test_service_windows_hello_and_password_dual_wrapping(monkeypatch):
                 raise ValueError("Invalid DPAPI blob")
             return blob[len(b"DPAPI_WRAPPED:"):]
 
-        import safe.windows_hello as wh
-        monkeypatch.setattr(wh, "is_windows_hello_available", mock_is_available)
-        monkeypatch.setattr(wh, "verify_windows_hello", mock_verify)
-        monkeypatch.setattr(wh, "protect_data_dpapi", mock_protect)
-        monkeypatch.setattr(wh, "unprotect_data_dpapi", mock_unprotect)
+        import safe.service as ss
+        monkeypatch.setattr(ss.windows_hello, "is_windows_hello_available", mock_is_available)
+        monkeypatch.setattr(ss.windows_hello, "verify_windows_hello", mock_verify)
+        monkeypatch.setattr(ss.windows_hello, "protect_data_dpapi", mock_protect)
+        monkeypatch.setattr(ss.windows_hello, "unprotect_data_dpapi", mock_unprotect)
 
         # 1. Setup no modo Híbrido (com senha + Windows Hello)
         setup_res = service.setup_vault(auth_mode="hybrid", password="InitialPassword123!", use_hello=True)
