@@ -5,6 +5,7 @@ Ponto de Entrada e JS Bridge do Plugin Safe (Cofre Seguro) - pywebview.
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -35,6 +36,32 @@ if sys.platform == "win32":
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("toolbox.plugin.safe")
     except Exception:
         pass
+
+
+def get_plugin_manifest() -> Dict[str, Any]:
+    """Lê o arquivo plugin.json do diretório do plugin Safe."""
+    manifest_path = PLUGIN_DIR / "plugin.json"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Não foi possível carregar plugin.json: {e}")
+    return {}
+
+
+def get_plugin_version() -> str:
+    """Retorna a versão do plugin Safe definida em plugin.json."""
+    manifest = get_plugin_manifest()
+    return manifest.get("version", "1.3.1")
+
+
+def get_window_title() -> str:
+    """Gera o título padronizado para a janela do plugin: 'Cofre - vX.Y.Z'."""
+    version = get_plugin_version()
+    if version:
+        return f"Cofre - v{version}"
+    return "Cofre"
 
 
 class SafePluginApi(BasePluginApi):
@@ -71,7 +98,9 @@ class SafePluginApi(BasePluginApi):
     def get_vault_status(self) -> Dict[str, Any]:
         try:
             status = self.service.get_status()
-            logger.debug(f"Status do cofre consultado pela UI: configured={status.get('configured')}, status={status.get('status')}")
+            status["plugin_version"] = get_plugin_version()
+            status["window_title"] = get_window_title()
+            logger.debug(f"Status do cofre consultado pela UI: configured={status.get('configured')}, status={status.get('status')}, version={status['plugin_version']}")
             return {"success": True, "data": status}
         except Exception as e:
             logger.error(f"Erro ao obter status do cofre: {e}", exc_info=True)
@@ -471,8 +500,9 @@ def main():
     try:
         api = SafePluginApi()
         ui_path = PLUGIN_DIR / "ui" / "index.html"
+        window_title = get_window_title()
         window = create_plugin_window(
-            title="Cofre Seguro",
+            title=window_title,
             entry_html=ui_path,
             js_api=api,
             width=920,

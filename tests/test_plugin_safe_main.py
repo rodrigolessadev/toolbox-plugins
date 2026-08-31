@@ -140,4 +140,34 @@ def test_safe_plugin_api_frontend_error_logging(tmp_path):
     assert res["success"] is True
 
 
+def test_get_plugin_version_and_window_title():
+    """Valida que a versão é lida de plugin.json e que o título da janela segue o padrão 'Cofre - vX.Y.Z'."""
+    manifest = safe_main.get_plugin_manifest()
+    assert isinstance(manifest, dict)
+    assert "version" in manifest
+    
+    version = safe_main.get_plugin_version()
+    assert version == manifest["version"]
+    assert len(version.split(".")) >= 3  # SemVer x.y.z
+
+    window_title = safe_main.get_window_title()
+    assert window_title == f"Cofre - v{version}"
+    assert " - v" in window_title
+
+
+def test_get_vault_status_includes_version_metadata(tmp_path):
+    """Valida que get_vault_status retorna plugin_version e window_title para o frontend."""
+    db_file = tmp_path / "test_status_ver.db"
+    svc = safe_service.SafeService(db_path=db_file)
+    api = safe_main.SafePluginApi(service=svc)
+
+    status_res = api.get_vault_status()
+    assert status_res["success"] is True
+    assert "plugin_version" in status_res["data"]
+    assert "window_title" in status_res["data"]
+    assert status_res["data"]["plugin_version"] == safe_main.get_plugin_version()
+    assert status_res["data"]["window_title"] == safe_main.get_window_title()
+
+
+
 
