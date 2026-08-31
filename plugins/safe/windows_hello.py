@@ -73,20 +73,50 @@ def is_windows_hello_available(force_refresh: bool = False) -> bool:
         return False
 
 
-def verify_windows_hello(prompt_message: str = "Confirme sua identidade para acessar o Cofre Seguro") -> Tuple[bool, str]:
+def allow_foreground_focus() -> bool:
+    """Permite que o processo de verificação biométrica/PIN traga a janela do Windows Hello para o primeiro plano."""
+    if not _is_windows():
+        return False
+    try:
+        import ctypes
+        ASFW_ANY = 0xFFFFFFFF
+        res = ctypes.windll.user32.AllowSetForegroundWindow(ASFW_ANY)
+        return bool(res)
+    except Exception as e:
+        logger.debug(f"Aviso ao executar AllowSetForegroundWindow: {e}")
+        return False
+
+
+def verify_windows_hello(
+    prompt_message: str = "Confirme sua identidade para acessar o Cofre Seguro",
+    window_handle: Optional[int] = None
+) -> Tuple[bool, str]:
     """
-    Dispara o prompt oficial do Windows Hello para autenticação biométrica ou PIN.
+    Dispara o prompt oficial do Windows Hello para autenticação biométrica ou PIN em primeiro plano.
     Retorna (sucesso, mensagem_status).
     """
     if not _is_windows():
         return False, "Windows Hello só é suportado no ambiente Windows."
 
+    # 1. Concede permissão de primeiro plano ao processo filho
+    allow_foreground_focus()
+
     # Escapa aspas simples na mensagem do prompt
     safe_msg = prompt_message.replace("'", "''")
 
-    # Script PowerShell para invocar RequestVerificationAsync
+    # Script PowerShell para invocar RequestVerificationAsync garantindo foco
     ps_cmd = (
         "try { "
+        "  Add-Type -TypeDefinition @\" "
+        "    using System; "
+        "    using System.Runtime.InteropServices; "
+        "    public class Win32Foreground { "
+        "      [DllImport(\"user32.dll\")] public static extern bool AllowSetForegroundWindow(int dwProcessId); "
+        "      [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); "
+        "      [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); "
+        "    } "
+        "\"@ -ErrorAction SilentlyContinue; "
+        "  [Win32Foreground]::AllowSetForegroundWindow(-1) | Out-Null; "
         "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
         "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null; "
         "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { "
