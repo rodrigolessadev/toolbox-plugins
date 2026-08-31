@@ -61,7 +61,7 @@ def get_plugin_manifest() -> Dict[str, Any]:
 def get_plugin_version() -> str:
     """Retorna a versão do plugin Safe definida em plugin.json."""
     manifest = get_plugin_manifest()
-    return manifest.get("version", "1.3.1")
+    return manifest.get("version", "1.8.2")
 
 
 def get_window_title() -> str:
@@ -79,19 +79,19 @@ class SafePluginApi(BasePluginApi):
 
     def __init__(self, service: Optional[SafeService] = None, window: Optional[Any] = None):
         super().__init__()
-        self.service = service or SafeService()
-        self.window = window
-        self.service.add_on_lock_listener(self._on_service_lock)
+        self._service = service or SafeService()
+        self._window = window
+        self._service.add_on_lock_listener(self._on_service_lock)
 
     def set_window(self, window: Any) -> None:
-        """Define a referência da janela pywebview para eventos push."""
-        self.window = window
+        """Define a referência privada da janela pywebview para eventos push."""
+        self._window = window
 
     def _on_service_lock(self, reason: str) -> None:
         """Acionado quando o serviço do cofre é bloqueado (por timeout ou evento do SO)."""
-        if self.window:
+        if self._window:
             try:
-                self.window.evaluate_js("if (typeof onVaultLockedBySystem === 'function') onVaultLockedBySystem();")
+                self._window.evaluate_js("if (typeof onVaultLockedBySystem === 'function') onVaultLockedBySystem();")
             except Exception as e:
                 logger.debug(f"Aviso ao avaliar onVaultLockedBySystem na janela: {e}")
 
@@ -105,7 +105,7 @@ class SafePluginApi(BasePluginApi):
 
     def get_vault_status(self) -> Dict[str, Any]:
         try:
-            status = self.service.get_status()
+            status = self._service.get_status()
             status["plugin_version"] = get_plugin_version()
             status["window_title"] = get_window_title()
             logger.debug(f"Status do cofre consultado pela UI: configured={status.get('configured')}, status={status.get('status')}, version={status['plugin_version']}")
@@ -135,7 +135,7 @@ class SafePluginApi(BasePluginApi):
         lock_on_os_lock: bool = True,
     ) -> Dict[str, Any]:
         try:
-            res = self.service.setup_vault(
+            res = self._service.setup_vault(
                 auth_mode=auth_mode,
                 password=password,
                 use_hello=use_hello,
@@ -153,21 +153,21 @@ class SafePluginApi(BasePluginApi):
         reason: str = "Acesso ao Cofre Seguro",
     ) -> Dict[str, Any]:
         try:
-            self.service.unlock(password=password, use_hello=use_hello, reason=reason)
+            self._service.unlock(password=password, use_hello=use_hello, reason=reason)
             return {"success": True, "message": "Cofre desbloqueado com sucesso!"}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
     def lock_vault(self) -> Dict[str, Any]:
         try:
-            self.service.lock()
+            self._service.lock()
             return {"success": True, "message": "Cofre bloqueado com sucesso."}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
     def touch_activity(self) -> Dict[str, Any]:
         try:
-            self.service.touch_activity()
+            self._service.touch_activity()
             return {"success": True}
         except Exception as e:
             return {"success": False, "message": str(e)}
@@ -178,14 +178,14 @@ class SafePluginApi(BasePluginApi):
         search_query: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            items = self.service.list_secrets(category=category, search_query=search_query)
+            items = self._service.list_secrets(category=category, search_query=search_query)
             return {"success": True, "data": items}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
     def get_secret(self, entry_id: str) -> Dict[str, Any]:
         try:
-            secret = self.service.get_secret(entry_id=entry_id)
+            secret = self._service.get_secret(entry_id=entry_id)
             return {"success": True, "data": secret}
         except Exception as e:
             return {"success": False, "message": str(e)}
@@ -201,7 +201,7 @@ class SafePluginApi(BasePluginApi):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         try:
-            res = self.service.save_secret(
+            res = self._service.save_secret(
                 title=title,
                 secret_payload=secret_payload,
                 category=category,
@@ -216,7 +216,7 @@ class SafePluginApi(BasePluginApi):
 
     def delete_secret(self, entry_id: str) -> Dict[str, Any]:
         try:
-            success = self.service.delete_secret(entry_id=entry_id)
+            success = self._service.delete_secret(entry_id=entry_id)
             return {"success": success, "message": "Registro excluído com sucesso."}
         except Exception as e:
             return {"success": False, "message": str(e)}
@@ -229,7 +229,7 @@ class SafePluginApi(BasePluginApi):
         expires_at: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            res = self.service.grant_permission(
+            res = self._service.grant_permission(
                 target_plugin_id=target_plugin_id,
                 entry_id=entry_id,
                 access_level=access_level,
@@ -241,14 +241,14 @@ class SafePluginApi(BasePluginApi):
 
     def revoke_plugin_access(self, grant_id: str) -> Dict[str, Any]:
         try:
-            success = self.service.revoke_permission(grant_id)
+            success = self._service.revoke_permission(grant_id)
             return {"success": success}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
     def list_plugin_grants(self) -> Dict[str, Any]:
         try:
-            grants = self.service.list_grants()
+            grants = self._service.list_grants()
             return {"success": True, "data": grants}
         except Exception as e:
             return {"success": False, "message": str(e)}
@@ -262,7 +262,7 @@ class SafePluginApi(BasePluginApi):
         use_symbols: bool = True,
     ) -> Dict[str, Any]:
         try:
-            pwd = self.service.generate_secure_password(
+            pwd = self._service.generate_secure_password(
                 length=length,
                 use_upper=use_upper,
                 use_lower=use_lower,
@@ -275,14 +275,14 @@ class SafePluginApi(BasePluginApi):
 
     def set_master_password(self, password: str) -> Dict[str, Any]:
         try:
-            res = self.service.set_master_password(password=password)
+            res = self._service.set_master_password(password=password)
             return {"success": True, "message": res.get("message", "Senha mestre definida com sucesso!")}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
     def update_security_settings(self, auto_lock_timeout: int, lock_on_os_lock: bool = True) -> Dict[str, Any]:
         try:
-            res = self.service.update_security_settings(
+            res = self._service.update_security_settings(
                 auto_lock_timeout=auto_lock_timeout,
                 lock_on_os_lock=lock_on_os_lock,
             )
@@ -295,7 +295,7 @@ class SafePluginApi(BasePluginApi):
 
     def export_secrets(self, format: str = "json", backup_password: Optional[str] = None) -> Dict[str, Any]:
         try:
-            data = self.service.export_secrets(format=format, backup_password=backup_password)
+            data = self._service.export_secrets(format=format, backup_password=backup_password)
             if isinstance(data, bytes):
                 import base64
                 return {"success": True, "format": "safepack", "data_b64": base64.b64encode(data).decode("ascii")}
@@ -306,7 +306,7 @@ class SafePluginApi(BasePluginApi):
     def export_secrets_to_file(self, format: str = "safepack", backup_password: Optional[str] = None) -> Dict[str, Any]:
         """Abre caixa de diálogo para salvar o backup (.safepack ou .json) diretamente em arquivo."""
         try:
-            win = self.window or self._window
+            win = self._window
             if not win:
                 return {"success": False, "message": "Janela não inicializada."}
             import webview
@@ -329,7 +329,7 @@ class SafePluginApi(BasePluginApi):
             target_path = save_path if isinstance(save_path, str) else save_path[0]
             p = Path(target_path)
 
-            data = self.service.export_secrets(format=format, backup_password=backup_password)
+            data = self._service.export_secrets(format=format, backup_password=backup_password)
             if isinstance(data, bytes):
                 p.write_bytes(data)
             else:
@@ -353,12 +353,12 @@ class SafePluginApi(BasePluginApi):
                 if not p.exists() or not p.is_file():
                     return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
                 raw_bytes = p.read_bytes()
-                res = self.service.preview_import(raw_bytes, filename=p.name, backup_password=backup_password)
+                res = self._service.preview_import(raw_bytes, filename=p.name, backup_password=backup_password)
                 res["file_path"] = str(p.resolve())
                 res["file_name"] = p.name
                 return res
             elif raw_text:
-                return self.service.preview_import(raw_text, backup_password=backup_password)
+                return self._service.preview_import(raw_text, backup_password=backup_password)
             else:
                 return {"success": False, "message": "Nenhum dado fornecido para pré-visualização."}
         except Exception as e:
@@ -373,7 +373,7 @@ class SafePluginApi(BasePluginApi):
         backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            res = self.service.import_secrets(
+            res = self._service.import_secrets(
                 items_or_payload, conflict_policy=conflict_policy, filename=filename, backup_password=backup_password
             )
             return res
@@ -392,7 +392,7 @@ class SafePluginApi(BasePluginApi):
             if not p.exists() or not p.is_file():
                 return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
             raw_bytes = p.read_bytes()
-            return self.service.import_secrets(
+            return self._service.import_secrets(
                 raw_bytes, conflict_policy=conflict_policy, filename=p.name, backup_password=backup_password
             )
         except Exception as e:
@@ -401,7 +401,7 @@ class SafePluginApi(BasePluginApi):
     def select_file_for_import(self) -> Dict[str, Any]:
         """Abre janela de seleção de arquivo (.safepack, .xml, .csv, .txt, .json) e retorna os dados para preview."""
         try:
-            win = self.window or self._window
+            win = self._window
             if not win:
                 return {"success": False, "message": "Janela não inicializada."}
 
@@ -431,7 +431,7 @@ class SafePluginApi(BasePluginApi):
     def select_and_import_secrets_file(self, conflict_policy: str = "skip", backup_password: Optional[str] = None) -> Dict[str, Any]:
         """Abre janela para selecionar arquivo (.safepack, .xml, .csv, .txt, .json) e importa diretamente."""
         try:
-            win = self.window or self._window
+            win = self._window
             if not win:
                 return {"success": False, "message": "Janela não inicializada."}
             

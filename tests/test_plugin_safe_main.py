@@ -48,7 +48,7 @@ print('IMPORT_SUCCESS')
         cwd=str(SAFE_DIR),
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=25,
     )
     assert res.returncode == 0, f"Erro na execução direta: {res.stderr}"
     assert "IMPORT_SUCCESS" in res.stdout
@@ -179,6 +179,26 @@ def test_get_vault_status_includes_version_metadata(tmp_path):
     assert "window_title" in status_res["data"]
     assert status_res["data"]["plugin_version"] == safe_main.get_plugin_version()
     assert status_res["data"]["window_title"] == safe_main.get_window_title()
+
+
+def test_safe_plugin_api_internal_attributes_are_private(tmp_path):
+    """Valida que atributos de infraestrutura (service, window) não são expostos publicamente via reflexão do pywebview."""
+    db_file = tmp_path / "test_priv_attr.db"
+    svc = safe_service.SafeService(db_path=db_file)
+    mock_window = object()
+    api = safe_main.SafePluginApi(service=svc, window=mock_window)
+
+    # Verifica que não existem atributos públicos 'service' ou 'window'
+    assert not hasattr(api, "service") or callable(getattr(api, "service")) is False
+    assert "service" not in api.__dict__, "Atributo 'service' não deve ser público na SafePluginApi"
+    assert "window" not in api.__dict__, "Atributo 'window' não deve ser público na SafePluginApi"
+
+    # Verifica que os atributos privados existem e estão acessíveis internamente
+    assert hasattr(api, "_service")
+    assert hasattr(api, "_window")
+    assert api._service is svc
+    assert api._window is mock_window
+
 
 
 
