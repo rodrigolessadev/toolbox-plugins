@@ -286,6 +286,14 @@ async function initApp() {
     if (statusRes && statusRes.success) {
       appInitialized = true;
       const data = statusRes.data;
+
+      // Atualiza o título da janela/documento com a versão dinâmica
+      if (data.window_title) {
+        document.title = data.window_title;
+      } else if (data.plugin_version) {
+        document.title = `Cofre - v${data.plugin_version}`;
+      }
+
       if (!data.configured) {
         showScreen('screen-setup');
         setupSetupScreen(data);
