@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
@@ -510,8 +511,15 @@ class SafeDatabase:
                 params.append(category)
 
             if owner_plugin_id:
-                query += " AND (owner_plugin_id = ? OR owner_plugin_id IS NULL)"
-                params.append(owner_plugin_id)
+                query += """ AND (
+                    owner_plugin_id = ? 
+                    OR id IN (
+                        SELECT entry_id FROM safe_plugin_grants 
+                        WHERE plugin_id = ? 
+                          AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                    )
+                )"""
+                params.extend([owner_plugin_id, owner_plugin_id])
 
             if search_query:
                 query += " AND (title LIKE ? OR username_or_key LIKE ? OR tags LIKE ?)"
