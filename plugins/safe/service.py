@@ -20,20 +20,25 @@ try:
     import db
     import windows_hello
     import windows_session
+    import logger as safe_logger_module
 except ImportError:
     try:
         from . import crypto
         from . import db
         from . import windows_hello
         from . import windows_session
+        from . import logger as safe_logger_module
     except ImportError:
         from safe import crypto
         from safe import db
         from safe import windows_hello
+        from safe import logger as safe_logger_module
         try:
             from safe import windows_session
         except ImportError:
             windows_session = None
+
+logger = safe_logger_module.get_logger("safe.service")
 
 
 class SafeAccessDeniedError(Exception):
@@ -55,19 +60,21 @@ class SafeService:
         self.db = db.SafeDatabase(db_path)
         self._master_key: Optional[bytearray] = None
         self._last_activity_time: float = time.time()
+        logger.info("SafeService inicializado.")
         
         # Inicializa o listener de bloqueio de sessão do Windows
         if windows_session and hasattr(windows_session, "start_session_lock_listener"):
             try:
                 windows_session.start_session_lock_listener(self._handle_os_session_lock)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Aviso ao iniciar session_lock_listener: {e}")
 
     def _handle_os_session_lock(self) -> None:
         """Callback acionado quando o Windows é bloqueado (Win + L / Suspensão)."""
         meta = self.db.get_metadata()
         if meta and meta.get("lock_on_os_lock", True):
-            self.lock()
+            logger.info("Bloqueio de sessão do Windows detectado (Win+L). Bloqueando cofre.")
+            self.lock(reason="Bloqueio de Sessão do Windows")
 
     # ========================================================================
     # Ciclo de Vida & Status
@@ -136,7 +143,8 @@ class SafeService:
 
         elapsed = time.time() - self._last_activity_time
         if elapsed >= timeout:
-            self.lock()
+            logger.info("Tempo limite de inatividade atingido. Bloqueando o cofre automaticamente.")
+            self.lock(reason="Inatividade")
             return True
         return False
 
@@ -153,9 +161,11 @@ class SafeService:
         A criação de senha mestra é obrigatória para todos os modos.
         """
         if not password or len(password.strip()) < 4:
+            logger.warning("Tentativa de setup do cofre rejeitada: senha mestre inválida ou curta.")
             raise ValueError("A senha mestre é obrigatória e deve ter pelo menos 4 caracteres.")
 
         auth_mode_clean = "hybrid" if use_hello or auth_mode.lower() == "hybrid" else "master_password"
+        logger.info(f"Iniciando configuração inicial do cofre (modo: {auth_mode_clean}, timeout: {auto_lock_timeout}s, lock_on_os: {lock_on_os_lock}).")
         mk_raw = crypto.generate_master_key()
 
         kdf_salt = crypto.generate_salt(16)
@@ -173,7 +183,8 @@ class SafeService:
             hello_cred_id = str(uuid.uuid4())
             try:
                 wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_cred_id.encode("utf-8"))
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Proteção DPAPI para Windows Hello indisponível no setup: {e}")
                 wrapped_hello = None
 
         self.db.save_metadata(
@@ -191,6 +202,7 @@ class SafeService:
         # Guarda a chave ativa em memória protegida (bytearray)
         self._master_key = bytearray(mk_raw)
         self.touch_activity()
+        logger.info("Cofre configurado e desbloqueado com sucesso.")
 
         return {"success": True, "message": "Cofre configurado e desbloqueado com sucesso."}
 
@@ -201,6 +213,7 @@ class SafeService:
         """
         self._require_unlocked()
         if not password or len(password.strip()) < 4:
+            logger.warning("Tentativa de alteração de senha mestre rejeitada: senha curta.")
             raise ValueError("A senha mestre deve ter pelo menos 4 caracteres.")
 
         meta = self.db.get_metadata()
@@ -241,6 +254,7 @@ class SafeService:
             auto_lock_timeout=meta.get("auto_lock_timeout", 300),
             lock_on_os_lock=meta.get("lock_on_os_lock", True),
         )
+        logger.info("Senha mestre redefinida e persistida com sucesso.")
 
         return {"success": True, "message": "Senha mestre definida com sucesso."}
 
@@ -255,6 +269,7 @@ class SafeService:
         """
         meta = self.db.get_metadata()
         if not meta:
+            logger.warning("Tentativa de desbloqueio falhou: cofre não configurado.")
             raise ValueError("O cofre ainda não foi configurado. Execute a configuração inicial.")
 
         auth_mode = meta.get("auth_mode", "master_password")
@@ -270,6 +285,7 @@ class SafeService:
             # Solicita confirmação biométrica/PIN
             ok, msg = windows_hello.verify_windows_hello(reason)
             if not ok:
+                logger.warning(f"Desbloqueio via Windows Hello recusado: {msg}")
                 raise SafeAccessDeniedError(f"Windows Hello recusado: {msg}")
 
             hello_id = (meta.get("hello_credential_id") or "").encode("utf-8")
@@ -280,6 +296,7 @@ class SafeService:
             except Exception as e:
                 # Se falhar pelo DPAPI e for híbrido, tenta senha mestre se informada
                 if auth_mode != "hybrid" or not password:
+                    logger.warning("Falha ao desencapsular chave DPAPI do Windows Hello.")
                     raise SafeAccessDeniedError("Não foi possível desencapsular a chave com Windows Hello.") from e
 
         if mk_bytes is None:
@@ -306,22 +323,26 @@ class SafeService:
             try:
                 mk_bytes = crypto.unwrap_key(ciphertext, iv, auth_tag, wrapping_key)
             except Exception as e:
+                logger.warning("Tentativa de desbloqueio com senha mestre incorreta.")
                 raise SafeAccessDeniedError("Senha mestre incorreta ou dados corrompidos.") from e
 
         if not mk_bytes or len(mk_bytes) != 32:
+            logger.error("Chave mestra resultante do desencapsulamento é inválida.")
             raise SafeAccessDeniedError("Chave mestra inválida.")
 
         self._master_key = bytearray(mk_bytes)
         self.touch_activity()
+        logger.info(f"Cofre desbloqueado com sucesso (método: {'Windows Hello' if use_hello else 'Senha Mestra'}).")
         return True
 
-    def lock(self) -> bool:
+    def lock(self, reason: str = "Solicitação do Usuário") -> bool:
         """
         Bloqueia o cofre imediatamente e limpa a chave da memória RAM (Zeroization).
         """
         if self._master_key is not None:
             crypto.zeroize(self._master_key)
             self._master_key = None
+            logger.info(f"Cofre bloqueado com sucesso (motivo: {reason}).")
         return True
 
     def _require_unlocked(self) -> bytes:
@@ -368,6 +389,7 @@ class SafeService:
                 tags=tags,
                 metadata=metadata,
             )
+            logger.info(f"Credencial atualizada com sucesso: id={eid}, categoria={category}, titulo='{title}'")
         else:
             self.db.insert_entry(
                 entry_id=eid,
@@ -381,6 +403,7 @@ class SafeService:
                 tags=tags,
                 metadata=metadata,
             )
+            logger.info(f"Nova credencial salva com sucesso: id={eid}, categoria={category}, titulo='{title}'")
 
         return {
             "id": eid,
@@ -401,6 +424,7 @@ class SafeService:
         mk = self._require_unlocked()
         entry = self.db.get_entry(entry_id)
         if not entry:
+            logger.warning(f"Tentativa de leitura falhou: credencial '{entry_id}' não encontrada.")
             raise ValueError(f"Credencial com ID '{entry_id}' não encontrada.")
 
         # Validação de ACL se for requisitado por um plugin terceiro
@@ -409,6 +433,7 @@ class SafeService:
             if owner != requester_plugin_id:
                 grant = self.db.get_grant(requester_plugin_id, entry_id)
                 if not grant:
+                    logger.warning(f"Acesso negado: plugin '{requester_plugin_id}' tentou acessar credencial '{entry_id}' sem permissão.")
                     raise SafeAccessDeniedError(
                         f"Plugin '{requester_plugin_id}' não possui permissão para acessar a credencial '{entry.get('title')}'."
                     )
@@ -418,6 +443,7 @@ class SafeService:
         auth_tag = entry["auth_tag"]
 
         decrypted = crypto.decrypt_payload(ciphertext, iv, auth_tag, mk)
+        logger.debug(f"Credencial descriptografada com sucesso: id={entry_id}, requisitante={requester_plugin_id or 'safe-ui'}")
 
         return {
             "id": entry["id"],
@@ -466,9 +492,13 @@ class SafeService:
             if owner != requester_plugin_id:
                 grant = self.db.get_grant(requester_plugin_id, entry_id)
                 if not grant or grant.get("access_level") not in ("read_write", "full"):
+                    logger.warning(f"Exclusão negada: plugin '{requester_plugin_id}' sem permissão de escrita para '{entry_id}'.")
                     raise SafeAccessDeniedError(f"Permissão insuficiente para excluir a credencial '{entry.get('title')}'.")
 
-        return self.db.delete_entry(entry_id)
+        deleted = self.db.delete_entry(entry_id)
+        if deleted:
+            logger.info(f"Credencial excluída com sucesso: id={entry_id}")
+        return deleted
 
     # ========================================================================
     # Permissões e ACLs de Plugins
@@ -484,11 +514,15 @@ class SafeService:
         self._require_unlocked()
         grant_id = f"{target_plugin_id}_{entry_id}"
         self.db.add_grant(grant_id, target_plugin_id, entry_id, access_level, expires_at)
+        logger.info(f"Permissão de acesso concedida: plugin='{target_plugin_id}', segredo='{entry_id}', nivel='{access_level}'")
         return {"success": True, "grant_id": grant_id}
 
     def revoke_permission(self, grant_id: str) -> bool:
         self._require_unlocked()
-        return self.db.delete_grant(grant_id)
+        revoked = self.db.delete_grant(grant_id)
+        if revoked:
+            logger.info(f"Permissão revogada com sucesso: grant_id='{grant_id}'")
+        return revoked
 
     def list_grants(self, plugin_id: Optional[str] = None) -> List[Dict[str, Any]]:
         self._require_unlocked()
@@ -544,6 +578,7 @@ class SafeService:
         """Atualiza configurações de segurança do cofre."""
         self._require_unlocked()
         self.db.update_security_settings(auto_lock_timeout, lock_on_os_lock)
+        logger.info(f"Configurações de segurança atualizadas: timeout={auto_lock_timeout}s, lock_on_os_lock={lock_on_os_lock}")
         return {"success": True, "message": "Configurações de segurança atualizadas com sucesso."}
 
     # ========================================================================
@@ -573,6 +608,7 @@ class SafeService:
             except Exception:
                 continue
 
+        logger.info(f"Exportação de credenciais concluída: {len(exported)} itens exportados.")
         return exported
 
     def import_secrets(self, items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Dict[str, Any]:
@@ -632,6 +668,7 @@ class SafeService:
             except Exception as e:
                 errors.append(f"Erro ao salvar '{title}': {e}")
 
+        logger.info(f"Importação de credenciais concluída: {imported_count} importadas, {skipped_count} ignoradas de um total de {len(raw_list)}.")
         return {
             "success": True,
             "imported": imported_count,
