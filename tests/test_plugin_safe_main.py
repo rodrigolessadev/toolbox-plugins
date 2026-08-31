@@ -94,3 +94,50 @@ def test_windows_hello_availability_detection():
         assert avail is True
 
 
+def test_safe_plugin_api_exposed_methods(tmp_path):
+    """Valida que todos os métodos RPC esperados pelo frontend (app.js) estão implementados e chamáveis."""
+    db_file = tmp_path / "test_api_vault.db"
+    svc = safe_service.SafeService(db_path=db_file)
+    api = safe_main.SafePluginApi(service=svc)
+
+    required_methods = [
+        "get_vault_status",
+        "setup_vault",
+        "unlock_vault",
+        "lock_vault",
+        "touch_activity",
+        "list_secrets",
+        "save_secret",
+        "get_secret",
+        "delete_secret",
+        "generate_password",
+        "set_master_password",
+        "update_security_settings",
+        "grant_plugin_access",
+        "revoke_plugin_access",
+        "list_plugin_grants",
+        "export_secrets",
+        "preview_import_data",
+        "import_secrets",
+        "select_file_for_import",
+        "import_secrets_from_file_path",
+        "copy_secret_to_clipboard",
+        "log_frontend_error",
+    ]
+
+    for method_name in required_methods:
+        assert hasattr(api, method_name), f"Método '{method_name}' não encontrado em SafePluginApi"
+        assert callable(getattr(api, method_name)), f"Atributo '{method_name}' não é chamável em SafePluginApi"
+
+
+def test_safe_plugin_api_frontend_error_logging(tmp_path):
+    """Valida o endpoint de log de erros do frontend."""
+    db_file = tmp_path / "test_api_err.db"
+    svc = safe_service.SafeService(db_path=db_file)
+    api = safe_main.SafePluginApi(service=svc)
+
+    res = api.log_frontend_error("Erro de teste no frontend", "Stacktrace line 1\nline 2")
+    assert res["success"] is True
+
+
+

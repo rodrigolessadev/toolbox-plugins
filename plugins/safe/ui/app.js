@@ -35,6 +35,77 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 // ============================================================================
+// Bridge da API (pywebview / Toolbox Container)
+// ============================================================================
+
+function getApiObject() {
+  if (window.pywebview && window.pywebview.api) {
+    return window.pywebview.api;
+  }
+  if (window.toolbox && window.toolbox.api) {
+    return window.toolbox.api;
+  }
+  if (window.toolbox && typeof window.toolbox.get_vault_status === 'function') {
+    return window.toolbox;
+  }
+  if (window.api && typeof window.api.get_vault_status === 'function') {
+    return window.api;
+  }
+  return null;
+}
+
+let apiWaitPromise = null;
+
+function waitForApi(timeoutMs = 8000, pollIntervalMs = 50) {
+  const currentApi = getApiObject();
+  if (currentApi) {
+    return Promise.resolve(currentApi);
+  }
+
+  if (apiWaitPromise) {
+    return apiWaitPromise;
+  }
+
+  apiWaitPromise = new Promise((resolve) => {
+    let resolved = false;
+
+    const timeoutTimer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        console.warn(`[SafeUI] waitForApi: timeout atingido (${timeoutMs}ms) sem injeção da API.`);
+        resolve(null);
+      }
+    }, timeoutMs);
+
+    function checkReady() {
+      const api = getApiObject();
+      if (!resolved && api) {
+        resolved = true;
+        cleanup();
+        resolve(api);
+      }
+    }
+
+    function onPywebviewReady() {
+      checkReady();
+    }
+
+    function cleanup() {
+      clearTimeout(timeoutTimer);
+      clearInterval(pollTimer);
+      window.removeEventListener('pywebviewready', onPywebviewReady);
+      apiWaitPromise = null;
+    }
+
+    window.addEventListener('pywebviewready', onPywebviewReady);
+    const pollTimer = setInterval(checkReady, pollIntervalMs);
+  });
+
+  return apiWaitPromise;
+}
+
+// ============================================================================
 // Inicialização
 // ============================================================================
 
@@ -43,15 +114,7 @@ window.addEventListener('DOMContentLoaded', () => {
     window.lucide.createIcons();
   }
   setupActivityTracker();
-
-  // Aguarda pywebview ficar pronto
-  if (window.pywebview && window.pywebview.api) {
-    initApp();
-  } else {
-    window.addEventListener('pywebviewready', initApp);
-    // Fallback após 500ms para ambientes de desenvolvimento / preview
-    setTimeout(initApp, 500);
-  }
+  initApp();
 });
 
 function registerUserActivity() {
@@ -137,16 +200,23 @@ async function callApi(method, ...args) {
   if (method !== 'touch_activity') {
     lastActivityTimestamp = Date.now();
   }
-  if (window.pywebview && window.pywebview.api && window.pywebview.api[method]) {
+
+  let api = getApiObject();
+  if (!api) {
+    api = await waitForApi(3000);
+  }
+
+  if (api && typeof api[method] === 'function') {
     try {
-      return await window.pywebview.api[method](...args);
+      return await api[method](...args);
     } catch (e) {
-      console.error(`Erro ao chamar ${method}:`, e);
+      console.error(`[SafeUI] Erro ao chamar ${method}:`, e);
       return { success: false, message: e.toString() };
     }
   }
-  console.warn(`pywebview.api.${method} indisponível (modo mock/preview).`);
-  return { success: false, message: 'API indisponível' };
+
+  console.warn(`[SafeUI] pywebview/toolbox API.${method} indisponível.`);
+  return { success: false, message: `Não existe API disponível para '${method}'. Verifique se o Toolbox Desktop está em execução.` };
 }
 
 function showInitError(message) {
@@ -186,20 +256,30 @@ function retryAppInit() {
 async function initApp() {
   if (appInitialized) return;
 
+  resetInitState();
+
   if (initTimeoutTimer) {
     clearTimeout(initTimeoutTimer);
   }
 
-  // Timeout de segurança de 5 segundos para evitar loop de carregamento infinito
+  // Timeout de segurança para feedback visual caso o bridge trave completamente
   initTimeoutTimer = setTimeout(() => {
     if (!appInitialized) {
-      console.warn('[SafeUI] Timeout de inicialização (5s) atingido.');
-      callApi('log_frontend_error', 'Timeout de inicialização do frontend atingido (5 segundos).');
+      console.warn('[SafeUI] Timeout global de inicialização atingido (10s).');
+      callApi('log_frontend_error', 'Timeout global de inicialização atingido (10s).');
       showInitError('Tempo limite de inicialização excedido. O serviço do Cofre não respondeu a tempo.');
     }
-  }, 5000);
+  }, 10000);
 
   try {
+    const api = await waitForApi(8000);
+    if (!api) {
+      if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
+      console.error('[SafeUI] Falha no bootstrap: Bridge não foi injetado após 8s.');
+      showInitError('A API do Toolbox não está disponível ou demorou para inicializar. Verifique se o aplicativo principal está em execução.');
+      return;
+    }
+
     const statusRes = await callApi('get_vault_status');
     if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
 
@@ -219,16 +299,10 @@ async function initApp() {
         checkPasswordMigrationBanner(data);
       }
     } else {
-      if (window.pywebview && window.pywebview.api) {
-        const err = (statusRes && statusRes.message) || 'Erro desconhecido ao carregar status do cofre.';
-        console.error('[SafeUI] Falha ao obter status do cofre:', err);
-        callApi('log_frontend_error', `Falha ao obter status: ${err}`);
-        showInitError(`Erro ao carregar dados do cofre: ${err}`);
-      } else {
-        // Modo preview / mock sem pywebview
-        appInitialized = true;
-        showScreen('screen-setup');
-      }
+      const err = (statusRes && statusRes.message) || 'Erro desconhecido ao carregar status do cofre.';
+      console.error('[SafeUI] Falha ao obter status do cofre:', err);
+      callApi('log_frontend_error', `Falha ao obter status: ${err}`);
+      showInitError(`Erro ao carregar dados do cofre: ${err}`);
     }
   } catch (err) {
     if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
