@@ -471,3 +471,73 @@ def test_service_windows_hello_entropy_fallback(monkeypatch):
         assert service.unlock(use_hello=True) is True
 
 
+def test_service_update_security_settings_persistence():
+    """
+    Testa a persistência de configurações de segurança, garantindo que timeouts
+    de 0s (desativado), 60s, 900s e flags de lock_on_os sejam mantidos entre consultas.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+
+        service.setup_vault(password="TestPassword123!", auto_lock_timeout=300, lock_on_os_lock=True)
+        status = service.get_status()
+        assert status["auto_lock_timeout"] == 300
+        assert status["lock_on_os_lock"] is True
+
+        # 1. Altera para 0s (Desativado / Nunca) e lock_on_os = False
+        res = service.update_security_settings(auto_lock_timeout=0, lock_on_os_lock=False)
+        assert res["success"] is True
+
+        # Instancia novo serviço apontando para o mesmo banco para validar persistência real em disco
+        service2 = SafeService(db_path)
+        status2 = service2.get_status()
+        assert status2["auto_lock_timeout"] == 0
+        assert status2["lock_on_os_lock"] is False
+
+        # 2. Desbloqueia service2, altera para 900s (15 min) e lock_on_os = True
+        service2.unlock(password="TestPassword123!")
+        service2.update_security_settings(auto_lock_timeout=900, lock_on_os_lock=True)
+        service3 = SafeService(db_path)
+        status3 = service3.get_status()
+        assert status3["auto_lock_timeout"] == 900
+        assert status3["lock_on_os_lock"] is True
+
+
+def test_service_os_session_lock_with_listeners():
+    """
+    Testa se o listener de bloqueio de sessão do Windows aciona os callbacks registrados
+    quando lock_on_os_lock = True e respeita quando lock_on_os_lock = False.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+
+        service.setup_vault(password="MasterPassword123!", lock_on_os_lock=True)
+        assert service.get_status()["status"] == "UNLOCKED"
+
+        lock_events = []
+        def lock_listener(reason: str):
+            lock_events.append(reason)
+
+        service.add_on_lock_listener(lock_listener)
+
+        # 1. Simula evento Win+L com lock_on_os_lock = True
+        service._handle_os_session_lock()
+        assert service.get_status()["status"] == "LOCKED"
+        assert len(lock_events) == 1
+        assert "Bloqueio de Sessão do Windows" in lock_events[0]
+
+        # 2. Desbloqueia e altera configuração para lock_on_os_lock = False
+        service.unlock(password="MasterPassword123!")
+        assert service.get_status()["status"] == "UNLOCKED"
+        service.update_security_settings(auto_lock_timeout=300, lock_on_os_lock=False)
+
+        # 3. Simula evento Win+L com lock_on_os_lock = False -> NÃO deve bloquear
+        lock_events.clear()
+        service._handle_os_session_lock()
+        assert service.get_status()["status"] == "UNLOCKED"
+        assert len(lock_events) == 0
+
+
+

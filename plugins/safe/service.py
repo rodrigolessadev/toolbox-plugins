@@ -60,6 +60,7 @@ class SafeService:
         self.db = db.SafeDatabase(db_path)
         self._master_key: Optional[bytearray] = None
         self._last_activity_time: float = time.time()
+        self._on_lock_listeners: List[Callable[[str], None]] = []
         logger.info("SafeService inicializado.")
         
         # Inicializa o listener de bloqueio de sessão do Windows
@@ -68,6 +69,11 @@ class SafeService:
                 windows_session.start_session_lock_listener(self._handle_os_session_lock)
             except Exception as e:
                 logger.debug(f"Aviso ao iniciar session_lock_listener: {e}")
+
+    def add_on_lock_listener(self, listener: Callable[[str], None]) -> None:
+        """Registra um callback a ser acionado sempre que o cofre for bloqueado."""
+        if listener not in self._on_lock_listeners:
+            self._on_lock_listeners.append(listener)
 
     def _handle_os_session_lock(self) -> None:
         """Callback acionado quando o Windows é bloqueado (Win + L / Suspensão)."""
@@ -363,11 +369,19 @@ class SafeService:
     def lock(self, reason: str = "Solicitação do Usuário") -> bool:
         """
         Bloqueia o cofre imediatamente e limpa a chave da memória RAM (Zeroization).
+        Notifica listeners registrados (como a UI).
         """
         if self._master_key is not None:
             crypto.zeroize(self._master_key)
             self._master_key = None
             logger.info(f"Cofre bloqueado com sucesso (motivo: {reason}).")
+
+        for listener in list(self._on_lock_listeners):
+            try:
+                listener(reason)
+            except Exception as e:
+                logger.debug(f"Erro ao notificar on_lock_listener: {e}")
+
         return True
 
     def _require_unlocked(self) -> bytes:
