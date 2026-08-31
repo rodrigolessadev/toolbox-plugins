@@ -20,6 +20,7 @@ try:
     import db
     import windows_hello
     import windows_session
+    import importers
     import logger as safe_logger_module
 except ImportError:
     try:
@@ -27,6 +28,7 @@ except ImportError:
         from . import db
         from . import windows_hello
         from . import windows_session
+        from . import importers
         from . import logger as safe_logger_module
     except ImportError:
         from safe import crypto
@@ -37,6 +39,10 @@ except ImportError:
             from safe import windows_session
         except ImportError:
             windows_session = None
+        try:
+            from safe import importers
+        except ImportError:
+            importers = None
 
 logger = safe_logger_module.get_logger("safe.service")
 
@@ -650,15 +656,80 @@ class SafeService:
         logger.info(f"Exportação de credenciais concluída: {len(exported)} itens exportados.")
         return exported
 
-    def import_secrets(self, items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any]]) -> Dict[str, Any]:
+    def preview_import(
+        self,
+        content_or_bytes: Union[str, bytes],
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
-        Importa segredos (formato Save in Cloud, backup de cofre ou lista JSON).
+        Gera uma pré-visualização dos registros a serem importados sem gravar no banco de dados.
+        Identifica formato, total de registros, categorias e possíveis conflitos com itens existentes.
         """
         self._require_unlocked()
 
-        # Suporta {"entries": [...]}, {"secrets": [...]} ou lista direta [...]
+        if importers is None:
+            raise RuntimeError("Módulo de importadores não disponível.")
+
+        items, detected_format = importers.detect_and_parse_secrets(content_or_bytes, filename=filename)
+        
+        # Obtém títulos já existentes no banco para checar conflitos
+        existing_entries = self.db.list_entries_summary()
+        existing_titles = {e["title"].strip().lower(): e["id"] for e in existing_entries}
+
+        conflicts_count = 0
+        categories_count: Dict[str, int] = {}
+        preview_list: List[Dict[str, Any]] = []
+
+        for item in items:
+            cat = item.get("category", "password")
+            categories_count[cat] = categories_count.get(cat, 0) + 1
+
+            t_clean = (item.get("title") or "").strip().lower()
+            is_conflict = t_clean in existing_titles
+            if is_conflict:
+                conflicts_count += 1
+
+            if len(preview_list) < 25:
+                preview_list.append({
+                    "title": item.get("title", "Sem Título"),
+                    "category": cat,
+                    "username": item.get("username_or_key") or "",
+                    "has_password": bool(item.get("payload")),
+                    "conflict": is_conflict,
+                })
+
+        return {
+            "success": True,
+            "format": detected_format,
+            "total_detected": len(items),
+            "conflicts_count": conflicts_count,
+            "categories": categories_count,
+            "preview_items": preview_list,
+        }
+
+    def import_secrets(
+        self,
+        items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any], str, bytes],
+        conflict_policy: str = "skip",
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Importa segredos (Microsoft Safe XML/CSV/TXT, Save in Cloud ou JSON de backup).
+        Políticas de conflito suportadas:
+          - 'skip': Se o item já existir (mesmo título), não importa.
+          - 'overwrite': Se o item já existir, atualiza os dados do registro existente.
+          - 'duplicate': Se o item já existir, cria um novo registro com sufixo '(Importado)'.
+        """
+        self._require_unlocked()
+
         raw_list: List[Dict[str, Any]] = []
-        if isinstance(items_or_payload, dict):
+
+        if isinstance(items_or_payload, (str, bytes)):
+            if importers is None:
+                raise RuntimeError("Módulo de importadores não disponível.")
+            parsed_items, _ = importers.detect_and_parse_secrets(items_or_payload, filename=filename)
+            raw_list = parsed_items
+        elif isinstance(items_or_payload, dict):
             if "entries" in items_or_payload and isinstance(items_or_payload["entries"], list):
                 raw_list = items_or_payload["entries"]
             elif "secrets" in items_or_payload and isinstance(items_or_payload["secrets"], list):
@@ -672,7 +743,11 @@ class SafeService:
         else:
             raise ValueError("Formato de dados para importação inválido.")
 
+        existing_entries = self.db.list_entries_summary()
+        existing_map = {e["title"].strip().lower(): e for e in existing_entries}
+
         imported_count = 0
+        updated_count = 0
         skipped_count = 0
         errors: List[str] = []
 
@@ -681,39 +756,70 @@ class SafeService:
                 skipped_count += 1
                 continue
 
-            title = item.get("title") or item.get("name")
+            title = str(item.get("title") or item.get("name") or "").strip()
             payload = item.get("payload") or item.get("secret") or item.get("password") or item.get("value")
             
             if not title or payload is None:
                 skipped_count += 1
-                errors.append(f"Item ignorado (título ou conteúdo ausente): {item.get('title', 'Sem Título')}")
                 continue
 
-            category = item.get("category", "general")
+            category = str(item.get("category", "password")).strip()
             username_or_key = item.get("username_or_key") or item.get("username") or item.get("key") or ""
             tags = item.get("tags", [])
             metadata = item.get("metadata", {})
 
+            t_lower = title.lower()
+            existing = existing_map.get(t_lower)
+
+            secret_id_to_use = None
+            final_title = title
+
+            if existing:
+                if conflict_policy == "skip":
+                    skipped_count += 1
+                    continue
+                elif conflict_policy == "overwrite":
+                    secret_id_to_use = existing["id"]
+                    final_title = existing["title"]
+                elif conflict_policy == "duplicate":
+                    # Gera um título com sufixo
+                    suffix_idx = 1
+                    candidate = f"{title} (Importado)"
+                    while candidate.lower() in existing_map:
+                        suffix_idx += 1
+                        candidate = f"{title} (Importado {suffix_idx})"
+                    final_title = candidate
+
             try:
-                self.save_secret(
-                    title=str(title).strip(),
+                save_res = self.save_secret(
+                    entry_id=secret_id_to_use,
+                    title=final_title,
                     secret_payload=payload,
-                    category=str(category).strip(),
+                    category=category,
                     username_or_key=str(username_or_key).strip() if username_or_key else None,
                     tags=tags if isinstance(tags, list) else [],
                     metadata=metadata if isinstance(metadata, dict) else {},
                 )
-                imported_count += 1
+                if existing and conflict_policy == "overwrite":
+                    updated_count += 1
+                else:
+                    imported_count += 1
+                    # Atualiza o mapa para detectar duplicatas dentro do próprio arquivo
+                    existing_map[final_title.lower()] = {"id": save_res["id"], "title": final_title}
             except Exception as e:
-                errors.append(f"Erro ao salvar '{title}': {e}")
+                errors.append(f"Erro ao processar item: {e}")
 
-        logger.info(f"Importação de credenciais concluída: {imported_count} importadas, {skipped_count} ignoradas de um total de {len(raw_list)}.")
+        logger.info(
+            f"Importação de credenciais concluída: {imported_count} criadas, "
+            f"{updated_count} atualizadas, {skipped_count} ignoradas de um total de {len(raw_list)}."
+        )
         return {
             "success": True,
             "imported": imported_count,
+            "updated": updated_count,
             "skipped": skipped_count,
             "total": len(raw_list),
             "errors": errors,
-            "message": f"{imported_count} credenciais importadas com sucesso ({skipped_count} ignoradas)."
+            "message": f"{imported_count + updated_count} credenciais processadas com sucesso ({imported_count} criadas, {updated_count} atualizadas, {skipped_count} ignoradas).",
         }
 

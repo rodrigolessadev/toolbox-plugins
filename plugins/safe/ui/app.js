@@ -888,70 +888,171 @@ async function handleSetMasterPasswordSubmit() {
 // Importação & Exportação de Segredos (Save in Cloud / Backup)
 // ============================================================================
 
+// ============================================================================
+// Importação de Credenciais (Microsoft Safe / Backup)
+// ============================================================================
+
+let pendingImportData = null;
+let pendingImportFilePath = null;
+
 function openImportModal() {
-  document.getElementById('import-json-text').value = '';
+  const rawInput = document.getElementById('import-raw-text');
+  if (rawInput) rawInput.value = '';
+  
+  const fileLabel = document.getElementById('import-selected-file-label');
+  if (fileLabel) fileLabel.innerText = 'Nenhum arquivo selecionado';
+  
+  const previewBox = document.getElementById('import-preview-box');
+  if (previewBox) previewBox.classList.add('hidden');
+  
   const statusMsg = document.getElementById('import-status-msg');
   if (statusMsg) {
     statusMsg.className = 'hidden';
     statusMsg.innerText = '';
   }
+  
+  pendingImportData = null;
+  pendingImportFilePath = null;
   openModal('modal-import');
+}
+
+function renderImportPreview(data) {
+  const previewBox = document.getElementById('import-preview-box');
+  const badgesContainer = document.getElementById('import-preview-badges');
+  const listContainer = document.getElementById('import-preview-list');
+
+  if (!data || !data.success || data.total_detected === 0) {
+    previewBox.classList.add('hidden');
+    return;
+  }
+
+  const formatLabels = {
+    'xml': 'Microsoft Safe XML',
+    'csv': 'Planilha CSV',
+    'txt': 'Texto Simples TXT',
+    'json': 'JSON / Backup'
+  };
+  const fmtLabel = formatLabels[data.format] || (data.format ? data.format.toUpperCase() : 'Desconhecido');
+
+  badgesContainer.innerHTML = `
+    <span class="badge" style="background: var(--accent); color: white;">${fmtLabel}</span>
+    <span class="badge" style="background: var(--bg-elev-1); color: var(--fg); border: 1px solid var(--border);">${data.total_detected} itens</span>
+    ${data.conflicts_count > 0 ? `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning);">⚠️ ${data.conflicts_count} existentes</span>` : ''}
+  `;
+
+  let listHtml = '';
+  if (data.preview_items && data.preview_items.length > 0) {
+    data.preview_items.forEach(it => {
+      listHtml += `
+        <div style="padding: 6px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="color: var(--fg);">${escapeHtml(it.title)}</strong>
+            ${it.username ? `<span style="color: var(--fg-muted); margin-left: 6px;">(${escapeHtml(it.username)})</span>` : ''}
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--bg-elev-2); color: var(--fg-muted);">${escapeHtml(it.category)}</span>
+            ${it.conflict ? '<span style="font-size: 10px; color: var(--warning);" title="Item já existe no cofre">⚠️ Já existe</span>' : ''}
+          </div>
+        </div>
+      `;
+    });
+    if (data.total_detected > data.preview_items.length) {
+      listHtml += `<div style="padding: 6px 10px; text-align: center; color: var(--fg-muted); font-size: 11px;">+ ${data.total_detected - data.preview_items.length} outros itens...</div>`;
+    }
+  } else {
+    listHtml = '<div style="padding: 10px; text-align: center; color: var(--fg-muted);">Nenhum item válido identificado.</div>';
+  }
+
+  listContainer.innerHTML = listHtml;
+  previewBox.classList.remove('hidden');
+  if (window.lucide) window.lucide.createIcons();
 }
 
 async function handleSelectImportFile() {
   const statusMsg = document.getElementById('import-status-msg');
   statusMsg.className = 'hidden';
   
-  const res = await callApi('select_and_import_secrets_file');
+  const res = await callApi('select_file_for_import');
   if (res && res.success) {
-    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
-    statusMsg.style.color = 'var(--success)';
-    statusMsg.innerText = res.message || `${res.imported} registros importados com sucesso.`;
-    statusMsg.classList.remove('hidden');
-    loadVaultData();
-  } else {
+    pendingImportFilePath = res.file_path;
+    pendingImportData = null;
+    document.getElementById('import-selected-file-label').innerText = res.file_name || 'Arquivo selecionado';
+    renderImportPreview(res);
+  } else if (res && res.message && res.message !== 'Nenhum arquivo selecionado.') {
     statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
     statusMsg.style.color = 'var(--danger)';
-    statusMsg.innerText = res.message || 'Nenhum registro importado.';
+    statusMsg.innerText = res.message;
     statusMsg.classList.remove('hidden');
   }
 }
 
-async function handleImportJsonText() {
-  const text = document.getElementById('import-json-text').value;
+async function handlePreviewPastedText() {
+  const text = document.getElementById('import-raw-text').value;
   const statusMsg = document.getElementById('import-status-msg');
+  statusMsg.className = 'hidden';
 
   if (!text || !text.trim()) {
     statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
     statusMsg.style.color = 'var(--danger)';
-    statusMsg.innerText = 'Insira o JSON de credenciais para importar.';
+    statusMsg.innerText = 'Cole o conteúdo em texto (XML, CSV, TXT ou JSON) para analisar.';
     statusMsg.classList.remove('hidden');
     return;
   }
 
-  let parsed = null;
-  try {
-    parsed = JSON.parse(text);
-  } catch (e) {
-    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
-    statusMsg.style.color = 'var(--danger)';
-    statusMsg.innerText = `JSON inválido: ${e.message}`;
-    statusMsg.classList.remove('hidden');
-    return;
-  }
-
-  const res = await callApi('import_secrets', parsed);
+  const res = await callApi('preview_import_data', text);
   if (res && res.success) {
-    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
-    statusMsg.style.color = 'var(--success)';
-    statusMsg.innerText = res.message || `${res.imported} registros importados com sucesso!`;
-    statusMsg.classList.remove('hidden');
-    loadVaultData();
+    pendingImportData = text;
+    pendingImportFilePath = null;
+    document.getElementById('import-selected-file-label').innerText = 'Texto colado';
+    renderImportPreview(res);
   } else {
     statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
     statusMsg.style.color = 'var(--danger)';
-    statusMsg.innerText = res.message || 'Erro ao importar credenciais.';
+    statusMsg.innerText = res.message || 'Não foi possível reconhecer a estrutura do texto.';
     statusMsg.classList.remove('hidden');
+  }
+}
+
+async function handleConfirmImport() {
+  const statusMsg = document.getElementById('import-status-msg');
+  const policy = document.getElementById('import-conflict-policy').value;
+  const btn = document.getElementById('btn-confirm-import');
+
+  let res = null;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Importando...';
+
+  try {
+    if (pendingImportFilePath) {
+      res = await callApi('import_secrets_from_file_path', pendingImportFilePath, policy);
+    } else {
+      const textToUse = pendingImportData || document.getElementById('import-raw-text').value;
+      if (!textToUse || !textToUse.trim()) {
+        statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+        statusMsg.style.color = 'var(--danger)';
+        statusMsg.innerText = 'Selecione um arquivo ou cole os dados antes de importar.';
+        statusMsg.classList.remove('hidden');
+        return;
+      }
+      res = await callApi('import_secrets', textToUse, policy);
+    }
+
+    if (res && res.success) {
+      statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
+      statusMsg.style.color = 'var(--success)';
+      statusMsg.innerText = res.message || `${res.imported} registros importados com sucesso!`;
+      statusMsg.classList.remove('hidden');
+      loadVaultData();
+    } else {
+      statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+      statusMsg.style.color = 'var(--danger)';
+      statusMsg.innerText = res.message || 'Erro ao importar credenciais.';
+      statusMsg.classList.remove('hidden');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload"></i> Importar Credenciais';
+    if (window.lucide) window.lucide.createIcons();
   }
 }
 
