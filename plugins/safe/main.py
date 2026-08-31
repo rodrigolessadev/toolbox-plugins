@@ -30,6 +30,14 @@ except ImportError:
     except ImportError:
         from safe.service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
 
+try:
+    from clipboard import copy_to_clipboard_secure
+except ImportError:
+    try:
+        from .clipboard import copy_to_clipboard_secure
+    except ImportError:
+        from safe.clipboard import copy_to_clipboard_secure
+
 if sys.platform == "win32":
     try:
         import ctypes
@@ -389,10 +397,15 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
-    def copy_secret_to_clipboard(self, text: str) -> Dict[str, Any]:
+    def copy_secret_to_clipboard(self, text: str, auto_clear_seconds: int = 30) -> Dict[str, Any]:
         try:
-            copy_to_clipboard(text)
-            return {"success": True, "message": "Copiado para a área de transferência!"}
+            ok = copy_to_clipboard_secure(text, auto_clear_seconds=auto_clear_seconds)
+            if ok:
+                return {
+                    "success": True,
+                    "message": f"Copiado para a área de transferência! (Higienização automática em {auto_clear_seconds}s)",
+                }
+            return {"success": False, "message": "Falha ao acessar a área de transferência do sistema."}
         except Exception as e:
             return {"success": False, "message": str(e)}
 
