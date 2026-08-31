@@ -351,3 +351,51 @@ def test_config_json_not_present_in_repo() -> None:
     """Garante que nenhum config.json de preferências de usuário está salvo na pasta do plugin no repositório."""
     config_file = PLUGIN_DIR / "config.json"
     assert not config_file.exists(), "config.json não deve existir no repositório limpo!"
+
+
+@patch("subprocess.Popen")
+def test_ssm_tunnel_exit_updates_icon_and_state(mock_popen: MagicMock) -> None:
+    """Valida que o encerramento do túnel SSM (código 0 ou erro) atualiza o ícone para desconectado."""
+    import time
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.returncode = 0
+    mock_proc.stdout.readline.side_effect = ["Starting session...", ""]
+    mock_proc.wait.return_value = 0
+    mock_popen.return_value = mock_proc
+
+    mgr = domain.AwsTunnelManager()
+    with patch.object(domain, "set_window_taskbar_icon") as mock_icon:
+        res = mgr.start_tunnel(profile="user-test", local_port=42586, target_instance_id="i-test123")
+        assert res["success"] is True
+
+        # Aguarda thread _reader_worker finalizar
+        time.sleep(0.1)
+
+        assert mgr.process is None
+        assert mgr.current_state == "idle"
+        # Verifica se set_window_taskbar_icon(False) foi chamado
+        mock_icon.assert_called_with(False)
+
+
+@patch("subprocess.Popen")
+def test_ssm_tunnel_abnormal_exit_updates_icon(mock_popen: MagicMock) -> None:
+    """Valida que o encerramento do túnel SSM com erro (código 255) atualiza o ícone para desconectado."""
+    import time
+    mock_proc = MagicMock()
+    mock_proc.poll.return_value = None
+    mock_proc.returncode = 255
+    mock_proc.stdout.readline.side_effect = ["Session ended with error", ""]
+    mock_proc.wait.return_value = 255
+    mock_popen.return_value = mock_proc
+
+    mgr = domain.AwsTunnelManager()
+    with patch.object(domain, "set_window_taskbar_icon") as mock_icon:
+        res = mgr.start_tunnel(profile="user-test", local_port=42586, target_instance_id="i-test123")
+        assert res["success"] is True
+
+        time.sleep(0.1)
+
+        assert mgr.process is None
+        assert mgr.current_state == "idle"
+        mock_icon.assert_called_with(False)
