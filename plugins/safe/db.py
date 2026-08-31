@@ -360,6 +360,31 @@ class SafeDatabase:
     def update_auto_lock_timeout(self, timeout_seconds: int) -> None:
         self.update_security_settings(auto_lock_timeout=timeout_seconds)
 
+    def update_wrapped_hello_key(
+        self,
+        wrapped_hello_key: bytes,
+        hello_credential_id: Optional[str] = None,
+    ) -> None:
+        """Atualiza ou auto-regenera o envelope DPAPI do Windows Hello."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            if hello_credential_id:
+                cursor.execute("""
+                UPDATE safe_metadata SET
+                    wrapped_hello_key = ?,
+                    hello_credential_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = 'default_vault';
+                """, (wrapped_hello_key, hello_credential_id))
+            else:
+                cursor.execute("""
+                UPDATE safe_metadata SET
+                    wrapped_hello_key = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = 'default_vault';
+                """, (wrapped_hello_key,))
+            conn.commit()
+
     # ========================================================================
     # Operações de Registros (safe_entries)
     # ========================================================================

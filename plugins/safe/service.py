@@ -289,14 +289,27 @@ class SafeService:
                 raise SafeAccessDeniedError(f"Windows Hello recusado: {msg}")
 
             hello_id = (meta.get("hello_credential_id") or "").encode("utf-8")
-            # Prefere wrapped_hello_key se disponível, caso contrário fallback para wrapped_mk (bases legadas)
-            target_hello_blob = wrapped_hello or wrapped_mk
+
+            # Se for base híbrida moderna mas wrapped_hello_key for NULL
+            if auth_mode == "hybrid" and not wrapped_hello:
+                logger.warning("Vínculo do Windows Hello ausente no cofre híbrido.")
+                raise SafeAccessDeniedError(
+                    "Vínculo do Windows Hello desatualizado. Desbloqueie com a Senha Mestra uma vez para restaurar o acesso por biometria/PIN."
+                )
+
+            # Prefere wrapped_hello_key; fallback para wrapped_mk apenas se for base legada pura windows_hello
+            target_hello_blob = wrapped_hello if wrapped_hello else (wrapped_mk if auth_mode == "windows_hello" else None)
+            if not target_hello_blob:
+                raise SafeAccessDeniedError("Chave de segurança do Windows Hello não encontrada.")
+
             try:
                 mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=hello_id if hello_id else None)
             except Exception as e:
-                # Se falhar pelo DPAPI e for híbrido, tenta senha mestre se informada
-                if auth_mode != "hybrid" or not password:
-                    logger.warning("Falha ao desencapsular chave DPAPI do Windows Hello.")
+                # Tenta fallback sem entropia para bases legadas
+                try:
+                    mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=None)
+                except Exception:
+                    logger.warning(f"Falha ao desencapsular chave DPAPI do Windows Hello: {e}")
                     raise SafeAccessDeniedError("Não foi possível desencapsular a chave com Windows Hello.") from e
 
         if mk_bytes is None:
@@ -332,6 +345,18 @@ class SafeService:
 
         self._master_key = bytearray(mk_bytes)
         self.touch_activity()
+
+        # Auto-Cura (Self-Healing): se o cofre é híbrido e wrapped_hello_key está ausente ou vazio
+        if not use_hello and auth_mode == "hybrid":
+            if not wrapped_hello or len(wrapped_hello) == 0:
+                try:
+                    hello_id_str = meta.get("hello_credential_id") or str(uuid.uuid4())
+                    new_wrapped_hello = windows_hello.protect_data_dpapi(mk_bytes, entropy=hello_id_str.encode("utf-8"))
+                    self.db.update_wrapped_hello_key(new_wrapped_hello, hello_id_str)
+                    logger.info("Auto-cura realizada: envelope DPAPI do Windows Hello gerado e sincronizado no cofre híbrido.")
+                except Exception as heal_err:
+                    logger.debug(f"Aviso na auto-cura do Windows Hello: {heal_err}")
+
         logger.info(f"Cofre desbloqueado com sucesso (método: {'Windows Hello' if use_hello else 'Senha Mestra'}).")
         return True
 

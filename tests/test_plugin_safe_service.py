@@ -373,3 +373,101 @@ def test_service_auto_lock_disabled_mode():
         assert service.check_auto_lock() is False
         assert service.get_status()["status"] == "UNLOCKED"
 
+
+def test_service_windows_hello_self_healing_from_null_blob(monkeypatch):
+    """
+    Testa a capacidade de auto-cura (self-healing) quando uma base híbrida existente
+    possui wrapped_hello_key = NULL (cenário exato da regressão na issue #162).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+
+        def mock_is_available():
+            return True
+
+        def mock_verify(reason=""):
+            return True, "OK"
+
+        def mock_protect(data: bytes, entropy: bytes = None) -> bytes:
+            return b"DPAPI_WRAPPED:" + data
+
+        def mock_unprotect(blob: bytes, entropy: bytes = None) -> bytes:
+            if not blob or not blob.startswith(b"DPAPI_WRAPPED:"):
+                raise ValueError("Invalid DPAPI blob")
+            return blob[len(b"DPAPI_WRAPPED:"):]
+
+        import safe.service as ss
+        monkeypatch.setattr(ss.windows_hello, "is_windows_hello_available", mock_is_available)
+        monkeypatch.setattr(ss.windows_hello, "verify_windows_hello", mock_verify)
+        monkeypatch.setattr(ss.windows_hello, "protect_data_dpapi", mock_protect)
+        monkeypatch.setattr(ss.windows_hello, "unprotect_data_dpapi", mock_unprotect)
+
+        # 1. Configura cofre apenas com Senha Mestra inicialmente
+        service.setup_vault(auth_mode="master_password", password="MasterPassword123!")
+        service.save_secret(title="Credencial Crítica", secret_payload="TokenSecret999")
+        service.lock()
+
+        # 2. Força o estado quebrado no banco: auth_mode = 'hybrid', mas wrapped_hello_key = NULL
+        with service.db.connect() as conn:
+            conn.execute("UPDATE safe_metadata SET auth_mode = 'hybrid', wrapped_hello_key = NULL WHERE id = 'default_vault'")
+            conn.commit()
+
+        # 3. Tenta desbloquear via Windows Hello: deve recusar com mensagem explicativa (sem quebrar)
+        with pytest.raises(ss.SafeAccessDeniedError) as exc_info:
+            service.unlock(use_hello=True)
+        assert "Vínculo do Windows Hello desatualizado" in str(exc_info.value)
+
+        # 4. Desbloqueia com a Senha Mestra: isso DEVE disparar a AUTO-CURA
+        assert service.unlock(password="MasterPassword123!") is True
+
+        # 5. Verifica se o banco agora contém o envelope wrapped_hello_key persistido
+        meta_healed = service.db.get_metadata()
+        assert meta_healed["wrapped_hello_key"] is not None
+        assert meta_healed["wrapped_hello_key"].startswith(b"DPAPI_WRAPPED:")
+
+        # 6. Bloqueia e agora tenta desbloquear via Windows Hello de forma 100% autônoma
+        service.lock()
+        assert service.unlock(use_hello=True) is True
+        secret = service.get_secret(service.list_secrets()[0]["id"])
+        assert secret["payload"] == "TokenSecret999"
+
+
+def test_service_windows_hello_entropy_fallback(monkeypatch):
+    """
+    Testa a resiliência do Windows Hello com fallback quando o envelope foi protegido sem entropia.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault.db"
+        service = SafeService(db_path)
+
+        def mock_is_available():
+            return True
+
+        def mock_verify(reason=""):
+            return True, "OK"
+
+        def mock_protect(data: bytes, entropy: bytes = None) -> bytes:
+            return b"RAW_DPAPI:" + data
+
+        def mock_unprotect(blob: bytes, entropy: bytes = None) -> bytes:
+            # Falha se entropy for fornecido (simula chave salva sem entropia)
+            if entropy is not None:
+                raise ValueError("CryptUnprotectData failed: invalid parameter / wrong entropy")
+            if not blob or not blob.startswith(b"RAW_DPAPI:"):
+                raise ValueError("Invalid blob")
+            return blob[len(b"RAW_DPAPI:"):]
+
+        import safe.service as ss
+        monkeypatch.setattr(ss.windows_hello, "is_windows_hello_available", mock_is_available)
+        monkeypatch.setattr(ss.windows_hello, "verify_windows_hello", mock_verify)
+        monkeypatch.setattr(ss.windows_hello, "protect_data_dpapi", mock_protect)
+        monkeypatch.setattr(ss.windows_hello, "unprotect_data_dpapi", mock_unprotect)
+
+        service.setup_vault(auth_mode="hybrid", password="TestPassword123!", use_hello=True)
+        service.lock()
+
+        # Desbloqueio via Windows Hello deve conseguir decifrar usando o fallback sem entropia
+        assert service.unlock(use_hello=True) is True
+
+
