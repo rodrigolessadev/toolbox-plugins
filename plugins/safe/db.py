@@ -274,6 +274,51 @@ class SafeDatabase:
             );
             """)
 
+            # Tabela Virtual FTS5 para Busca Rápida de Texto Completo
+            cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS safe_entries_fts USING fts5(
+                entry_id UNINDEXED,
+                title,
+                username_or_key,
+                tags,
+                tokenize = 'unicode61 remove_diacritics 2'
+            );
+            """)
+
+            # Triggers de sincronização do FTS5
+            cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_safe_entries_fts_insert AFTER INSERT ON safe_entries BEGIN
+                INSERT INTO safe_entries_fts(entry_id, title, username_or_key, tags)
+                VALUES (new.id, new.title, coalesce(new.username_or_key, ''), coalesce(new.tags, ''));
+            END;
+            """)
+
+            cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_safe_entries_fts_update AFTER UPDATE ON safe_entries BEGIN
+                UPDATE safe_entries_fts
+                SET title = new.title,
+                    username_or_key = coalesce(new.username_or_key, ''),
+                    tags = coalesce(new.tags, '')
+                WHERE entry_id = old.id;
+            END;
+            """)
+
+            cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS trg_safe_entries_fts_delete AFTER DELETE ON safe_entries BEGIN
+                DELETE FROM safe_entries_fts WHERE entry_id = old.id;
+            END;
+            """)
+
+            # Popula FTS5 retroativamente se o índice estiver vazio mas houver registros
+            cursor.execute("SELECT COUNT(*) FROM safe_entries_fts;")
+            fts_count = cursor.fetchone()[0]
+            if fts_count == 0:
+                cursor.execute("""
+                INSERT INTO safe_entries_fts(entry_id, title, username_or_key, tags)
+                SELECT id, title, coalesce(username_or_key, ''), coalesce(tags, '')
+                FROM safe_entries;
+                """)
+
             # Índices para performance
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_safe_entries_cat ON safe_entries(category);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_safe_entries_owner ON safe_entries(owner_plugin_id);")
@@ -566,10 +611,14 @@ class SafeDatabase:
                 )"""
                 params.extend([owner_plugin_id, owner_plugin_id])
 
-            if search_query:
-                query += " AND (title LIKE ? OR username_or_key LIKE ? OR tags LIKE ?)"
-                like_term = f"%{search_query}%"
-                params.extend([like_term, like_term, like_term])
+            if search_query and search_query.strip():
+                clean_term = search_query.strip()
+                words = [w.replace('"', '""') for w in clean_term.split() if w]
+                if words:
+                    fts_query = " ".join([f'"{w}"*' for w in words])
+                    query += " AND (id IN (SELECT entry_id FROM safe_entries_fts WHERE safe_entries_fts MATCH ?) OR title LIKE ? OR username_or_key LIKE ? OR tags LIKE ?)"
+                    like_term = f"%{clean_term}%"
+                    params.extend([fts_query, like_term, like_term, like_term])
 
             query += " ORDER BY updated_at DESC;"
             cursor.execute(query, params)

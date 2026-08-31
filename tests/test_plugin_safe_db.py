@@ -306,3 +306,74 @@ def test_db_list_entries_summary_with_active_and_expired_grants():
         assert "e-1" not in ids_b
         assert "e-2" not in ids_b
         assert "e-3" not in ids_b
+
+
+def test_fts5_search_indexing_and_triggers():
+    """Valida busca rápida FTS5, suporte a prefixos, múltiplos termos e sincronização por triggers."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "vault_fts.db"
+        safe_db = SafeDatabase(db_path)
+        safe_db.init_schema()
+
+        # Inserção de credenciais
+        safe_db.insert_entry(
+            entry_id="fts-1",
+            title="Conta Corrente Santander Brasil",
+            category="finance",
+            owner_plugin_id="safe-ui",
+            username_or_key="rodrigo.lessa@santander.com.br",
+            encrypted_payload=b"c1",
+            iv=b"iv1234567890",
+            auth_tag=b"tag123456789012",
+            tags=["banco", "pix", "corporativo"],
+        )
+
+        safe_db.insert_entry(
+            entry_id="fts-2",
+            title="Servidor Cloud AWS Us-East-1",
+            category="cloud",
+            owner_plugin_id="safe-ui",
+            username_or_key="admin_cloud",
+            encrypted_payload=b"c2",
+            iv=b"iv1234567890",
+            auth_tag=b"tag123456789012",
+            tags=["infra", "devops", "aws"],
+        )
+
+        # 1. Busca por termo parcial (prefixo)
+        res_santan = safe_db.list_entries_summary(search_query="Santan")
+        assert len(res_santan) == 1
+        assert res_santan[0]["id"] == "fts-1"
+
+        # 2. Busca por tag
+        res_devops = safe_db.list_entries_summary(search_query="devops")
+        assert len(res_devops) == 1
+        assert res_devops[0]["id"] == "fts-2"
+
+        # 3. Busca por múltiplos termos desconexos
+        res_multi = safe_db.list_entries_summary(search_query="AWS admin")
+        assert len(res_multi) == 1
+        assert res_multi[0]["id"] == "fts-2"
+
+        # 4. Atualização via trigger
+        safe_db.update_entry(
+            entry_id="fts-1",
+            title="Conta Itaú Unibanco Global",
+            category="finance",
+            username_or_key="rodrigo.itau",
+            encrypted_payload=b"c1_updated",
+            iv=b"iv1234567890",
+            auth_tag=b"tag123456789012",
+            tags=["itau", "investimentos"],
+        )
+
+        # Busca pelo termo antigo não deve retornar nada
+        assert len(safe_db.list_entries_summary(search_query="Santander")) == 0
+        # Busca pelo termo novo deve retornar
+        res_itau = safe_db.list_entries_summary(search_query="Unibanco")
+        assert len(res_itau) == 1
+        assert res_itau[0]["id"] == "fts-1"
+
+        # 5. Exclusão via trigger
+        safe_db.delete_entry("fts-1")
+        assert len(safe_db.list_entries_summary(search_query="Unibanco")) == 0

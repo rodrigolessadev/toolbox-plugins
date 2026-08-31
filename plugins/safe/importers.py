@@ -22,6 +22,18 @@ except ImportError:
         def get_logger(name="safe"):
             return logging.getLogger(name)
 
+try:
+    from crypto import unpack_safepack_container, SAFEPACK_MAGIC
+except ImportError:
+    try:
+        from .crypto import unpack_safepack_container, SAFEPACK_MAGIC
+    except ImportError:
+        try:
+            from safe.crypto import unpack_safepack_container, SAFEPACK_MAGIC
+        except ImportError:
+            unpack_safepack_container = None
+            SAFEPACK_MAGIC = b"SAFEPACK\x01\x00\x00\x00"
+
 logger = get_logger("safe.importers")
 
 
@@ -443,11 +455,30 @@ def parse_safe_json(content: str) -> List[Dict[str, Any]]:
 def detect_and_parse_secrets(
     content_or_bytes: Union[str, bytes],
     filename: Optional[str] = None,
+    backup_password: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
     """
-    Detecta automaticamente o formato (XML, CSV, TXT ou JSON), realiza o parsing
+    Detecta automaticamente o formato (.safepack, XML, CSV, TXT ou JSON), realiza o parsing
     e retorna uma tupla (lista_de_itens_normalizados, formato_detectado).
     """
+    lower_fn = (filename or "").lower()
+
+    # 0. Verificação especial para arquivo .safepack binário ou codificado
+    is_safepack_bytes = isinstance(content_or_bytes, bytes) and content_or_bytes.startswith(SAFEPACK_MAGIC[:8])
+    if is_safepack_bytes or lower_fn.endswith(".safepack"):
+        if not backup_password:
+            return [], "safepack_password_required"
+        if unpack_safepack_container is None:
+            raise RuntimeError("Módulo de criptografia indisponível para restaurar backup .safepack.")
+        
+        raw_b = content_or_bytes if isinstance(content_or_bytes, bytes) else content_or_bytes.encode("latin1")
+        unpacked = unpack_safepack_container(raw_b, backup_password)
+        if isinstance(unpacked, dict) and "entries" in unpacked:
+            return unpacked["entries"], "safepack"
+        elif isinstance(unpacked, list):
+            return unpacked, "safepack"
+        return [unpacked], "safepack"
+
     if isinstance(content_or_bytes, bytes):
         text = decode_file_bytes(content_or_bytes)
     else:

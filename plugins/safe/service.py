@@ -12,6 +12,7 @@ import secrets
 import string
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -630,9 +631,13 @@ class SafeService:
     # Importação & Exportação de Segredos (Save in Cloud / Backups)
     # ========================================================================
 
-    def export_secrets(self) -> List[Dict[str, Any]]:
+    def export_secrets(
+        self,
+        format: str = "json",
+        backup_password: Optional[str] = None,
+    ) -> Union[List[Dict[str, Any]], bytes]:
         """
-        Exporta todas as credenciais descriptografadas em formato estruturado.
+        Exporta todas as credenciais descriptografadas em formato estruturado ou container .safepack.
         """
         self._require_unlocked()
         entries = self.list_secrets()
@@ -653,13 +658,27 @@ class SafeService:
             except Exception:
                 continue
 
-        logger.info(f"Exportação de credenciais concluída: {len(exported)} itens exportados.")
+        logger.info(f"Exportação de credenciais concluída: {len(exported)} itens exportados (formato: {format}).")
+
+        if format == "safepack":
+            if not backup_password or len(backup_password.strip()) < 4:
+                raise ValueError("A senha de backup deve conter pelo menos 4 caracteres para o formato .safepack.")
+            if not hasattr(crypto, "pack_safepack_container"):
+                raise RuntimeError("Função de empacotamento .safepack não disponível.")
+            payload_wrapper = {
+                "version": 1,
+                "exported_at": datetime.now().isoformat(),
+                "entries": exported,
+            }
+            return crypto.pack_safepack_container(payload_wrapper, backup_password)
+
         return exported
 
     def preview_import(
         self,
         content_or_bytes: Union[str, bytes],
         filename: Optional[str] = None,
+        backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Gera uma pré-visualização dos registros a serem importados sem gravar no banco de dados.
@@ -670,7 +689,9 @@ class SafeService:
         if importers is None:
             raise RuntimeError("Módulo de importadores não disponível.")
 
-        items, detected_format = importers.detect_and_parse_secrets(content_or_bytes, filename=filename)
+        items, detected_format = importers.detect_and_parse_secrets(
+            content_or_bytes, filename=filename, backup_password=backup_password
+        )
         
         # Obtém títulos já existentes no banco para checar conflitos
         existing_entries = self.db.list_entries_summary()
@@ -712,9 +733,10 @@ class SafeService:
         items_or_payload: Union[List[Dict[str, Any]], Dict[str, Any], str, bytes],
         conflict_policy: str = "skip",
         filename: Optional[str] = None,
+        backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Importa segredos (Microsoft Safe XML/CSV/TXT, Save in Cloud ou JSON de backup).
+        Importa segredos (Microsoft Safe XML/CSV/TXT, Save in Cloud, .safepack ou JSON de backup).
         Políticas de conflito suportadas:
           - 'skip': Se o item já existir (mesmo título), não importa.
           - 'overwrite': Se o item já existir, atualiza os dados do registro existente.
@@ -727,7 +749,9 @@ class SafeService:
         if isinstance(items_or_payload, (str, bytes)):
             if importers is None:
                 raise RuntimeError("Módulo de importadores não disponível.")
-            parsed_items, _ = importers.detect_and_parse_secrets(items_or_payload, filename=filename)
+            parsed_items, _ = importers.detect_and_parse_secrets(
+                items_or_payload, filename=filename, backup_password=backup_password
+            )
             raw_list = parsed_items
         elif isinstance(items_or_payload, dict):
             if "entries" in items_or_payload and isinstance(items_or_payload["entries"], list):
