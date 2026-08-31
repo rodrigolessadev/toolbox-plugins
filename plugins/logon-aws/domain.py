@@ -50,6 +50,22 @@ def set_window_taskbar_icon(is_connected: bool, hwnd: Optional[int] = None) -> b
         ICON_SMALL = 0
         ICON_BIG = 1
 
+        # Flags Win32 para forçar o recálculo do frame da janela e notificação do Shell/Taskbar
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        SWP_FRAMECHANGED = 0x0020
+        SWP_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
+
+        RDW_INVALIDATE = 0x0001
+        RDW_INTERNALPAINT = 0x0002
+        RDW_ERASE = 0x0004
+        RDW_UPDATENOW = 0x0100
+        RDW_FRAME = 0x0400
+        RDW_ALLCHILDREN = 0x0080
+        RDW_FLAGS = RDW_INVALIDATE | RDW_INTERNALPAINT | RDW_ERASE | RDW_UPDATENOW | RDW_FRAME | RDW_ALLCHILDREN
+
         h_icon_big = user32.LoadImageW(
             None,
             str(icon_path),
@@ -93,6 +109,11 @@ def set_window_taskbar_icon(is_connected: bool, hwnd: Optional[int] = None) -> b
                 user32.SendMessageW(target, WM_SETICON, ICON_BIG, h_icon_big)
             if h_icon_small:
                 user32.SendMessageW(target, WM_SETICON, ICON_SMALL, h_icon_small)
+            try:
+                user32.SetWindowPos(target, 0, 0, 0, 0, 0, SWP_FLAGS)
+                user32.RedrawWindow(target, None, None, RDW_FLAGS)
+            except Exception:
+                pass
             success = True
         return success
     except Exception:
@@ -445,6 +466,7 @@ class AwsTunnelManager:
                         self.process = None
                         self.current_state = "idle"
                 set_window_taskbar_icon(False)
+                threading.Timer(0.2, lambda: set_window_taskbar_icon(False)).start()
 
         threading.Thread(target=_reader_worker, args=(proc,), daemon=True).start()
         return {"success": True, "message": f"Túnel iniciado na porta {local_port}.", "instance_id": instance_id}
