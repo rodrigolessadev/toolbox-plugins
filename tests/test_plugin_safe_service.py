@@ -81,18 +81,28 @@ def test_service_secret_encryption_and_acl():
         # Concede permissão ao plugin-git
         service.grant_permission("plugin-git", entry_id, access_level="read")
 
-        # Agora plugin-git consegue acessar
+        # Agora plugin-git consegue acessar e listar
         secret_by_plugin = service.get_secret(entry_id, requester_plugin_id="plugin-git")
         assert secret_by_plugin["payload"] == "ghp_1234567890abcdef"
+
+        list_by_plugin = service.list_secrets(requester_plugin_id="plugin-git")
+        assert any(s["id"] == entry_id for s in list_by_plugin)
+
+        # Outro plugin sem grant não deve listar
+        list_by_other = service.list_secrets(requester_plugin_id="plugin-other")
+        assert not any(s["id"] == entry_id for s in list_by_other)
 
         # Revogar permissão
         grants = service.list_grants("plugin-git")
         assert len(grants) == 1
         service.revoke_permission(grants[0]["id"])
 
-        # Deve falhar novamente
+        # Deve falhar novamente tanto get quanto list
         with pytest.raises(SafeAccessDeniedError):
             service.get_secret(entry_id, requester_plugin_id="plugin-git")
+
+        list_after_revoke = service.list_secrets(requester_plugin_id="plugin-git")
+        assert not any(s["id"] == entry_id for s in list_after_revoke)
 
 
 def test_service_auto_lock():
