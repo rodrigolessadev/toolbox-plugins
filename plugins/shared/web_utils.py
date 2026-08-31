@@ -108,6 +108,23 @@ def copy_to_clipboard(text: str) -> bool:
         return False
 
 
+def sanitize_file_types(file_types: Sequence[str]) -> Tuple[str, ...]:
+    """Sanitiza strings de filtros para garantir compatibilidade estrita com a regex do pywebview."""
+    sanitized = []
+    for ft in file_types:
+        ft_str = str(ft).strip()
+        m = re.match(r"^(.*?)\s*(\(\*.*?\))$", ft_str)
+        if m:
+            desc, ext = m.group(1), m.group(2)
+            clean_desc = desc.replace("/", " ou ")
+            clean_desc = re.sub(r"[^\w\s]", "", clean_desc)
+            clean_desc = re.sub(r"\s+", " ", clean_desc).strip()
+            sanitized.append(f"{clean_desc} {ext}")
+        else:
+            sanitized.append(ft_str)
+    return tuple(sanitized)
+
+
 class BasePluginApi:
     """
     Classe base com utilitários para APIs expostas ao JavaScript (window.pywebview.api).
@@ -137,23 +154,6 @@ class BasePluginApi:
             if res and len(res) > 0:
                 return str(Path(res[0]).resolve())
         return ""
-
-def sanitize_file_types(file_types: Sequence[str]) -> Tuple[str, ...]:
-    """Sanitiza strings de filtros para garantir compatibilidade estrita com a regex do pywebview."""
-    sanitized = []
-    for ft in file_types:
-        ft_str = str(ft).strip()
-        m = re.match(r"^(.*?)\s*(\(\*.*?\))$", ft_str)
-        if m:
-            desc, ext = m.group(1), m.group(2)
-            clean_desc = desc.replace("/", " ou ")
-            clean_desc = re.sub(r"[^\w\s]", "", clean_desc)
-            clean_desc = re.sub(r"\s+", " ", clean_desc).strip()
-            sanitized.append(f"{clean_desc} {ext}")
-        else:
-            sanitized.append(ft_str)
-    return tuple(sanitized)
-
 
     def select_file(
         self,

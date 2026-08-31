@@ -2,15 +2,28 @@ import sys
 from pathlib import Path
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+PLUGINS_DIR = Path(__file__).parent.parent / "plugins"
+if str(PLUGINS_DIR) not in sys.path:
+    sys.path.insert(0, str(PLUGINS_DIR))
 
-from shared.web_utils import (
-    TOOLBOX_THEME,
-    BasePluginApi,
-    create_plugin_window,
-    open_in_explorer,
-    copy_to_clipboard,
-)
+try:
+    from shared.web_utils import (
+        TOOLBOX_THEME,
+        BasePluginApi,
+        create_plugin_window,
+        open_in_explorer,
+        copy_to_clipboard,
+        sanitize_file_types,
+    )
+except ImportError:
+    from plugins.shared.web_utils import (
+        TOOLBOX_THEME,
+        BasePluginApi,
+        create_plugin_window,
+        open_in_explorer,
+        copy_to_clipboard,
+        sanitize_file_types,
+    )
 
 
 def test_toolbox_theme_tokens():
@@ -32,6 +45,13 @@ def test_base_plugin_api():
 
     res_none = api.copy_text(None)
     assert res_none["success"] is False
+
+    assert hasattr(api, "select_file")
+    assert callable(api.select_file)
+    assert hasattr(api, "select_folder")
+    assert callable(api.select_folder)
+    assert hasattr(api, "open_path")
+    assert callable(api.open_path)
 
 
 def test_copy_to_clipboard_functionality():
