@@ -1072,31 +1072,37 @@ function renderImportPreview(data) {
   const previewBox = document.getElementById('import-preview-box');
   const badgesContainer = document.getElementById('import-preview-badges');
   const listContainer = document.getElementById('import-preview-list');
+  const pwdContainer = document.getElementById('import-safepack-pwd-container');
 
-  if (!data || !data.success || data.total_detected === 0) {
-    previewBox.classList.add('hidden');
+  if (data.format === 'safepack_password_required') {
+    if (pwdContainer) pwdContainer.classList.remove('hidden');
+    badgesContainer.innerHTML = `<span class="badge" style="background:var(--accent); color:white;">🔒 SafePack Protegido</span>`;
+    listContainer.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--fg-muted);">Informe a senha do backup acima e clique em <strong>Descriptografar</strong> para visualizar os itens.</div>';
+    previewBox.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
     return;
   }
 
-  const formatLabels = {
-    'xml': 'Microsoft Safe XML',
-    'csv': 'Planilha CSV',
-    'txt': 'Texto Simples TXT',
-    'json': 'JSON / Backup'
-  };
-  const fmtLabel = formatLabels[data.format] || (data.format ? data.format.toUpperCase() : 'Desconhecido');
+  if (pwdContainer && data.format !== 'safepack') {
+    pwdContainer.classList.add('hidden');
+  }
 
-  badgesContainer.innerHTML = `
-    <span class="badge" style="background: var(--accent); color: white;">${fmtLabel}</span>
-    <span class="badge" style="background: var(--bg-elev-1); color: var(--fg); border: 1px solid var(--border);">${data.total_detected} itens</span>
-    ${data.conflicts_count > 0 ? `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning);">⚠️ ${data.conflicts_count} existentes</span>` : ''}
-  `;
+  // Badges de cabeçalho
+  let formatBadge = `<span class="badge" style="background:var(--bg-elev-1);">${escapeHtml((data.format || 'unknown').toUpperCase())}</span>`;
+  if (data.format === 'safepack') {
+    formatBadge = `<span class="badge" style="background:var(--success); color:white;">🔒 SafePack Descriptografado</span>`;
+  }
+  let totalBadge = `<span class="badge" style="background:rgba(59, 130, 246, 0.2); color:var(--accent);">${data.total_detected} itens</span>`;
+  let conflictBadge = data.conflicts_count > 0 ? `<span class="badge" style="background:rgba(245, 158, 11, 0.2); color:var(--warning);">${data.conflicts_count} já existem</span>` : '';
 
+  badgesContainer.innerHTML = `${formatBadge} ${totalBadge} ${conflictBadge}`;
+
+  // Itens da lista
   let listHtml = '';
   if (data.preview_items && data.preview_items.length > 0) {
     data.preview_items.forEach(it => {
       listHtml += `
-        <div style="padding: 6px 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border);">
           <div>
             <strong style="color: var(--fg);">${escapeHtml(it.title)}</strong>
             ${it.username ? `<span style="color: var(--fg-muted); margin-left: 6px;">(${escapeHtml(it.username)})</span>` : ''}
@@ -1118,6 +1124,35 @@ function renderImportPreview(data) {
   listContainer.innerHTML = listHtml;
   previewBox.classList.remove('hidden');
   if (window.lucide) window.lucide.createIcons();
+}
+
+async function handlePreviewWithPassword() {
+  const statusMsg = document.getElementById('import-status-msg');
+  statusMsg.className = 'hidden';
+  const pwd = document.getElementById('import-backup-pwd').value;
+  if (!pwd) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = 'Digite a senha do arquivo de backup.';
+    statusMsg.classList.remove('hidden');
+    return;
+  }
+
+  let res = null;
+  if (pendingImportFilePath) {
+    res = await callApi('preview_import_data', null, pendingImportFilePath, pwd);
+  } else if (pendingImportData) {
+    res = await callApi('preview_import_data', pendingImportData, null, pwd);
+  }
+
+  if (res && res.success) {
+    renderImportPreview(res);
+  } else {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = res.message || 'Senha incorreta ou arquivo corrompido.';
+    statusMsg.classList.remove('hidden');
+  }
 }
 
 async function handleSelectImportFile() {
@@ -1168,6 +1203,7 @@ async function handlePreviewPastedText() {
 async function handleConfirmImport() {
   const statusMsg = document.getElementById('import-status-msg');
   const policy = document.getElementById('import-conflict-policy').value;
+  const backupPwd = document.getElementById('import-backup-pwd').value || null;
   const btn = document.getElementById('btn-confirm-import');
 
   let res = null;
@@ -1176,7 +1212,7 @@ async function handleConfirmImport() {
 
   try {
     if (pendingImportFilePath) {
-      res = await callApi('import_secrets_from_file_path', pendingImportFilePath, policy);
+      res = await callApi('import_secrets_from_file_path', pendingImportFilePath, policy, backupPwd);
     } else {
       const textToUse = pendingImportData || document.getElementById('import-raw-text').value;
       if (!textToUse || !textToUse.trim()) {
@@ -1186,7 +1222,7 @@ async function handleConfirmImport() {
         statusMsg.classList.remove('hidden');
         return;
       }
-      res = await callApi('import_secrets', textToUse, policy);
+      res = await callApi('import_secrets', textToUse, policy, null, backupPwd);
     }
 
     if (res && res.success) {
@@ -1208,14 +1244,62 @@ async function handleConfirmImport() {
   }
 }
 
-async function handleExportSecrets() {
-  const res = await callApi('export_secrets');
-  if (res && res.success && res.data) {
-    const jsonStr = JSON.stringify(res.data, null, 2);
-    await callApi('copy_secret_to_clipboard', jsonStr);
-    alert(`${res.data.length} credenciais exportadas e copiadas para a área de transferência em formato JSON!`);
-  } else {
-    alert(res.message || 'Falha ao exportar credenciais.');
+function handleExportSecrets() {
+  document.getElementById('export-status-msg').className = 'hidden';
+  document.getElementById('export-backup-pwd').value = '';
+  document.getElementById('export-backup-pwd-confirm').value = '';
+  openModal('modal-export');
+}
+
+function toggleExportPasswordFields() {
+  const isSafepack = document.querySelector('input[name="export-format"]:checked').value === 'safepack';
+  const pwdBox = document.getElementById('export-safepack-pwd-container');
+  if (pwdBox) {
+    pwdBox.style.display = isSafepack ? 'block' : 'none';
+  }
+}
+
+async function handleConfirmExport() {
+  const format = document.querySelector('input[name="export-format"]:checked').value;
+  const statusMsg = document.getElementById('export-status-msg');
+  statusMsg.className = 'hidden';
+
+  let pwd = null;
+  if (format === 'safepack') {
+    const pwd1 = document.getElementById('export-backup-pwd').value;
+    const pwd2 = document.getElementById('export-backup-pwd-confirm').value;
+
+    if (!pwd1 || pwd1.length < 4) {
+      statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+      statusMsg.style.color = 'var(--danger)';
+      statusMsg.innerText = 'A senha do arquivo de backup deve ter pelo menos 4 caracteres.';
+      statusMsg.classList.remove('hidden');
+      return;
+    }
+    if (pwd1 !== pwd2) {
+      statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+      statusMsg.style.color = 'var(--danger)';
+      statusMsg.innerText = 'As senhas informadas não coincidem.';
+      statusMsg.classList.remove('hidden');
+      return;
+    }
+    pwd = pwd1;
+  }
+
+  const res = await callApi('export_secrets_to_file', format, pwd);
+  if (res && res.success) {
+    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
+    statusMsg.style.color = 'var(--success)';
+    statusMsg.innerText = res.message || 'Backup exportado com sucesso!';
+    statusMsg.classList.remove('hidden');
+    setTimeout(() => {
+      closeModal('modal-export');
+    }, 1200);
+  } else if (res && res.message && res.message !== 'Exportação cancelada pelo usuário.') {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = res.message || 'Falha ao exportar backup.';
+    statusMsg.classList.remove('hidden');
   }
 }
 

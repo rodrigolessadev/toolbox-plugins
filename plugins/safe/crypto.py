@@ -250,3 +250,70 @@ def zeroize(buffer: Union[bytearray, memoryview, list]) -> None:
     elif isinstance(buffer, list):
         for i in range(len(buffer)):
             buffer[i] = 0
+
+
+SAFEPACK_MAGIC = b"SAFEPACK\x01\x00\x00\x00"  # 12 bytes
+
+
+def pack_safepack_container(payload_data: Any, backup_password: str) -> bytes:
+    """
+    Empacota e criptografa dados em um container portátil .safepack protegido por senha.
+    Utiliza derivação de chave Argon2id e criptografia AES-256-GCM.
+    
+    Estrutura do arquivo binário:
+      [12 bytes] Magic Header ("SAFEPACK\x01\x00\x00\x00")
+      [16 bytes] Salt KDF
+      [12 bytes] IV (Nonce AES-GCM)
+      [16 bytes] Auth Tag AES-GCM
+      [N bytes]  Ciphertext
+    """
+    if not backup_password or len(backup_password.strip()) < 4:
+        raise ValueError("A senha de backup deve conter pelo menos 4 caracteres.")
+
+    salt = generate_salt(16)
+    kdf_params = {"iterations": 3, "memory_cost": 65536, "parallelism": 4}
+    wrapping_key = derive_key(backup_password, salt, algorithm="argon2id", params=kdf_params)
+
+    ciphertext, iv, auth_tag = encrypt_payload(
+        payload_data,
+        wrapping_key,
+        associated_data=b"toolbox-safepack-v1",
+    )
+
+    return SAFEPACK_MAGIC + salt + iv + auth_tag + ciphertext
+
+
+def unpack_safepack_container(safepack_bytes: bytes, backup_password: str) -> Any:
+    """
+    Desempacota e decriptografa um container .safepack verificando a integridade.
+    Lança DecryptionError ou IntegrityError se a senha estiver incorreta ou dados corrompidos.
+    """
+    if not safepack_bytes or len(safepack_bytes) < 56:  # 12 + 16 + 12 + 16 = 56 bytes mínimos
+        raise ValueError("Arquivo .safepack inválido ou corrompido (tamanho insuficiente).")
+
+    if not safepack_bytes.startswith(SAFEPACK_MAGIC[:8]):
+        raise ValueError("Cabeçalho do arquivo .safepack inválido (não é um arquivo SafePack oficial).")
+
+    if not backup_password:
+        raise ValueError("Senha de backup necessária para restaurar o arquivo .safepack.")
+
+    header = safepack_bytes[:12]
+    salt = safepack_bytes[12:28]
+    iv = safepack_bytes[28:40]
+    auth_tag = safepack_bytes[40:56]
+    ciphertext = safepack_bytes[56:]
+
+    kdf_params = {"iterations": 3, "memory_cost": 65536, "parallelism": 4}
+    wrapping_key = derive_key(backup_password, salt, algorithm="argon2id", params=kdf_params)
+
+    try:
+        return decrypt_payload(
+            ciphertext,
+            iv,
+            auth_tag,
+            wrapping_key,
+            associated_data=b"toolbox-safepack-v1",
+            as_json=True,
+        )
+    except (IntegrityError, InvalidTag) as e:
+        raise IntegrityError("Senha de backup incorreta ou arquivo de backup corrompido.") from e

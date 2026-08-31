@@ -128,6 +128,7 @@ def test_safe_plugin_api_exposed_methods(tmp_path):
         "revoke_plugin_access",
         "list_plugin_grants",
         "export_secrets",
+        "export_secrets_to_file",
         "preview_import_data",
         "import_secrets",
         "select_file_for_import",

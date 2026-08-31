@@ -281,17 +281,58 @@ class SafePluginApi(BasePluginApi):
     def update_settings(self, auto_lock_timeout: int) -> Dict[str, Any]:
         return self.update_security_settings(auto_lock_timeout=auto_lock_timeout, lock_on_os_lock=True)
 
-    def export_secrets(self) -> Dict[str, Any]:
+    def export_secrets(self, format: str = "json", backup_password: Optional[str] = None) -> Dict[str, Any]:
         try:
-            data = self.service.export_secrets()
-            return {"success": True, "data": data}
+            data = self.service.export_secrets(format=format, backup_password=backup_password)
+            if isinstance(data, bytes):
+                import base64
+                return {"success": True, "format": "safepack", "data_b64": base64.b64encode(data).decode("ascii")}
+            return {"success": True, "format": "json", "data": data}
         except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def export_secrets_to_file(self, format: str = "safepack", backup_password: Optional[str] = None) -> Dict[str, Any]:
+        """Abre caixa de diálogo para salvar o backup (.safepack ou .json) diretamente em arquivo."""
+        try:
+            win = self.window or self._window
+            if not win:
+                return {"success": False, "message": "Janela não inicializada."}
+            import webview
+
+            if format == "safepack":
+                file_types = ("Backup Protegido SafePack (*.safepack)", "Todos os arquivos (*.*)")
+                default_name = "backup_cofre.safepack"
+            else:
+                file_types = ("Arquivo JSON (*.json)", "Todos os arquivos (*.*)")
+                default_name = "backup_cofre.json"
+
+            save_path = win.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename=default_name,
+                file_types=file_types,
+            )
+            if not save_path:
+                return {"success": False, "message": "Exportação cancelada pelo usuário."}
+
+            target_path = save_path if isinstance(save_path, str) else save_path[0]
+            p = Path(target_path)
+
+            data = self.service.export_secrets(format=format, backup_password=backup_password)
+            if isinstance(data, bytes):
+                p.write_bytes(data)
+            else:
+                p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            return {"success": True, "message": f"Backup exportado com sucesso: {p.name}", "file_path": str(p)}
+        except Exception as e:
+            logger.error(f"Erro ao exportar backup para arquivo: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
 
     def preview_import_data(
         self,
         raw_text: Optional[str] = None,
         file_path: Optional[str] = None,
+        backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Gera preview da importação a partir de texto bruto ou caminho de arquivo."""
         try:
@@ -300,12 +341,12 @@ class SafePluginApi(BasePluginApi):
                 if not p.exists() or not p.is_file():
                     return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
                 raw_bytes = p.read_bytes()
-                res = self.service.preview_import(raw_bytes, filename=p.name)
+                res = self.service.preview_import(raw_bytes, filename=p.name, backup_password=backup_password)
                 res["file_path"] = str(p.resolve())
                 res["file_name"] = p.name
                 return res
             elif raw_text:
-                return self.service.preview_import(raw_text)
+                return self.service.preview_import(raw_text, backup_password=backup_password)
             else:
                 return {"success": False, "message": "Nenhum dado fornecido para pré-visualização."}
         except Exception as e:
@@ -317,9 +358,12 @@ class SafePluginApi(BasePluginApi):
         items_or_payload: Any,
         conflict_policy: str = "skip",
         filename: Optional[str] = None,
+        backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
-            res = self.service.import_secrets(items_or_payload, conflict_policy=conflict_policy, filename=filename)
+            res = self.service.import_secrets(
+                items_or_payload, conflict_policy=conflict_policy, filename=filename, backup_password=backup_password
+            )
             return res
         except Exception as e:
             logger.error(f"Erro ao importar segredos: {e}", exc_info=True)
@@ -329,18 +373,21 @@ class SafePluginApi(BasePluginApi):
         self,
         file_path: str,
         conflict_policy: str = "skip",
+        backup_password: Optional[str] = None,
     ) -> Dict[str, Any]:
         try:
             p = Path(file_path)
             if not p.exists() or not p.is_file():
                 return {"success": False, "message": f"Arquivo não encontrado: {file_path}"}
             raw_bytes = p.read_bytes()
-            return self.service.import_secrets(raw_bytes, conflict_policy=conflict_policy, filename=p.name)
+            return self.service.import_secrets(
+                raw_bytes, conflict_policy=conflict_policy, filename=p.name, backup_password=backup_password
+            )
         except Exception as e:
             return {"success": False, "message": f"Erro ao ler/importar arquivo: {e}"}
 
     def select_file_for_import(self) -> Dict[str, Any]:
-        """Abre janela de seleção de arquivo (.xml, .csv, .txt, .json) e retorna os dados para preview."""
+        """Abre janela de seleção de arquivo (.safepack, .xml, .csv, .txt, .json) e retorna os dados para preview."""
         try:
             win = self.window or self._window
             if not win:
@@ -348,7 +395,8 @@ class SafePluginApi(BasePluginApi):
 
             import webview
             file_types = (
-                "Arquivos Suportados (*.xml;*.csv;*.txt;*.json)",
+                "Arquivos Suportados (*.safepack;*.xml;*.csv;*.txt;*.json)",
+                "SafePack Criptografado (*.safepack)",
                 "Microsoft Safe XML (*.xml)",
                 "Valores Separados por Vírgula (*.csv)",
                 "Texto Simples (*.txt)",
@@ -368,8 +416,8 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
-    def select_and_import_secrets_file(self, conflict_policy: str = "skip") -> Dict[str, Any]:
-        """Abre janela para selecionar arquivo (.xml, .csv, .txt, .json) e importa diretamente."""
+    def select_and_import_secrets_file(self, conflict_policy: str = "skip", backup_password: Optional[str] = None) -> Dict[str, Any]:
+        """Abre janela para selecionar arquivo (.safepack, .xml, .csv, .txt, .json) e importa diretamente."""
         try:
             win = self.window or self._window
             if not win:
@@ -377,7 +425,8 @@ class SafePluginApi(BasePluginApi):
             
             import webview
             file_types = (
-                "Arquivos Suportados (*.xml;*.csv;*.txt;*.json)",
+                "Arquivos Suportados (*.safepack;*.xml;*.csv;*.txt;*.json)",
+                "SafePack Criptografado (*.safepack)",
                 "Microsoft Safe XML (*.xml)",
                 "Valores Separados por Vírgula (*.csv)",
                 "Texto Simples (*.txt)",
@@ -393,7 +442,7 @@ class SafePluginApi(BasePluginApi):
                 return {"success": False, "message": "Nenhum arquivo selecionado."}
             
             chosen_file = res[0] if isinstance(res, (list, tuple)) else str(res)
-            return self.import_secrets_from_file_path(chosen_file, conflict_policy=conflict_policy)
+            return self.import_secrets_from_file_path(chosen_file, conflict_policy=conflict_policy, backup_password=backup_password)
         except Exception as e:
             return {"success": False, "message": str(e)}
 

@@ -500,22 +500,86 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- MODAL: IMPORTAR REGISTROS (Microsoft Safe / Backup) -->
+  <!-- MODAL: EXPORTAR BACKUP (SafePack Criptografado ou JSON) -->
+  <!-- ===================================================================== -->
+  <div id="modal-export" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3><i data-lucide="shield" style="width: 20px; height: 20px; color: var(--accent);"></i> Exportar Backup de Segredos</h3>
+        <button class="btn-close" onclick="closeModal('modal-export')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle" style="margin-bottom: 12px;">Selecione o formato de exportação para suas credenciais:</p>
+
+        <div class="form-group">
+          <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 8px;">
+            <input type="radio" name="export-format" value="safepack" checked onchange="toggleExportPasswordFields()" style="margin-top: 3px;">
+            <div>
+              <strong style="color: var(--fg); display: block; font-size: 13px;">🔒 Backup Protegido por Senha (.safepack) <span style="background: var(--accent); color: white; padding: 1px 6px; border-radius: 10px; font-size: 10px;">Recomendado</span></strong>
+              <span style="font-size: 11px; color: var(--fg-muted);">Criptografado com AES-256-GCM e chave derivada com Argon2id. Seguro para armazenar na nuvem ou pendrive.</span>
+            </div>
+          </label>
+
+          <label style="display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: var(--bg-elev-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;">
+            <input type="radio" name="export-format" value="json" onchange="toggleExportPasswordFields()" style="margin-top: 3px;">
+            <div>
+              <strong style="color: var(--fg); display: block; font-size: 13px;">📄 Arquivo JSON Desprotegido (.json)</strong>
+              <span style="font-size: 11px; color: var(--warning);">Atenção: Os segredos serão exportados em texto puro legível.</span>
+            </div>
+          </label>
+        </div>
+
+        <div id="export-safepack-pwd-container" style="margin-top: 12px;">
+          <div class="form-group" style="margin-bottom: 10px;">
+            <label class="form-label" for="export-backup-pwd">Senha do Arquivo de Backup *</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="export-backup-pwd" class="form-input" placeholder="Mínimo 4 caracteres..." autocomplete="new-password">
+              <button type="button" class="btn-icon" onclick="togglePasswordVisibility('export-backup-pwd', this)"><i data-lucide="eye"></i></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="export-backup-pwd-confirm">Confirmar Senha do Backup *</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="export-backup-pwd-confirm" class="form-input" placeholder="Repita a senha do backup..." autocomplete="new-password">
+              <button type="button" class="btn-icon" onclick="togglePasswordVisibility('export-backup-pwd-confirm', this)"><i data-lucide="eye"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div id="export-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 10px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-export')">Cancelar</button>
+        <button class="btn btn-primary" onclick="handleConfirmExport()"><i data-lucide="download"></i> Salvar Arquivo de Backup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: IMPORTAR REGISTROS (Microsoft Safe / SafePack / Backup) -->
   <!-- ===================================================================== -->
   <div id="modal-import" class="modal-overlay hidden">
     <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
-        <h3><i data-lucide="download" style="width: 20px; height: 20px; color: var(--accent);"></i> Importar do Microsoft Safe / Backup</h3>
+        <h3><i data-lucide="download" style="width: 20px; height: 20px; color: var(--accent);"></i> Importar do SafePack / Microsoft Safe / Backup</h3>
         <button class="btn-close" onclick="closeModal('modal-import')"><i data-lucide="x"></i></button>
       </div>
       <div class="modal-body">
-        <p class="subtitle" style="margin-bottom: 12px;">Importe suas credenciais do Microsoft Safe (XML, CSV, TXT) ou backups em JSON:</p>
+        <p class="subtitle" style="margin-bottom: 12px;">Restaure backups criptografados (.safepack) ou importe credenciais (XML, CSV, TXT, JSON):</p>
 
         <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
           <button type="button" class="btn btn-primary" onclick="handleSelectImportFile()" id="btn-select-file">
-            <i data-lucide="folder-open"></i> Selecionar Arquivo (.xml, .csv, .txt, .json)
+            <i data-lucide="folder-open"></i> Selecionar Arquivo (.safepack, .xml, .csv, .txt, .json)
           </button>
           <span id="import-selected-file-label" style="font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;">Nenhum arquivo selecionado</span>
+        </div>
+
+        <div id="import-safepack-pwd-container" class="hidden" style="margin-bottom: 12px; padding: 12px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--accent);">
+          <label class="form-label" for="import-backup-pwd"><i data-lucide="lock" style="width: 14px; height: 14px; color: var(--accent);"></i> Senha do Backup SafePack:</label>
+          <div class="input-password-wrapper" style="display: flex; gap: 6px;">
+            <input type="password" id="import-backup-pwd" class="form-input" placeholder="Informe a senha usada na exportação..." style="flex: 1;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handlePreviewWithPassword()"><i data-lucide="unlock"></i> Descriptografar</button>
+          </div>
         </div>
 
         <div class="form-group" style="margin-bottom: 12px;">
@@ -550,7 +614,7 @@
 
         <div style="margin-top: 14px; padding: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); display: flex; align-items: flex-start; gap: 8px;">
           <i data-lucide="shield-alert" style="width: 18px; height: 18px; color: var(--warning); flex-shrink: 0; margin-top: 1px;"></i>
-          <span style="font-size: 11px; color: var(--fg-muted);"><strong>Recomendação de Segurança:</strong> Arquivos exportados pelo Microsoft Safe não são criptografados. Exclua permanentemente o arquivo do disco após concluir a importação.</span>
+          <span style="font-size: 11px; color: var(--fg-muted);"><strong>Recomendação de Segurança:</strong> Arquivos exportados em texto puro (.xml, .csv, .txt, .json) não são criptografados. Utilize sempre o formato <strong>.safepack</strong> para backups seguros.</span>
         </div>
       </div>
       <div class="modal-footer">

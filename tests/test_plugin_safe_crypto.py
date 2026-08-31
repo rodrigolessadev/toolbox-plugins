@@ -126,3 +126,27 @@ def test_zeroization():
     assert any(b != 0 for b in buf)
     crypto.zeroize(buf)
     assert all(b == 0 for b in buf)
+
+
+def test_safepack_packing_and_unpacking():
+    """Valida empacotamento cifrado .safepack, desempacotamento e rejeição de senha incorreta."""
+    data = {
+        "version": 1,
+        "entries": [
+            {"id": "1", "title": "Banco Central", "payload": "SecretPass#123", "tags": ["financas"]},
+            {"id": "2", "title": "AWS Production", "payload": "AKIAIOSFODNN7EXAMPLE", "tags": ["cloud"]},
+        ]
+    }
+    password = "BackupSecretPassword#2026!"
+
+    packed = crypto.pack_safepack_container(data, password)
+    assert isinstance(packed, bytes)
+    assert packed.startswith(crypto.SAFEPACK_MAGIC[:8])
+    assert len(packed) > 60
+
+    unpacked = crypto.unpack_safepack_container(packed, password)
+    assert unpacked == data
+
+    # Rejeição de senha incorreta
+    with pytest.raises(crypto.IntegrityError):
+        crypto.unpack_safepack_container(packed, "WrongPassword#999")

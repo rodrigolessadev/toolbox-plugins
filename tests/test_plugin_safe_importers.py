@@ -264,3 +264,59 @@ def test_service_batch_import_large_dataset_performance():
         assert sample["payload"].startswith("SecretValue_P@ss_")
         assert "corp" in sample["tags"]
         assert "tag_2" in sample["tags"]
+
+
+def test_service_safepack_export_and_import_flow():
+    """Valida o fluxo completo de exportação em container .safepack, preview com senha e restauração."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_src_path = Path(tmpdir) / "vault_src.db"
+        service_src = SafeService(db_src_path)
+        service_src.setup_vault(password="MasterSource123!")
+
+        # Cadastra segredos no cofre de origem
+        service_src.save_secret(
+            title="Credencial Bancária Safepack",
+            category="finance",
+            secret_payload="SuperSecret#SafepackPayload!2026",
+            username_or_key="usuario.safepack",
+            tags=["safepack", "backup"],
+        )
+
+        backup_pwd = "BackupEncryptionPassword#777"
+        safepack_bytes = service_src.export_secrets(format="safepack", backup_password=backup_pwd)
+        assert isinstance(safepack_bytes, bytes)
+        assert safepack_bytes.startswith(b"SAFEPACK")
+
+        # Configura cofre de destino
+        db_dst_path = Path(tmpdir) / "vault_dst.db"
+        service_dst = SafeService(db_dst_path)
+        service_dst.setup_vault(password="MasterDest123!")
+
+        # 1. Preview sem senha deve solicitar senha
+        prev_no_pwd = service_dst.preview_import(safepack_bytes, filename="meu_backup.safepack")
+        assert prev_no_pwd["format"] == "safepack_password_required"
+        assert prev_no_pwd["total_detected"] == 0
+
+        # 2. Preview com senha correta
+        prev_ok = service_dst.preview_import(safepack_bytes, filename="meu_backup.safepack", backup_password=backup_pwd)
+        assert prev_ok["format"] == "safepack"
+        assert prev_ok["total_detected"] == 1
+        assert prev_ok["preview_items"][0]["title"] == "Credencial Bancária Safepack"
+
+        # 3. Importação com senha correta
+        res_import = service_dst.import_secrets(
+            safepack_bytes,
+            conflict_policy="duplicate",
+            filename="meu_backup.safepack",
+            backup_password=backup_pwd,
+        )
+        assert res_import["success"] is True
+        assert res_import["imported"] == 1
+
+        # 4. Validação da credencial restaurada no destino
+        entries = service_dst.list_secrets()
+        assert len(entries) == 1
+        secret = service_dst.get_secret(entries[0]["id"])
+        assert secret["title"] == "Credencial Bancária Safepack"
+        assert secret["payload"] == "SuperSecret#SafepackPayload!2026"
+        assert "safepack" in secret["tags"]
