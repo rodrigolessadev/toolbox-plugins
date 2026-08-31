@@ -77,6 +77,13 @@ class SafeService:
             except Exception as e:
                 logger.debug(f"Aviso ao iniciar session_lock_listener: {e}")
 
+        # Inicia pre-warming assíncrono do Windows Hello para não bloquear a UI na inicialização
+        if windows_hello and hasattr(windows_hello, "start_background_prewarm"):
+            try:
+                windows_hello.start_background_prewarm()
+            except Exception as e:
+                logger.debug(f"Aviso ao iniciar prewarm do Windows Hello: {e}")
+
     def add_on_lock_listener(self, listener: Callable[[str], None]) -> None:
         """Registra um callback a ser acionado sempre que o cofre for bloqueado."""
         if listener not in self._on_lock_listeners:

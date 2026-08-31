@@ -490,6 +490,22 @@ function setupUnlockScreen(data) {
   }
 
   if (window.lucide) window.lucide.createIcons();
+
+  // Consulta assíncrona em background para refinar status sem travar renderização inicial
+  if (authMode !== 'master_password') {
+    callApi('check_windows_hello_availability').then((res) => {
+      if (res && res.success && res.available !== undefined) {
+        if (!res.available && authMode === 'windows_hello') {
+          btnHello.style.display = 'none';
+          errBanner.innerText = 'Este cofre está protegido por Windows Hello, mas a autenticação biométrica/PIN não está acessível.';
+          errBanner.classList.remove('hidden');
+        } else if (!res.available) {
+          btnHello.style.display = 'none';
+          if (divider) divider.style.display = 'none';
+        }
+      }
+    });
+  }
 }
 
 async function handleUnlockHello() {

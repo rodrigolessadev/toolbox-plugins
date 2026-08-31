@@ -13,32 +13,32 @@ import sys
 import time
 from typing import Optional, Tuple
 
+import threading
+
 # Flags DPAPI
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
 
 _hello_cache_result: Optional[bool] = None
 _hello_cache_timestamp: float = 0.0
+_hello_check_in_progress: bool = False
+_hello_lock = threading.Lock()
 
 
 def _is_windows() -> bool:
     return sys.platform == "win32"
 
 
-def is_windows_hello_available(force_refresh: bool = False) -> bool:
-    """
-    Verifica se o Windows Hello (biometria ou PIN) está disponível e configurado no dispositivo.
-    Utiliza cache em memória com TTL de 60 segundos para evitar invocações lentas do PowerShell.
-    """
-    global _hello_cache_result, _hello_cache_timestamp
-
+def check_windows_hello_sync() -> bool:
+    """Executa a verificação síncrona via PowerShell e atualiza o cache em memória."""
+    global _hello_cache_result, _hello_cache_timestamp, _hello_check_in_progress
     if not _is_windows():
+        with _hello_lock:
+            _hello_cache_result = False
+            _hello_cache_timestamp = time.time()
+            _hello_check_in_progress = False
         return False
 
     now = time.time()
-    if not force_refresh and _hello_cache_result is not None and (now - _hello_cache_timestamp < 60.0):
-        return _hello_cache_result
-
-    # Testa via PowerShell usando Windows.Security.Credentials.UI.UserConsentVerifier com reflexão para AsTask
     ps_cmd = (
         "try { "
         "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
@@ -62,15 +62,61 @@ def is_windows_hello_available(force_refresh: bool = False) -> bool:
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
         out = (res.stdout or "").strip()
-        # Valores possíveis: 'Available', 'DeviceNotPresent', 'NotConfiguredForUser', 'DisabledByPolicy', 'DeviceBusy'
         is_available = "Available" in out
-        _hello_cache_result = is_available
-        _hello_cache_timestamp = now
+        with _hello_lock:
+            _hello_cache_result = is_available
+            _hello_cache_timestamp = now
+            _hello_check_in_progress = False
         return is_available
     except Exception:
-        _hello_cache_result = False
-        _hello_cache_timestamp = now
+        with _hello_lock:
+            _hello_cache_result = False
+            _hello_cache_timestamp = now
+            _hello_check_in_progress = False
         return False
+
+
+def start_background_prewarm(force_refresh: bool = False) -> None:
+    """Dispara a checagem do Windows Hello em uma thread daemon em background sem bloquear o processo."""
+    global _hello_check_in_progress
+    if not _is_windows():
+        return
+
+    now = time.time()
+    with _hello_lock:
+        if not force_refresh and _hello_cache_result is not None and (now - _hello_cache_timestamp < 120.0):
+            return
+        if _hello_check_in_progress:
+            return
+        _hello_check_in_progress = True
+
+    t = threading.Thread(target=check_windows_hello_sync, name="WindowsHelloPrewarm", daemon=True)
+    t.start()
+
+
+def is_windows_hello_available(force_refresh: bool = False, allow_async_fallback: bool = True) -> bool:
+    """
+    Verifica se o Windows Hello está disponível.
+    Se o cache for válido, retorna imediatamente.
+    Se ainda não houver cache e allow_async_fallback=True, dispara o pre-warming em segundo plano
+    e retorna True provisoriamente no Windows (não bloqueia inicialização da UI).
+    Se allow_async_fallback=False, executa a verificação síncrona.
+    """
+    global _hello_cache_result, _hello_cache_timestamp
+
+    if not _is_windows():
+        return False
+
+    now = time.time()
+    with _hello_lock:
+        if not force_refresh and _hello_cache_result is not None and (now - _hello_cache_timestamp < 120.0):
+            return _hello_cache_result
+
+    if allow_async_fallback:
+        start_background_prewarm(force_refresh=force_refresh)
+        return _hello_cache_result if _hello_cache_result is not None else True
+
+    return check_windows_hello_sync()
 
 
 def allow_foreground_focus() -> bool:

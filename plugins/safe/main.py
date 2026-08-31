@@ -114,6 +114,18 @@ class SafePluginApi(BasePluginApi):
             logger.error(f"Erro ao obter status do cofre: {e}", exc_info=True)
             return {"success": False, "message": str(e)}
 
+    def check_windows_hello_availability(self, force_refresh: bool = False) -> Dict[str, Any]:
+        """Consulta a disponibilidade atual do Windows Hello de forma direta/assíncrona."""
+        try:
+            try:
+                from windows_hello import is_windows_hello_available
+            except ImportError:
+                from safe.windows_hello import is_windows_hello_available
+            avail = is_windows_hello_available(force_refresh=force_refresh, allow_async_fallback=False)
+            return {"success": True, "available": avail}
+        except Exception as e:
+            return {"success": False, "message": str(e), "available": False}
+
     def setup_vault(
         self,
         auth_mode: str = "hybrid",

@@ -82,11 +82,12 @@ class SafeDatabase:
     def __init__(self, db_path: Optional[Union[str, Path]] = None):
         self.db_path = Path(db_path) if db_path else get_default_db_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.debug(f"Inicializando SafeDatabase em {self.db_path}")
         self.init_schema()
-        # Se estiver usando o banco central padrão, executa migração de base legada se existir
+        # Se estiver usando o banco central padrão, executa migração de base legada se existir e ainda não conferida
         if db_path is None or Path(db_path) == get_default_db_path():
-            self.migrate_legacy_vault_if_exists()
+            if not self.get_setting("legacy_migration_checked"):
+                self.migrate_legacy_vault_if_exists()
+                self.set_setting("legacy_migration_checked", "1")
 
     @contextmanager
     def connect(self) -> Generator[sqlite3.Connection, None, None]:
@@ -324,6 +325,40 @@ class SafeDatabase:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_safe_entries_owner ON safe_entries(owner_plugin_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_safe_grants_plugin ON safe_plugin_grants(plugin_id);")
 
+            # Tabela: Chave-Valor para Configurações e Flags Internas
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS safe_kv_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
+            conn.commit()
+
+    # ========================================================================
+    # Configurações & Flags Chave-Valor
+    # ========================================================================
+
+    def get_setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Obtém uma configuração ou flag interna persistida na tabela safe_kv_settings."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM safe_kv_settings WHERE key = ?;", (key,))
+            row = cursor.fetchone()
+            return row[0] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Grava ou atualiza uma configuração ou flag interna na tabela safe_kv_settings."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO safe_kv_settings (key, value, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP;
+            """, (key, value))
             conn.commit()
 
     # ========================================================================
