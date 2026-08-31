@@ -38,17 +38,28 @@ window.addEventListener('unhandledrejection', (event) => {
 // Bridge da API (pywebview / Toolbox Container)
 // ============================================================================
 
+let isAuthenticating = false;
+let lastUnlockTimestamp = 0;
+
+function isApiReady(api) {
+  return Boolean(
+    api &&
+    typeof api === 'object' &&
+    typeof api.get_vault_status === 'function'
+  );
+}
+
 function getApiObject() {
-  if (window.pywebview && window.pywebview.api) {
+  if (window.pywebview && window.pywebview.api && isApiReady(window.pywebview.api)) {
     return window.pywebview.api;
   }
-  if (window.toolbox && window.toolbox.api) {
+  if (window.toolbox && window.toolbox.api && isApiReady(window.toolbox.api)) {
     return window.toolbox.api;
   }
-  if (window.toolbox && typeof window.toolbox.get_vault_status === 'function') {
+  if (window.toolbox && isApiReady(window.toolbox)) {
     return window.toolbox;
   }
-  if (window.api && typeof window.api.get_vault_status === 'function') {
+  if (window.api && isApiReady(window.api)) {
     return window.api;
   }
   return null;
@@ -56,7 +67,7 @@ function getApiObject() {
 
 let apiWaitPromise = null;
 
-function waitForApi(timeoutMs = 8000, pollIntervalMs = 50) {
+function waitForApi(timeoutMs = 10000, pollIntervalMs = 50) {
   const currentApi = getApiObject();
   if (currentApi) {
     return Promise.resolve(currentApi);
@@ -73,8 +84,11 @@ function waitForApi(timeoutMs = 8000, pollIntervalMs = 50) {
       if (!resolved) {
         resolved = true;
         cleanup();
-        console.warn(`[SafeUI] waitForApi: timeout atingido (${timeoutMs}ms) sem injeção da API.`);
-        resolve(null);
+        const fallbackApi = getApiObject();
+        if (!fallbackApi) {
+          console.warn(`[SafeUI] waitForApi: timeout atingido (${timeoutMs}ms) sem injeção completa da API.`);
+        }
+        resolve(fallbackApi);
       }
     }, timeoutMs);
 
@@ -100,6 +114,7 @@ function waitForApi(timeoutMs = 8000, pollIntervalMs = 50) {
 
     window.addEventListener('pywebviewready', onPywebviewReady);
     const pollTimer = setInterval(checkReady, pollIntervalMs);
+    checkReady();
   });
 
   return apiWaitPromise;
@@ -129,12 +144,21 @@ function registerUserActivity() {
 }
 
 async function checkLockStatus() {
+  // Ignora verificação enquanto a autenticação está ativa ou nos primeiros 3 segundos após desbloquear
+  if (isAuthenticating || (Date.now() - lastUnlockTimestamp < 3000)) {
+    return;
+  }
+
+  const vaultScreen = document.getElementById('screen-vault');
+  if (!vaultScreen || !vaultScreen.classList.contains('active')) {
+    return;
+  }
+
   const statusRes = await callApi('get_vault_status');
   if (statusRes && statusRes.success) {
     const data = statusRes.data;
     if (data.status === 'LOCKED') {
-      const vaultScreen = document.getElementById('screen-vault');
-      if (vaultScreen && vaultScreen.classList.contains('active')) {
+      if (vaultScreen && vaultScreen.classList.contains('active') && !isAuthenticating && (Date.now() - lastUnlockTimestamp >= 3000)) {
         window.onVaultLockedBySystem();
       }
     }
@@ -142,6 +166,9 @@ async function checkLockStatus() {
 }
 
 window.onVaultLockedBySystem = function() {
+  if (isAuthenticating || (Date.now() - lastUnlockTimestamp < 3000)) {
+    return;
+  }
   console.log('[SafeUI] Cofre bloqueado pelo sistema/backend.');
   cachedSecrets = [];
   currentSecretBeingViewed = null;
@@ -202,8 +229,18 @@ async function callApi(method, ...args) {
   }
 
   let api = getApiObject();
-  if (!api) {
-    api = await waitForApi(3000);
+  if (!api || typeof api[method] !== 'function') {
+    api = await waitForApi(4000);
+  }
+
+  // Polling rápido se o método específico ainda não foi anexado
+  if (api && typeof api[method] !== 'function') {
+    const startWait = Date.now();
+    while (Date.now() - startWait < 2500) {
+      await new Promise(r => setTimeout(r, 50));
+      api = getApiObject();
+      if (api && typeof api[method] === 'function') break;
+    }
   }
 
   if (api && typeof api[method] === 'function') {
@@ -272,15 +309,24 @@ async function initApp() {
   }, 10000);
 
   try {
-    const api = await waitForApi(8000);
+    const api = await waitForApi(10000);
     if (!api) {
       if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
-      console.error('[SafeUI] Falha no bootstrap: Bridge não foi injetado após 8s.');
+      console.error('[SafeUI] Falha no bootstrap: Bridge não foi injetado após 10s.');
       showInitError('A API do Toolbox não está disponível ou demorou para inicializar. Verifique se o aplicativo principal está em execução.');
       return;
     }
 
-    const statusRes = await callApi('get_vault_status');
+    let statusRes = null;
+    let attempts = 0;
+    while (attempts < 3) {
+      attempts++;
+      statusRes = await callApi('get_vault_status');
+      if (statusRes && statusRes.success) break;
+      if (attempts < 3) {
+        await new Promise(r => setTimeout(r, attempts * 200));
+      }
+    }
     if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
 
     if (statusRes && statusRes.success) {
@@ -456,9 +502,15 @@ async function handleUnlockHello() {
   btnHello.innerHTML = '<i data-lucide="loader" class="spin"></i> Aguardando Windows Hello...';
   if (window.lucide) window.lucide.createIcons();
 
+  isAuthenticating = true;
+
   try {
     const res = await callApi('unlock_vault', null, true, 'Desbloquear Cofre Seguro Toolbox');
     if (res && res.success) {
+      lastUnlockTimestamp = Date.now();
+      lastActivityTimestamp = Date.now();
+      lastBackendTouchTimestamp = Date.now();
+
       showScreen('screen-vault');
       loadVaultData();
       const statusRes = await callApi('get_vault_status');
@@ -478,6 +530,9 @@ async function handleUnlockHello() {
     btnHello.disabled = false;
     btnHello.innerHTML = originalHtml;
     if (window.lucide) window.lucide.createIcons();
+    setTimeout(() => {
+      isAuthenticating = false;
+    }, 1500);
   }
 }
 
@@ -493,17 +548,32 @@ async function handleUnlockPassword() {
     return;
   }
 
-  const res = await callApi('unlock_vault', password, false);
-  if (res && res.success) {
-    showScreen('screen-vault');
-    loadVaultData();
-    const statusRes = await callApi('get_vault_status');
-    if (statusRes.success) {
-      startAutoLockTimer(statusRes.data.auto_lock_timeout, statusRes.data.auto_lock_remaining);
+  isAuthenticating = true;
+
+  try {
+    const res = await callApi('unlock_vault', password, false);
+    if (res && res.success) {
+      lastUnlockTimestamp = Date.now();
+      lastActivityTimestamp = Date.now();
+      lastBackendTouchTimestamp = Date.now();
+
+      showScreen('screen-vault');
+      loadVaultData();
+      const statusRes = await callApi('get_vault_status');
+      if (statusRes && statusRes.success) {
+        startAutoLockTimer(statusRes.data.auto_lock_timeout, statusRes.data.auto_lock_remaining);
+      }
+    } else {
+      errBanner.innerText = res.message || 'Senha incorreta.';
+      errBanner.classList.remove('hidden');
     }
-  } else {
-    errBanner.innerText = res.message || 'Senha incorreta.';
+  } catch (err) {
+    errBanner.innerText = String(err);
     errBanner.classList.remove('hidden');
+  } finally {
+    setTimeout(() => {
+      isAuthenticating = false;
+    }, 1000);
   }
 }
 
