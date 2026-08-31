@@ -1,6 +1,6 @@
 {
   "name": "Cofre Seguro",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Cofre de senhas e credenciais com criptografia AES-256-GCM em repouso, Windows Hello e API para outros plugins.",
   "language": "python",
   "entry": "main.py",
