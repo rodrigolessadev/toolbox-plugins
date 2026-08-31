@@ -65,6 +65,43 @@ function registerUserActivity() {
   }
 }
 
+async function checkLockStatus() {
+  const statusRes = await callApi('get_vault_status');
+  if (statusRes && statusRes.success) {
+    const data = statusRes.data;
+    if (data.status === 'LOCKED') {
+      const vaultScreen = document.getElementById('screen-vault');
+      if (vaultScreen && vaultScreen.classList.contains('active')) {
+        window.onVaultLockedBySystem();
+      }
+    }
+  }
+}
+
+window.onVaultLockedBySystem = function() {
+  console.log('[SafeUI] Cofre bloqueado pelo sistema/backend.');
+  cachedSecrets = [];
+  currentSecretBeingViewed = null;
+  if (autoLockInterval) {
+    clearInterval(autoLockInterval);
+    autoLockInterval = null;
+  }
+  
+  // Limpa elementos do DOM
+  const container = document.getElementById('secrets-list');
+  if (container) container.innerHTML = '';
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.value = '';
+
+  // Transiciona para a tela de desbloqueio
+  showScreen('screen-unlock');
+  callApi('get_vault_status').then(statusRes => {
+    if (statusRes && statusRes.success) {
+      setupUnlockScreen(statusRes.data);
+    }
+  });
+};
+
 function setupActivityTracker() {
   if (activityTrackerInitialized) return;
   activityTrackerInitialized = true;
@@ -83,10 +120,15 @@ function setupActivityTracker() {
     document.addEventListener(evt, registerUserActivity, { capture: true, passive: true });
   });
 
-  window.addEventListener('focus', registerUserActivity);
+  window.addEventListener('focus', () => {
+    registerUserActivity();
+    checkLockStatus();
+  });
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       registerUserActivity();
+      checkLockStatus();
     }
   });
 }
@@ -769,7 +811,7 @@ async function openSettingsModal() {
   const statusRes = await callApi('get_vault_status');
   if (statusRes && statusRes.success) {
     const data = statusRes.data;
-    document.getElementById('settings-timeout').value = String(data.auto_lock_timeout || 300);
+    document.getElementById('settings-timeout').value = String(data.auto_lock_timeout ?? 300);
     document.getElementById('settings-lock-on-os').checked = (data.lock_on_os_lock !== false);
     
     const authStatus = document.getElementById('settings-auth-status');
@@ -790,6 +832,7 @@ async function handleSaveSettings() {
   const lockOnOs = document.getElementById('settings-lock-on-os').checked;
   const res = await callApi('update_security_settings', timeout, lockOnOs);
   if (res && res.success) {
+    configuredAutoLockTimeout = timeout;
     closeModal('modal-settings');
     startAutoLockTimer(timeout);
   } else {

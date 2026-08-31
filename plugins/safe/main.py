@@ -45,6 +45,20 @@ class SafePluginApi(BasePluginApi):
     def __init__(self, service: Optional[SafeService] = None):
         super().__init__()
         self.service = service or SafeService()
+        self.window = None
+        self.service.add_on_lock_listener(self._on_service_lock)
+
+    def set_window(self, window: Any) -> None:
+        """Define a referência da janela pywebview para eventos push."""
+        self.window = window
+
+    def _on_service_lock(self, reason: str) -> None:
+        """Acionado quando o serviço do cofre é bloqueado (por timeout ou evento do SO)."""
+        if self.window:
+            try:
+                self.window.evaluate_js("if (typeof onVaultLockedBySystem === 'function') onVaultLockedBySystem();")
+            except Exception as e:
+                logger.debug(f"Aviso ao avaliar onVaultLockedBySystem na janela: {e}")
 
     def log_frontend_error(self, message: str, stack: Optional[str] = None) -> Dict[str, Any]:
         """Recebe e registra erros e exceções capturados no frontend JavaScript."""
@@ -396,6 +410,9 @@ def main():
             height=760,
             min_size=(800, 600),
         )
+        if window:
+            api.set_window(window)
+
         if webview and window:
             def on_shown():
                 set_window_taskbar_icon()
