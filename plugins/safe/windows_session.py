@@ -134,12 +134,28 @@ def start_session_lock_listener(on_lock_callback: Callable[[], None]) -> bool:
             except Exception:
                 pass
 
-            msg = wintypes.MSG()
-            while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) > 0:
-                user32.TranslateMessage(ctypes.byref(msg))
-                user32.DispatchMessageW(ctypes.byref(msg))
-        except Exception:
-            pass
+            try:
+                msg = wintypes.MSG()
+                while user32.GetMessageW(ctypes.byref(msg), 0, 0, 0) > 0:
+                    user32.TranslateMessage(ctypes.byref(msg))
+                    user32.DispatchMessageW(ctypes.byref(msg))
+            except Exception as e:
+                logger.debug(f"Exceção no loop de mensagens do session listener: {e}")
+            finally:
+                try:
+                    wtsapi32.WTSUnRegisterSessionNotification(hwnd)
+                except Exception:
+                    pass
+                try:
+                    user32.DestroyWindow(hwnd)
+                except Exception:
+                    pass
+                try:
+                    user32.UnregisterClassW(cls_name, hinst)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(f"Falha na thread do SafeSessionListener: {e}")
 
     _listener_thread = threading.Thread(target=listener_loop, daemon=True, name="SafeOSLockListener")
     _listener_thread.start()

@@ -2,6 +2,8 @@
  * Toolbox Safe Plugin — Frontend Logic (app.js)
  */
 
+let appInitialized = false;
+let initTimeoutTimer = null;
 let currentAuthMode = 'hybrid';
 let activeCategory = 'all';
 let cachedSecrets = [];
@@ -12,6 +14,25 @@ let configuredAutoLockTimeout = 300;
 let lastActivityTimestamp = Date.now();
 let lastBackendTouchTimestamp = 0;
 let activityTrackerInitialized = false;
+
+// ============================================================================
+// Tratamento Global de Erros de Frontend (Logs & Diagnóstico)
+// ============================================================================
+
+window.addEventListener('error', (event) => {
+  const errMsg = event.message || (event.error && event.error.message) || 'Erro não identificado no frontend';
+  const stack = event.error && event.error.stack ? event.error.stack : '';
+  console.error('[SafeUI] Erro capturado:', errMsg, stack);
+  callApi('log_frontend_error', errMsg, stack);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const errMsg = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : '';
+  console.error('[SafeUI] Promise rejeitada não tratada:', errMsg, stack);
+  callApi('log_frontend_error', `UnhandledRejection: ${errMsg}`, stack);
+});
 
 // ============================================================================
 // Inicialização
@@ -86,30 +107,92 @@ async function callApi(method, ...args) {
   return { success: false, message: 'API indisponível' };
 }
 
+function showInitError(message) {
+  const spinnerContainer = document.getElementById('loading-spinner-container');
+  const errorContainer = document.getElementById('loading-error-container');
+  const errorMsgEl = document.getElementById('loading-error-message');
+
+  if (spinnerContainer) spinnerContainer.style.display = 'none';
+  if (errorContainer) {
+    errorContainer.classList.remove('hidden');
+    errorContainer.style.display = 'flex';
+  }
+  if (errorMsgEl) {
+    errorMsgEl.innerText = message || 'Falha ao inicializar o serviço do Cofre Seguro.';
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function resetInitState() {
+  const spinnerContainer = document.getElementById('loading-spinner-container');
+  const errorContainer = document.getElementById('loading-error-container');
+
+  if (spinnerContainer) spinnerContainer.style.display = 'flex';
+  if (errorContainer) {
+    errorContainer.classList.add('hidden');
+    errorContainer.style.display = 'none';
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function retryAppInit() {
+  appInitialized = false;
+  resetInitState();
+  initApp();
+}
+
 async function initApp() {
   if (appInitialized) return;
 
-  const statusRes = await callApi('get_vault_status');
-  if (statusRes && statusRes.success) {
-    appInitialized = true;
-    const data = statusRes.data;
-    if (!data.configured) {
-      showScreen('screen-setup');
-      setupSetupScreen(data);
-    } else if (data.status === 'LOCKED') {
-      showScreen('screen-unlock');
-      setupUnlockScreen(data);
-    } else {
-      showScreen('screen-vault');
-      loadVaultData();
-      startAutoLockTimer(data.auto_lock_timeout, data.auto_lock_remaining);
-      checkPasswordMigrationBanner(data);
+  if (initTimeoutTimer) {
+    clearTimeout(initTimeoutTimer);
+  }
+
+  // Timeout de segurança de 5 segundos para evitar loop de carregamento infinito
+  initTimeoutTimer = setTimeout(() => {
+    if (!appInitialized) {
+      console.warn('[SafeUI] Timeout de inicialização (5s) atingido.');
+      callApi('log_frontend_error', 'Timeout de inicialização do frontend atingido (5 segundos).');
+      showInitError('Tempo limite de inicialização excedido. O serviço do Cofre não respondeu a tempo.');
     }
-  } else {
-    if (window.pywebview && window.pywebview.api) {
+  }, 5000);
+
+  try {
+    const statusRes = await callApi('get_vault_status');
+    if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
+
+    if (statusRes && statusRes.success) {
       appInitialized = true;
-      showScreen('screen-setup');
+      const data = statusRes.data;
+      if (!data.configured) {
+        showScreen('screen-setup');
+        setupSetupScreen(data);
+      } else if (data.status === 'LOCKED') {
+        showScreen('screen-unlock');
+        setupUnlockScreen(data);
+      } else {
+        showScreen('screen-vault');
+        loadVaultData();
+        startAutoLockTimer(data.auto_lock_timeout, data.auto_lock_remaining);
+        checkPasswordMigrationBanner(data);
+      }
+    } else {
+      if (window.pywebview && window.pywebview.api) {
+        const err = (statusRes && statusRes.message) || 'Erro desconhecido ao carregar status do cofre.';
+        console.error('[SafeUI] Falha ao obter status do cofre:', err);
+        callApi('log_frontend_error', `Falha ao obter status: ${err}`);
+        showInitError(`Erro ao carregar dados do cofre: ${err}`);
+      } else {
+        // Modo preview / mock sem pywebview
+        appInitialized = true;
+        showScreen('screen-setup');
+      }
     }
+  } catch (err) {
+    if (initTimeoutTimer) clearTimeout(initTimeoutTimer);
+    console.error('[SafeUI] Exceção durante initApp:', err);
+    callApi('log_frontend_error', `Exceção em initApp: ${err.message || err}`, err.stack);
+    showInitError(`Exceção durante a inicialização: ${err.message || err}`);
   }
 }
 
