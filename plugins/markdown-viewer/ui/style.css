@@ -296,7 +296,7 @@ html, body {
   overflow-y: auto;
 }
 
-/* Painel de Preview com Scroll Completo */
+/* Painel de Preview com Scroll Completo & Seleção de Texto Habilitada */
 .preview-pane {
   background: var(--bg);
   height: 100%;
@@ -304,12 +304,31 @@ html, body {
   overflow-y: auto;
   padding: 24px 32px 80px 32px;
   scroll-behavior: smooth;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .preview-content {
   max-width: 860px;
   margin: 0 auto;
   line-height: 1.7;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.preview-content * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.preview-content .code-header,
+.preview-content .btn-copy-code,
+.preview-content .code-lang,
+.preview-content .heading-anchor,
+.preview-content .alert-icon,
+.preview-content .alert-title {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Estilos de Tipografia & Markdown */

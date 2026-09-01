@@ -89,26 +89,37 @@ function parseMarkdown(md) {
     codeBuffer = [];
     inCodeBlock = false;
     codeLang = '';
+    codeIndentLen = 0;
+    codeFenceChar = '';
   }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Fenced code block check
-    const codeMatch = line.match(/^```(\w*)/);
-    if (codeMatch) {
-      if (inTable) flushTable();
-      if (inCodeBlock) {
+    // Fenced code block check (suporte a espaços/tabs antes de ``` ou ~~~)
+    if (inCodeBlock) {
+      const closeFencePattern = codeFenceChar === '~' ? /^\s*~{3,}\s*$/ : /^\s*`{3,}\s*$/;
+      if (closeFencePattern.test(line)) {
         flushCodeBlock();
+        continue;
+      }
+      // Remove recuo base correspondente à abertura da cerca
+      if (codeIndentLen > 0) {
+        const indentRegex = new RegExp(`^[ ]{0,${codeIndentLen}}`);
+        codeBuffer.push(line.replace(indentRegex, ''));
       } else {
-        inCodeBlock = true;
-        codeLang = codeMatch[1].toLowerCase().trim();
+        codeBuffer.push(line);
       }
       continue;
     }
 
-    if (inCodeBlock) {
-      codeBuffer.push(line);
+    const openCodeMatch = line.match(/^(\s*)(`{3,}|~{3,})([\w-]*)/);
+    if (openCodeMatch) {
+      if (inTable) flushTable();
+      inCodeBlock = true;
+      codeFenceChar = openCodeMatch[2][0];
+      codeIndentLen = openCodeMatch[1].replace(/\t/g, '  ').length;
+      codeLang = openCodeMatch[3] ? openCodeMatch[3].toLowerCase().trim() : '';
       continue;
     }
 

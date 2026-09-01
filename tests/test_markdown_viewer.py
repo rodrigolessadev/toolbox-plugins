@@ -140,3 +140,48 @@ def test_markdown_viewer_ui_tab_elements():
     assert ".tab-context-menu" in css_content
     assert ".modal-overlay" in css_content
 
+
+def test_analyze_markdown_indented_code_blocks():
+    sample = """# Teste Indentação
+
+Texto explicativo.
+
+  ```java
+  CompanyEntity company = companyRepository.findOneOrFail(employee.getEmployer().getId());
+  dto.employeeData.consistBudget = remunerationConfigRepository.getConsistBudgetByCompany(company.getHeadquarter());
+  ```
+
+Outro trecho com tis:
+
+    ~~~python
+    def calculate():
+        return 42
+    ~~~
+"""
+    stats = md_domain.analyze_markdown(sample)
+    assert stats["heading_count"] == 1
+    assert stats["code_block_count"] == 2
+    assert stats["word_count"] > 10
+
+
+def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
+    ui_css = ROOT / "plugins" / "markdown-viewer" / "ui" / "style.css"
+    ui_parser = ROOT / "plugins" / "markdown-viewer" / "ui" / "vendor" / "marked_parser.js"
+
+    assert ui_css.exists()
+    assert ui_parser.exists()
+
+    css_content = ui_css.read_text(encoding="utf-8")
+    assert ".preview-pane" in css_content
+    assert "user-select: text;" in css_content
+    assert "-webkit-user-select: text;" in css_content
+    assert ".preview-content *" in css_content
+
+    parser_content = ui_parser.read_text(encoding="utf-8")
+    # Confirma que a regex e lógica suportam espaços/tabs antes das cercas e tis
+    assert "openCodeMatch" in parser_content
+    assert "codeIndentLen" in parser_content
+    assert "codeFenceChar" in parser_content
+    assert "closeFencePattern" in parser_content
+
+
