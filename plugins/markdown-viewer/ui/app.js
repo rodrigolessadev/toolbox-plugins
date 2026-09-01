@@ -252,6 +252,59 @@ async function restoreSession() {
   return false;
 }
 
+// ─────────────────────── Resolução Dinâmica de Títulos de Abas ───────────────────────
+
+function extractFirstMarkdownTitle(content) {
+  if (!content || !content.trim()) return null;
+
+  // 1. Títulos ATX (# Título, ## Título, etc.)
+  const atxMatch = content.match(/^(?:#{1,6})\s+(.+)$/m);
+  if (atxMatch && atxMatch[1]) {
+    const cleaned = sanitizeHeadingText(atxMatch[1]);
+    if (cleaned) return cleaned;
+  }
+
+  // 2. Títulos Setext (Linha seguida por === ou ---)
+  const setextMatch = content.match(/^([^\r\n]+)\r?\n(?:={2,}|-{2,})$/m);
+  if (setextMatch && setextMatch[1]) {
+    const cleaned = sanitizeHeadingText(setextMatch[1]);
+    if (cleaned) return cleaned;
+  }
+
+  return null;
+}
+
+function sanitizeHeadingText(raw) {
+  if (!raw) return '';
+  return raw
+    .replace(/[*_~`\[\]]/g, '')    // Remove marcadores de formatação inline (bold, italic, code, brackets)
+    .replace(/<[^>]*>/g, '')        // Remove tags HTML
+    .replace(/\s+/g, ' ')           // Normaliza múltiplos espaços
+    .trim();
+}
+
+function getTabDisplayName(tab) {
+  if (!tab) return 'Sem título';
+  if (tab.filePath) {
+    return tab.title;
+  }
+  const extracted = extractFirstMarkdownTitle(tab.content);
+  if (extracted) {
+    return extracted;
+  }
+  return tab.title || 'Sem título';
+}
+
+function getSuggestedFilename(tab) {
+  const name = getTabDisplayName(tab);
+  let sanitized = name.replace(/[<>:"/\\|?*]/g, '').trim();
+  if (!sanitized) sanitized = 'documento';
+  if (!sanitized.toLowerCase().endsWith('.md')) {
+    sanitized += '.md';
+  }
+  return sanitized;
+}
+
 // ─────────────────────── Gerenciamento de Abas ───────────────────────
 
 function getActiveTab() {
@@ -300,7 +353,8 @@ function renderTabs() {
   tabsList.innerHTML = tabs.map(tab => {
     const isActive = tab.id === activeTabId;
     const isDirty = tab.isDirty;
-    const tooltip = tab.filePath ? tab.filePath : `${tab.title} (Não salvo no disco)`;
+    const displayName = getTabDisplayName(tab);
+    const tooltip = tab.filePath ? tab.filePath : `${displayName} (Não salvo no disco)`;
 
     return `
       <div class="tab-item ${isActive ? 'active' : ''} ${isDirty ? 'dirty' : ''}"
@@ -310,11 +364,11 @@ function renderTabs() {
            onclick="handleTabClick('${tab.id}', event)"
            oncontextmenu="handleTabContextMenu('${tab.id}', event)">
         <span class="tab-icon" data-icon="file-text"></span>
-        <span class="tab-title">${escapeHtml(tab.title)}</span>
+        <span class="tab-title">${escapeHtml(displayName)}</span>
         <span class="tab-dirty-indicator" title="Alterações não salvas"></span>
         <button type="button" class="tab-close-btn"
                 title="Fechar (Ctrl+W)"
-                aria-label="Fechar aba ${escapeHtml(tab.title)}"
+                aria-label="Fechar aba ${escapeHtml(displayName)}"
                 onclick="handleTabCloseClick('${tab.id}', event)">✕</button>
       </div>
     `;
@@ -322,6 +376,7 @@ function renderTabs() {
 
   if (window.renderIcons) window.renderIcons();
 }
+
 
 function activateTab(tabId) {
   const currentTab = getActiveTab();
@@ -606,6 +661,10 @@ function setupEventListeners() {
       if (tabEl) {
         if (activeTab.isDirty) tabEl.classList.add('dirty');
         else tabEl.classList.remove('dirty');
+        const tabTitleEl = tabEl.querySelector('.tab-title');
+        if (tabTitleEl) {
+          tabTitleEl.textContent = getTabDisplayName(activeTab);
+        }
       }
 
       scheduleSessionSave();
@@ -650,6 +709,10 @@ function setupEventListeners() {
           if (tabEl) {
             if (activeTab.isDirty) tabEl.classList.add('dirty');
             else tabEl.classList.remove('dirty');
+            const tabTitleEl = tabEl.querySelector('.tab-title');
+            if (tabTitleEl) {
+              tabTitleEl.textContent = getTabDisplayName(activeTab);
+            }
           }
           scheduleSessionSave();
         }
@@ -857,11 +920,12 @@ function updateTitle() {
   const el = document.getElementById('docTitle');
   const activeTab = getActiveTab();
   if (el && activeTab) {
+    const displayName = getTabDisplayName(activeTab);
     const mod = activeTab.isDirty ? ' •' : '';
-    el.textContent = `${activeTab.title}${mod}`;
-    el.title = activeTab.filePath || activeTab.title;
+    el.textContent = `${displayName}${mod}`;
+    el.title = activeTab.filePath || displayName;
     const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : ' — Visualizador de Markdown';
-    document.title = `${activeTab.title}${mod}${versionSuffix}`;
+    document.title = `${displayName}${mod}${versionSuffix}`;
   } else {
     const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : 'Visualizador de Markdown';
     document.title = versionSuffix;
@@ -996,7 +1060,8 @@ async function handleSaveFile() {
         return true;
       }
     } else {
-      const res = await window.pywebview.api.save_file_dialog(activeTab.content, activeTab.filePath);
+      const suggestedName = getSuggestedFilename(activeTab);
+      const res = await window.pywebview.api.save_file_dialog(activeTab.content, activeTab.filePath, suggestedName);
       if (res && res.success) {
         activeTab.filePath = res.path;
         activeTab.title = res.filename;
@@ -1029,7 +1094,8 @@ async function handleSaveFileAs() {
   try {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_file_dialog) return;
 
-    const res = await window.pywebview.api.save_file_dialog(activeTab.content, '');
+    const suggestedName = getSuggestedFilename(activeTab);
+    const res = await window.pywebview.api.save_file_dialog(activeTab.content, '', suggestedName);
     if (res && res.success) {
       activeTab.filePath = res.path;
       activeTab.title = res.filename;
