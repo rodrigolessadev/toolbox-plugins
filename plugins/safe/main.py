@@ -470,6 +470,58 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
+    # -------------------------------------------------------------------------
+    # Métodos da API KeePassXC Hub
+    # -------------------------------------------------------------------------
+    def get_keepassxc_status(self) -> Dict[str, Any]:
+        """Consulta estado do KeePassXC Desktop em execução."""
+        try:
+            res = self._service.get_keepassxc_status()
+            return {"success": True, "data": res}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def associate_keepassxc(self, client_name: str = "Toolbox") -> Dict[str, Any]:
+        """Inicia processo de associação/pareamento com o KeePassXC."""
+        try:
+            res = self._service.associate_keepassxc(client_name=client_name)
+            return {"success": True, "data": res}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def search_keepassxc_entries(self, query: str = "", url: str = "") -> Dict[str, Any]:
+        """Busca credenciais no KeePassXC."""
+        try:
+            entries = self._service.search_keepassxc_entries(query=query, url=url)
+            return {"success": True, "data": entries}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def get_keepassxc_totp(self, entry_uuid: str) -> Dict[str, Any]:
+        """Consulta token TOTP de uma entrada no KeePassXC."""
+        try:
+            totp = self._service.get_keepassxc_totp(entry_uuid)
+            return {"success": bool(totp), "totp": totp}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def generate_keepassxc_password(self) -> Dict[str, Any]:
+        """Gera senha forte usando gerador do KeePassXC."""
+        try:
+            pwd = self._service.generate_keepassxc_password()
+            return {"success": bool(pwd), "password": pwd}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def lock_keepassxc_database(self) -> Dict[str, Any]:
+        """Solicita bloqueio do cofre no KeePassXC."""
+        try:
+            success = self._service.lock_keepassxc_database()
+            return {"success": success}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+
 
 SHIELD_CHECK_ICON_PATH = PLUGIN_DIR / "ui" / "assets" / "shield-check.ico"
 

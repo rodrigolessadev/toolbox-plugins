@@ -670,6 +670,7 @@ async function loadVaultData() {
     updateCategoryCounts();
     renderSecretsGrid();
   }
+  checkKeePassXCStatus();
 }
 
 function updateCategoryCounts() {
@@ -689,8 +690,214 @@ function updateCategoryCounts() {
 function selectCategory(cat, element) {
   activeCategory = cat;
   document.querySelectorAll('.category-item').forEach(c => c.classList.remove('active'));
-  element.classList.add('active');
-  renderSecretsGrid();
+  if (element) element.classList.add('active');
+
+  const grid = document.getElementById('secrets-grid');
+  const emptyState = document.getElementById('empty-state');
+  const kpxcPanel = document.getElementById('keepassxc-hub-panel');
+
+  if (cat === 'keepassxc') {
+    if (grid) grid.classList.add('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+    if (kpxcPanel) {
+      kpxcPanel.classList.remove('hidden');
+      kpxcPanel.style.display = 'flex';
+    }
+    checkKeePassXCStatus();
+  } else {
+    if (kpxcPanel) {
+      kpxcPanel.classList.add('hidden');
+      kpxcPanel.style.display = 'none';
+    }
+    renderSecretsGrid();
+  }
+}
+
+// ============================================================================
+// Hub KeePassXC — Funções Frontend
+// ============================================================================
+
+let kpxcStatusCache = null;
+
+async function checkKeePassXCStatus(manual = false) {
+  const dot = document.getElementById('kpxc-status-dot');
+  const title = document.getElementById('kpxc-status-title');
+  const desc = document.getElementById('kpxc-status-desc');
+  const badge = document.getElementById('count-keepassxc');
+  const btnLock = document.getElementById('btn-lock-kpxc');
+  const btnAssociate = document.getElementById('btn-associate-kpxc');
+  const helpBanner = document.getElementById('kpxc-help-banner');
+
+  if (manual && title) {
+    title.innerText = 'Verificando KeePassXC...';
+  }
+
+  try {
+    const res = await callApi('get_keepassxc_status');
+    if (res && res.success && res.data) {
+      kpxcStatusCache = res.data;
+      const data = res.data;
+
+      if (data.connected && data.unlocked) {
+        if (dot) dot.style.background = 'var(--success, #10b981)';
+        if (title) title.innerText = '🟢 Conectado ao KeePassXC (Cofre Aberto)';
+        if (desc) desc.innerText = `Sessão ativa e associada. ID: ${data.client_id || 'Toolbox'}`;
+        if (badge) { badge.innerText = '🟢'; badge.style.color = '#10b981'; }
+        if (btnLock) btnLock.style.display = 'inline-flex';
+        if (btnAssociate) btnAssociate.innerText = 'Reassociar com KeePassXC';
+        if (helpBanner) helpBanner.style.display = 'none';
+      } else if (data.connected && !data.unlocked) {
+        if (dot) dot.style.background = 'var(--warning, #f59e0b)';
+        if (title) title.innerText = '🟡 KeePassXC Aberto (Cofre Bloqueado)';
+        if (desc) desc.innerText = 'Desbloqueie seu cofre no aplicativo KeePassXC para acessar credenciais.';
+        if (badge) { badge.innerText = '🟡'; badge.style.color = '#f59e0b'; }
+        if (btnLock) btnLock.style.display = 'none';
+        if (helpBanner) helpBanner.style.display = 'none';
+      } else {
+        if (dot) dot.style.background = 'var(--danger, #ef4444)';
+        if (title) title.innerText = '🔴 KeePassXC Desconectado';
+        if (desc) desc.innerText = data.error || 'KeePassXC não está em execução ou a integração com o navegador está desabilitada.';
+        if (badge) { badge.innerText = '🔴'; badge.style.color = '#ef4444'; }
+        if (btnLock) btnLock.style.display = 'none';
+        if (helpBanner) helpBanner.style.display = 'block';
+      }
+    } else {
+      if (dot) dot.style.background = '#888';
+      if (title) title.innerText = 'KeePassXC Indisponível';
+      if (desc) desc.innerText = (res && res.message) || 'Módulo indisponível.';
+      if (helpBanner) helpBanner.style.display = 'block';
+    }
+  } catch (err) {
+    if (dot) dot.style.background = '#888';
+    if (title) title.innerText = 'Erro ao consultar KeePassXC';
+    if (desc) desc.innerText = String(err);
+    if (helpBanner) helpBanner.style.display = 'block';
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function handleAssociateKeePassXC() {
+  const btn = document.getElementById('btn-associate-kpxc');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Aguardando Autorização...';
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  showToast('Por favor, aprove o diálogo de pareamento que apareceu na janela do KeePassXC.', 'info');
+
+  try {
+    const res = await callApi('associate_keepassxc', 'Toolbox');
+    if (res && res.success) {
+      showToast('Associação com KeePassXC realizada com sucesso!', 'success');
+      await checkKeePassXCStatus();
+    } else {
+      showToast(res.message || 'Falha ao associar com KeePassXC.', 'error');
+    }
+  } catch (err) {
+    showToast(`Erro de associação: ${err}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="link-2"></i> Parear com KeePassXC';
+      if (window.lucide) window.lucide.createIcons();
+    }
+    await checkKeePassXCStatus();
+  }
+}
+
+async function handleLockKeePassXC() {
+  try {
+    const res = await callApi('lock_keepassxc_database');
+    if (res && res.success) {
+      showToast('Cofre do KeePassXC bloqueado.', 'info');
+      await checkKeePassXCStatus();
+    }
+  } catch (err) {
+    showToast(`Erro ao bloquear cofre: ${err}`, 'error');
+  }
+}
+
+async function handleGenerateKeePassXCPassword() {
+  try {
+    const res = await callApi('generate_keepassxc_password');
+    if (res && res.success && res.password) {
+      await callApi('copy_secret_to_clipboard', res.password, 30);
+      showToast('Senha forte gerada pelo KeePassXC e copiada para a área de transferência!', 'success');
+    } else {
+      showToast('Não foi possível gerar senha no KeePassXC.', 'warning');
+    }
+  } catch (err) {
+    showToast(`Erro ao gerar senha: ${err}`, 'error');
+  }
+}
+
+async function handleSearchKeePassXC() {
+  const input = document.getElementById('kpxc-search-input');
+  const resultsContainer = document.getElementById('kpxc-results-container');
+  const query = input ? input.value.trim() : '';
+
+  if (resultsContainer) {
+    resultsContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--fg-secondary);"><i data-lucide="loader" class="spin"></i> Consultando cofre do KeePassXC...</div>';
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  try {
+    const res = await callApi('search_keepassxc_entries', query);
+    if (res && res.success) {
+      const entries = res.data || [];
+      if (entries.length === 0) {
+        resultsContainer.innerHTML = `
+          <div style="text-align:center; padding: 24px; color: var(--fg-muted); font-size: 13px;">
+            Nenhuma entrada encontrada no KeePassXC para "<strong>${escapeHtml(query)}</strong>".
+          </div>
+        `;
+      } else {
+        resultsContainer.innerHTML = entries.map(e => `
+          <div class="kpxc-entry-card" style="background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div>
+              <strong style="color: var(--fg-primary); font-size: 14px; display: block;">${escapeHtml(e.name || 'Sem Título')}</strong>
+              <span style="color: var(--fg-secondary); font-size: 12px;">Login: <code>${escapeHtml(e.login || '(sem login)')}</code></span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              ${e.login ? `<button type="button" class="btn btn-secondary btn-sm" onclick="copyKeePassXCText('${escapeJs(e.login)}', 'Usuário')"><i data-lucide="user"></i> Copiar Login</button>` : ''}
+              ${e.password ? `<button type="button" class="btn btn-primary btn-sm" onclick="copyKeePassXCText('${escapeJs(e.password)}', 'Senha')"><i data-lucide="key"></i> Copiar Senha</button>` : ''}
+              ${e.uuid ? `<button type="button" class="btn btn-secondary btn-sm" onclick="fetchAndCopyKeePassXCTotp('${escapeJs(e.uuid)}')"><i data-lucide="clock"></i> TOTP</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      }
+    } else {
+      resultsContainer.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--danger); font-size: 13px;">${escapeHtml(res.message || 'Erro ao consultar KeePassXC.')}</div>`;
+    }
+  } catch (err) {
+    resultsContainer.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--danger); font-size: 13px;">Erro: ${escapeHtml(String(err))}</div>`;
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function escapeJs(str) {
+  if (!str) return '';
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+async function copyKeePassXCText(text, label) {
+  await callApi('copy_secret_to_clipboard', text, 15);
+  showToast(`${label} copiado! (Higienização em 15s)`, 'success');
+}
+
+async function fetchAndCopyKeePassXCTotp(uuid) {
+  try {
+    const res = await callApi('get_keepassxc_totp', uuid);
+    if (res && res.success && res.totp) {
+      await callApi('copy_secret_to_clipboard', res.totp, 30);
+      showToast(`Código TOTP (${res.totp}) copiado!`, 'success');
+    } else {
+      showToast('Entrada não possui token TOTP configurado.', 'warning');
+    }
+  } catch (err) {
+    showToast(`Erro ao obter TOTP: ${err}`, 'error');
+  }
 }
 
 function handleSearch(query) {

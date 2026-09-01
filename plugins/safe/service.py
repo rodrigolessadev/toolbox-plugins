@@ -45,6 +45,26 @@ except ImportError:
         except ImportError:
             importers = None
 
+try:
+    from shared.keepassxc_client import (
+        KeePassXCClient,
+        KeePassXCError,
+        KeePassXCNotRunningError,
+        KeePassXCLockedError,
+        KeePassXCAssociationError,
+    )
+except ImportError:
+    try:
+        from plugins.shared.keepassxc_client import (
+            KeePassXCClient,
+            KeePassXCError,
+            KeePassXCNotRunningError,
+            KeePassXCLockedError,
+            KeePassXCAssociationError,
+        )
+    except ImportError:
+        KeePassXCClient = None
+
 logger = safe_logger_module.get_logger("safe.service")
 
 
@@ -63,11 +83,18 @@ class SafeService:
     Serviço central do Cofre Seguro com gerenciamento de chave mestra em memória.
     """
 
-    def __init__(self, db_path: Optional[Union[str, Path]] = None):
+    def __init__(self, db_path: Optional[Union[str, Path]] = None, keepassxc_client: Optional[Any] = None):
         self.db = db.SafeDatabase(db_path)
         self._master_key: Optional[bytearray] = None
         self._last_activity_time: float = time.time()
         self._on_lock_listeners: List[Callable[[str], None]] = []
+        self._keepassxc_client: Optional[Any] = keepassxc_client
+        if self._keepassxc_client is None and KeePassXCClient:
+            try:
+                self._keepassxc_client = KeePassXCClient()
+            except Exception as e:
+                logger.debug(f"Aviso ao instanciar KeePassXCClient no SafeService: {e}")
+
         logger.info("SafeService inicializado.")
         
         # Inicializa o listener de bloqueio de sessão do Windows
@@ -867,4 +894,61 @@ class SafeService:
             "errors": errors,
             "message": f"{imported_count + updated_count} credenciais processadas com sucesso ({imported_count} criadas, {updated_count} atualizadas, {skipped_count} ignoradas).",
         }
+
+    # ========================================================================
+    # Hub e Integração com KeePassXC Desktop
+    # ========================================================================
+    def get_keepassxc_status(self) -> Dict[str, Any]:
+        """Consulta o estado da conexão e do cofre no KeePassXC Desktop."""
+        if not self._keepassxc_client:
+            return {"available": False, "connected": False, "unlocked": False, "error": "PyNaCl ou KeePassXCClient indisponível."}
+        try:
+            return self._keepassxc_client.get_database_status()
+        except Exception as exc:
+            return {"available": True, "connected": False, "unlocked": False, "error": str(exc)}
+
+    def associate_keepassxc(self, client_name: str = "Toolbox") -> Dict[str, Any]:
+        """Dispara o fluxo de associação/pareamento no KeePassXC."""
+        if not self._keepassxc_client:
+            raise RuntimeError("Cliente KeePassXC indisponível.")
+        return self._keepassxc_client.associate(client_name=client_name)
+
+    def search_keepassxc_entries(self, query: str = "", url: str = "") -> List[Dict[str, Any]]:
+        """Busca credenciais no KeePassXC Desktop com base na URL ou query informada."""
+        if not self._keepassxc_client:
+            return []
+        target_url = url or query or "http://localhost"
+        try:
+            entries = self._keepassxc_client.get_logins(url=target_url)
+            if query and not url:
+                q_low = query.strip().lower()
+                entries = [
+                    e for e in entries
+                    if q_low in (e.get("name") or "").lower()
+                    or q_low in (e.get("login") or "").lower()
+                    or q_low in (e.get("uuid") or "").lower()
+                ]
+            return entries
+        except Exception as exc:
+            logger.warning(f"Erro ao buscar entradas no KeePassXC: {exc}")
+            return []
+
+    def get_keepassxc_totp(self, entry_uuid: str) -> Optional[str]:
+        """Recupera o token TOTP atual de uma entrada no KeePassXC."""
+        if not self._keepassxc_client:
+            return None
+        return self._keepassxc_client.get_totp(entry_uuid)
+
+    def generate_keepassxc_password(self) -> Optional[str]:
+        """Gera uma senha forte usando o KeePassXC."""
+        if not self._keepassxc_client:
+            return None
+        return self._keepassxc_client.generate_password()
+
+    def lock_keepassxc_database(self) -> bool:
+        """Solicita o bloqueio do cofre no KeePassXC."""
+        if not self._keepassxc_client:
+            return False
+        return self._keepassxc_client.lock_database()
+
 

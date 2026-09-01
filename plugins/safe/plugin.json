@@ -1,7 +1,7 @@
 {
   "name": "Cofre Seguro",
-  "version": "1.8.2",
-  "description": "Cofre de senhas e credenciais com criptografia AES-256-GCM em repouso, Windows Hello e API para outros plugins.",
+  "version": "1.9.0",
+  "description": "Cofre de senhas e Hub de integração com KeePassXC Desktop com criptografia ponta a ponta e API para outros plugins.",
   "language": "python",
   "entry": "main.py",
   "icon": "shield-check",

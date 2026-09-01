@@ -220,6 +220,10 @@
             <span class="badge" id="count-note">0</span>
           </button>
           <hr class="nav-divider">
+          <button class="category-item" id="nav-item-keepassxc" onclick="selectCategory('keepassxc', this)">
+            <i data-lucide="shield-check"></i> Hub KeePassXC
+            <span class="badge" id="count-keepassxc">⚪</span>
+          </button>
           <button class="category-item" onclick="openModal('modal-grants')">
             <i data-lucide="share-2"></i> Permissões de Plugins
           </button>
@@ -228,6 +232,74 @@
 
       <!-- Grade de Registros -->
       <main class="vault-content">
+        <!-- Painel Hub KeePassXC -->
+        <div id="keepassxc-hub-panel" class="hidden" style="display: none; flex-direction: column; gap: 20px; padding: 4px;">
+          <!-- Card de Status do KeePassXC -->
+          <div class="kpxc-status-card" style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;">
+            <div class="kpxc-status-header" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
+              <div class="kpxc-status-indicator" style="display: flex; align-items: center; gap: 12px;">
+                <span id="kpxc-status-dot" style="width: 14px; height: 14px; border-radius: 50%; background: #888; display: inline-block;"></span>
+                <div>
+                  <h3 id="kpxc-status-title" style="font-size: 16px; font-weight: 600; margin-bottom: 2px;">Consultando KeePassXC...</h3>
+                  <p id="kpxc-status-desc" style="font-size: 12px; color: var(--fg-secondary);">Verificando comunicação IPC com o KeePassXC Desktop</p>
+                </div>
+              </div>
+              <div class="kpxc-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-kpxc" onclick="checkKeePassXCStatus(true)">
+                  <i data-lucide="refresh-cw"></i> Atualizar Status
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-associate-kpxc" onclick="handleAssociateKeePassXC()">
+                  <i data-lucide="link-2"></i> Parear com KeePassXC
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" id="btn-lock-kpxc" onclick="handleLockKeePassXC()" style="display: none;">
+                  <i data-lucide="lock"></i> Bloquear KeePassXC
+                </button>
+              </div>
+            </div>
+
+            <!-- Banner de Instrução quando Desconectado -->
+            <div id="kpxc-help-banner" class="kpxc-help-box" style="display: none; margin-top: 14px; background: var(--bg-elev); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+              <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <i data-lucide="info" style="color: var(--accent); width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px;"></i>
+                <div style="font-size: 12px; line-height: 1.5; color: var(--fg-secondary);">
+                  <strong style="color: var(--fg-primary); display: block; margin-bottom: 4px;">Como conectar ao KeePassXC:</strong>
+                  1. Abra o aplicativo <strong>KeePassXC</strong> no seu computador.<br>
+                  2. Acesse <em>Ferramentas > Opções > Integração com o Navegador</em>.<br>
+                  3. Marque a opção <strong>"Habilitar integração com o navegador"</strong>.<br>
+                  4. Clique em <em>"Parear com KeePassXC"</em> acima e autorize a caixa de diálogo do KeePassXC.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Seção de Busca Rápida de Credenciais no KeePassXC -->
+          <div class="kpxc-search-section" style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="font-size: 14px; font-weight: 600; color: var(--fg-primary); display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="search" style="width: 16px; height: 16px;"></i> Busca de Credenciais no KeePassXC
+              </h4>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="handleGenerateKeePassXCPassword()">
+                <i data-lucide="wand-2"></i> Gerar Senha Forte
+              </button>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+              <div class="search-input-wrapper" style="flex: 1; position: relative;">
+                <input type="text" id="kpxc-search-input" class="form-input" style="width: 100%; padding-left: 12px;" placeholder="Digite URL, domínio ou nome da entrada (ex: aws.amazon.com, github)..." onkeydown="if(event.key==='Enter') handleSearchKeePassXC()">
+              </div>
+              <button type="button" class="btn btn-primary" onclick="handleSearchKeePassXC()">
+                <i data-lucide="search"></i> Buscar
+              </button>
+            </div>
+
+            <!-- Resultados da Busca -->
+            <div id="kpxc-results-container" class="kpxc-results-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="text-align: center; padding: 24px; color: var(--fg-muted); font-size: 13px;">
+                Digite uma URL ou termo acima e clique em <strong>Buscar</strong> para consultar o cofre ativo do KeePassXC.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="secrets-grid" class="secrets-grid">
           <!-- Inserido dinamicamente via JS -->
         </div>
