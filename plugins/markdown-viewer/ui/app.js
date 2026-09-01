@@ -134,6 +134,8 @@ async function loadPluginVersion() {
       const res = await window.pywebview.api.get_plugin_version();
       if (res.success && res.version) {
         appVersion = `v${res.version}`;
+        const badge = document.getElementById('pluginVersionBadge');
+        if (badge) badge.textContent = appVersion;
         updateTitle();
       }
     }
@@ -919,16 +921,24 @@ function updateStats() {
 function updateTitle() {
   const el = document.getElementById('docTitle');
   const activeTab = getActiveTab();
-  if (el && activeTab) {
-    const displayName = getTabDisplayName(activeTab);
-    const mod = activeTab.isDirty ? ' •' : '';
+  const displayName = activeTab ? getTabDisplayName(activeTab) : 'sem-titulo.md';
+  const mod = (activeTab && activeTab.isDirty) ? ' •' : '';
+  
+  if (el) {
     el.textContent = `${displayName}${mod}`;
-    el.title = activeTab.filePath || displayName;
-    const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : ' — Visualizador de Markdown';
-    document.title = `${displayName}${mod}${versionSuffix}`;
-  } else {
-    const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : 'Visualizador de Markdown';
-    document.title = versionSuffix;
+    el.title = (activeTab && activeTab.filePath) ? activeTab.filePath : displayName;
+  }
+
+  const versionSuffix = appVersion ? ` ${appVersion}` : '';
+  const fullTitle = `${displayName}${mod} — Visualizador de Markdown${versionSuffix}`;
+  document.title = fullTitle;
+
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.set_window_title) {
+    try {
+      window.pywebview.api.set_window_title(fullTitle);
+    } catch (e) {
+      // Ignora falhas se a janela já estiver fechando
+    }
   }
 }
 

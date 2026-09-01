@@ -1,6 +1,6 @@
 {
   "name": "Visualizador de Markdown",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Visualizador e editor de Markdown com títulos dinâmicos de abas, retenção de sessão (Hot Exit) e suporte a GFM.",
   "language": "python",
   "entry": "main.py",

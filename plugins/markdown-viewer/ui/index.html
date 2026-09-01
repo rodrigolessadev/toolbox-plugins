@@ -12,6 +12,12 @@
     <!-- Top Toolbar -->
     <header class="top-toolbar">
       <div class="toolbar-left">
+        <div class="app-brand" style="display: inline-flex; align-items: center; gap: 6px; margin-right: 6px;">
+          <span data-icon="file-text" style="color: var(--accent);"></span>
+          <span class="app-brand-title" style="font-weight: 700; font-size: 13px; color: var(--fg);">Markdown</span>
+          <span id="pluginVersionBadge" class="badge badge-accent" style="font-size: 11px;">v1.6.1</span>
+        </div>
+        <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 4px;"></div>
         <button type="button" class="btn btn-secondary btn-sm" onclick="handleNewFile()" title="Novo Documento (Ctrl+N)">
           <span data-icon="plus"></span> Novo
         </button>
