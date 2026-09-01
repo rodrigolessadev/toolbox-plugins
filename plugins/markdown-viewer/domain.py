@@ -76,7 +76,7 @@ def analyze_markdown(content: str) -> dict:
     lines = text.splitlines()
     words = re.findall(r"\b\w+\b", text)
     headings = re.findall(r"^(#{1,6})\s+(.+)$", text, flags=re.MULTILINE)
-    code_blocks = len(re.findall(r"^```", text, flags=re.MULTILINE)) // 2
+    code_blocks = len(re.findall(r"^\s*(?:`{3,}|~{3,})", text, flags=re.MULTILINE)) // 2
 
     # Tempo estimado de leitura (base média: 200 palavras/minuto)
     w_count = len(words)
