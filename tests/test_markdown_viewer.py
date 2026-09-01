@@ -124,6 +124,7 @@ def test_markdown_viewer_ui_tab_elements():
     assert 'id="btnNewTab"' in html_content
     assert 'id="tabContextMenu"' in html_content
     assert 'id="modalCloseConfirm"' in html_content
+    assert 'id="pluginVersionBadge"' not in html_content
 
     js_content = ui_js.read_text(encoding="utf-8")
     assert "createTab" in js_content
@@ -132,6 +133,8 @@ def test_markdown_viewer_ui_tab_elements():
     assert "openOrFocusFile" in js_content
     assert "handleSaveAllFiles" in js_content
     assert "handleTabContextMenu" in js_content
+    assert "tabBarContainer.addEventListener('dblclick'" in js_content
+    assert "document.title =" in js_content
 
     css_content = ui_css.read_text(encoding="utf-8")
     assert ".tab-bar-container" in css_content

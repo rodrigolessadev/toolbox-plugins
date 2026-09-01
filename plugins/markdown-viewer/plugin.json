@@ -1,6 +1,6 @@
 {
   "name": "Visualizador de Markdown",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Visualizador e editor de Markdown com retenção de sessão (Hot Exit), suporte a GFM, tabelas, syntax highlighting e alertas.",
   "language": "python",
   "entry": "main.py",
