@@ -188,3 +188,15 @@ def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
     assert "closeFencePattern" in parser_content
 
 
+def test_dynamic_tab_title_helpers():
+    ui_js = ROOT / "plugins" / "markdown-viewer" / "ui" / "app.js"
+    assert ui_js.exists()
+    js_content = ui_js.read_text(encoding="utf-8")
+
+    assert "extractFirstMarkdownTitle" in js_content
+    assert "sanitizeHeadingText" in js_content
+    assert "getTabDisplayName" in js_content
+    assert "getSuggestedFilename" in js_content
+
+
+

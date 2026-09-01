@@ -69,7 +69,7 @@ class MarkdownViewerApi(BasePluginApi):
         except Exception as exc:
             return {"success": False, "error": f"Erro ao abrir arquivo: {str(exc)}"}
 
-    def save_file_dialog(self, content: str, current_path: str = "") -> dict:
+    def save_file_dialog(self, content: str, current_path: str = "", default_filename: str = "documento.md") -> dict:
         """Salva o arquivo atual ou solicita local para salvar novo arquivo."""
         try:
             if current_path and Path(current_path).exists():
@@ -79,9 +79,13 @@ class MarkdownViewerApi(BasePluginApi):
                 return {"success": False, "error": "Janela principal não encontrada."}
 
             win = webview.windows[0]
+            clean_filename = default_filename or "documento.md"
+            if not clean_filename.lower().endswith(".md"):
+                clean_filename += ".md"
+
             result = win.create_file_dialog(
                 webview.SAVE_DIALOG,
-                save_filename="documento.md",
+                save_filename=clean_filename,
                 file_types=("Markdown (*.md)", "Todos os arquivos (*.*)")
             )
             if not result:
