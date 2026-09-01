@@ -1,7 +1,7 @@
 {
-  "name": "Cofre Seguro",
-  "version": "1.9.0",
-  "description": "Cofre de senhas e Hub de integração com KeePassXC Desktop com criptografia ponta a ponta e API para outros plugins.",
+  "name": "Cofre Seguro (Safe)",
+  "version": "1.10.0",
+  "description": "Gerenciador local e seguro de credenciais, certificados e segredos, com visualização unificada e integração em tempo real com o KeePassXC Desktop.",
   "language": "python",
   "entry": "main.py",
   "icon": "shield-check",

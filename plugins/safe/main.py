@@ -521,6 +521,22 @@ class SafePluginApi(BasePluginApi):
         except Exception as e:
             return {"success": False, "message": str(e)}
 
+    def import_keepassxc_entry_to_vault(self, entry: Dict[str, Any], tags: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Importa e persiste uma credencial do KeePassXC diretamente no cofre local."""
+        try:
+            res = self._service.import_keepassxc_entry_to_vault(entry, tags=tags)
+            return {"success": True, "data": res, "message": "Credencial salva no Cofre Central com sucesso!"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def search_unified_entries(self, query: str = "", source_filter: str = "all") -> Dict[str, Any]:
+        """Busca unificada em segredos locais e KeePassXC."""
+        try:
+            return self._service.search_unified_entries(query=query, source_filter=source_filter)
+        except Exception as e:
+            return {"success": False, "message": str(e), "local_entries": [], "keepassxc_entries": []}
+
+
 
 
 SHIELD_CHECK_ICON_PATH = PLUGIN_DIR / "ui" / "assets" / "shield-check.ico"

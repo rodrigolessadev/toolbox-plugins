@@ -149,3 +149,47 @@ def test_safe_plugin_api_keepassxc_bridge(tmp_path: Path):
     # lock_keepassxc_database
     lk = api.lock_keepassxc_database()
     assert lk["success"] is True
+
+
+def test_safe_import_keepassxc_entry_and_unified_search(tmp_path: Path):
+    """Valida a importação direta de uma credencial do KeePassXC para o banco local e a busca unificada."""
+    mock_client = MagicMock()
+    mock_client.get_database_status.return_value = {"available": True, "connected": True, "unlocked": True}
+    mock_client.get_logins.return_value = [
+        {"name": "AWS Production", "login": "admin_aws", "password": "secret_pwd", "uuid": "u-123"}
+    ]
+
+    db_path = tmp_path / "test_safe.db"
+    service = SafeService(db_path=db_path, keepassxc_client=mock_client)
+    service.setup_vault(password="StrongMasterPassword123!", use_hello=False)
+
+    # 1. Teste de importação de credencial do KeePassXC para a tabela safe_entries
+    kpxc_item = {"name": "AWS Production", "login": "admin_aws", "password": "secret_pwd", "uuid": "u-123"}
+    res = service.import_keepassxc_entry_to_vault(kpxc_item, tags=["cloud", "prod"])
+    assert res is not None
+    assert res["id"] is not None
+
+    # Verifica se a credencial foi gravada na base local e pode ser lida
+    sec = service.get_secret(res["id"])
+    assert sec["title"] == "AWS Production"
+    assert sec["username_or_key"] == "admin_aws"
+    assert "keepassxc" in sec["tags"]
+    assert "cloud" in sec["tags"]
+
+    # 2. Teste de busca unificada (local + keepassxc)
+    unified = service.search_unified_entries(query="AWS", source_filter="all")
+    assert unified["success"] is True
+    assert len(unified["local_entries"]) == 1
+    assert unified["local_entries"][0]["source"] == "local"
+    assert len(unified["keepassxc_entries"]) == 1
+    assert unified["keepassxc_entries"][0]["source"] == "keepassxc"
+
+    # 3. Teste da API JS Bridge
+    api = SafePluginApi(service=service)
+    api_import = api.import_keepassxc_entry_to_vault({"name": "GitHub", "login": "gituser", "password": "123"})
+    assert api_import["success"] is True
+
+    api_search = api.search_unified_entries(query="GitHub", source_filter="local")
+    assert api_search["success"] is True
+    assert len(api_search["local_entries"]) == 1
+
