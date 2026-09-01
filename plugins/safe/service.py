@@ -951,4 +951,71 @@ class SafeService:
             return False
         return self._keepassxc_client.lock_database()
 
+    @property
+    def is_unlocked(self) -> bool:
+        """Retorna True se o cofre estiver com a Master Key carregada e ativo."""
+        return self._master_key is not None
+
+    def import_keepassxc_entry_to_vault(self, entry: Dict[str, Any], tags: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Criptografa e persiste uma credencial obtida do KeePassXC no banco central do Toolbox."""
+        if not self.is_unlocked:
+            raise RuntimeError("Cofre bloqueado. Desbloqueie o cofre antes de importar.")
+
+        title = entry.get("name") or entry.get("title") or "Credencial KeePassXC"
+        username = entry.get("login") or entry.get("username") or ""
+        password = entry.get("password") or ""
+        url = entry.get("url") or ""
+        uuid_val = entry.get("uuid") or ""
+        notes = f"Importado do KeePassXC" + (f" (UUID: {uuid_val})" if uuid_val else "")
+
+        payload = {
+            "username": username,
+            "password": password,
+            "url": url,
+            "notes": notes,
+            "custom_fields": entry.get("stringFields", {})
+        }
+
+        entry_tags = ["keepassxc"] + (tags or [])
+        return self.save_secret(
+            title=title,
+            category="password",
+            username_or_key=username,
+            secret_payload=payload,
+            tags=entry_tags
+        )
+
+    def search_unified_entries(self, query: str = "", source_filter: str = "all") -> Dict[str, Any]:
+        """Busca unificada em segredos locais e no KeePassXC (se conectado)."""
+        local_entries = []
+        kpxc_entries = []
+        kpxc_status = self.get_keepassxc_status()
+
+        if source_filter in ("all", "local"):
+            if self.is_unlocked:
+                local_entries = self.list_secrets(search_query=query)
+                for e in local_entries:
+                    e["source"] = "local"
+
+        if source_filter in ("all", "keepassxc") and kpxc_status.get("connected") and kpxc_status.get("unlocked"):
+            raw_kpxc = self.search_keepassxc_entries(query=query)
+            for e in raw_kpxc:
+                kpxc_entries.append({
+                    "id": f"kpxc_{e.get('uuid') or e.get('name')}",
+                    "title": e.get("name") or "Sem título",
+                    "username_or_key": e.get("login") or "",
+                    "category": "password",
+                    "source": "keepassxc",
+                    "raw_entry": e,
+                    "has_totp": bool(e.get("uuid"))
+                })
+
+        return {
+            "success": True,
+            "local_entries": local_entries,
+            "keepassxc_entries": kpxc_entries,
+            "keepassxc_status": kpxc_status
+        }
+
+
 

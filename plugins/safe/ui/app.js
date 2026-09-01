@@ -660,17 +660,56 @@ function startAutoLockTimer(timeoutSeconds, initialRemaining) {
 }
 
 // ============================================================================
-// Workspace & Gerenciador de Segredos
+// Workspace & Gerenciador de Segredos (Unificado com KeePassXC)
 // ============================================================================
 
-async function loadVaultData() {
+let currentSourceFilter = 'all';
+let cachedKpxcEntries = [];
+
+async function loadVaultData(searchQuery = '') {
   const res = await callApi('list_secrets', 'all');
   if (res && res.success) {
     cachedSecrets = res.data || [];
     updateCategoryCounts();
-    renderSecretsGrid();
   }
-  checkKeePassXCStatus();
+
+  // Se KeePassXC estiver conectado e desbloqueado, carrega entradas para exibição unificada
+  await checkKeePassXCStatus();
+  if (kpxcStatusCache && kpxcStatusCache.connected && kpxcStatusCache.unlocked) {
+    try {
+      const kpxcRes = await callApi('search_keepassxc_entries', searchQuery || '');
+      if (kpxcRes && kpxcRes.success) {
+        cachedKpxcEntries = kpxcRes.data || [];
+      } else {
+        cachedKpxcEntries = [];
+      }
+    } catch (e) {
+      cachedKpxcEntries = [];
+    }
+  } else {
+    cachedKpxcEntries = [];
+  }
+
+  updateUnifiedStatusText();
+  renderSecretsGrid(searchQuery);
+}
+
+function setSourceFilter(filter) {
+  currentSourceFilter = filter;
+  document.querySelectorAll('#sourceFilterGroup .pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.id === `filter-src-${filter}`);
+  });
+  renderSecretsGrid(document.getElementById('search-input')?.value || '');
+}
+
+function updateUnifiedStatusText() {
+  const el = document.getElementById('unified-status-text');
+  if (!el) return;
+  if (kpxcStatusCache && kpxcStatusCache.connected && kpxcStatusCache.unlocked) {
+    el.innerHTML = `<span style="color: #10b981; font-weight: 500;">● KeePassXC Conectado</span> (${cachedKpxcEntries.length} entradas)`;
+  } else {
+    el.innerHTML = `<span style="color: var(--fg-muted);">KeePassXC offline</span>`;
+  }
 }
 
 function updateCategoryCounts() {
@@ -695,10 +734,12 @@ function selectCategory(cat, element) {
   const grid = document.getElementById('secrets-grid');
   const emptyState = document.getElementById('empty-state');
   const kpxcPanel = document.getElementById('keepassxc-hub-panel');
+  const sourceFilterToolbar = document.getElementById('sourceFilterGroup');
 
   if (cat === 'keepassxc') {
     if (grid) grid.classList.add('hidden');
     if (emptyState) emptyState.classList.add('hidden');
+    if (sourceFilterToolbar) sourceFilterToolbar.style.display = 'none';
     if (kpxcPanel) {
       kpxcPanel.classList.remove('hidden');
       kpxcPanel.style.display = 'flex';
@@ -709,7 +750,8 @@ function selectCategory(cat, element) {
       kpxcPanel.classList.add('hidden');
       kpxcPanel.style.display = 'none';
     }
-    renderSecretsGrid();
+    if (sourceFilterToolbar) sourceFilterToolbar.style.display = 'flex';
+    renderSecretsGrid(document.getElementById('search-input')?.value || '');
   }
 }
 
@@ -752,57 +794,42 @@ async function checkKeePassXCStatus(manual = false) {
         if (desc) desc.innerText = 'Desbloqueie seu cofre no aplicativo KeePassXC para acessar credenciais.';
         if (badge) { badge.innerText = '🟡'; badge.style.color = '#f59e0b'; }
         if (btnLock) btnLock.style.display = 'none';
+        if (btnAssociate) btnAssociate.innerText = 'Parear com KeePassXC';
         if (helpBanner) helpBanner.style.display = 'none';
       } else {
         if (dot) dot.style.background = 'var(--danger, #ef4444)';
-        if (title) title.innerText = '🔴 KeePassXC Desconectado';
-        if (desc) desc.innerText = data.error || 'KeePassXC não está em execução ou a integração com o navegador está desabilitada.';
+        if (title) title.innerText = '🔴 KeePassXC Não Detectado';
+        if (desc) desc.innerText = 'Abra o KeePassXC com a opção "Integração com o navegador" ativada.';
         if (badge) { badge.innerText = '🔴'; badge.style.color = '#ef4444'; }
         if (btnLock) btnLock.style.display = 'none';
+        if (btnAssociate) btnAssociate.innerText = 'Parear com KeePassXC';
         if (helpBanner) helpBanner.style.display = 'block';
       }
     } else {
       if (dot) dot.style.background = '#888';
-      if (title) title.innerText = 'KeePassXC Indisponível';
-      if (desc) desc.innerText = (res && res.message) || 'Módulo indisponível.';
-      if (helpBanner) helpBanner.style.display = 'block';
+      if (title) title.innerText = '⚪ KeePassXC Indisponível';
+      if (badge) { badge.innerText = '⚪'; badge.style.color = '#888'; }
     }
   } catch (err) {
-    if (dot) dot.style.background = '#888';
-    if (title) title.innerText = 'Erro ao consultar KeePassXC';
-    if (desc) desc.innerText = String(err);
-    if (helpBanner) helpBanner.style.display = 'block';
+    console.error('Erro ao verificar KeePassXC:', err);
   }
+  updateUnifiedStatusText();
   if (window.lucide) window.lucide.createIcons();
 }
 
 async function handleAssociateKeePassXC() {
-  const btn = document.getElementById('btn-associate-kpxc');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<i data-lucide="loader" class="spin"></i> Aguardando Autorização...';
-    if (window.lucide) window.lucide.createIcons();
-  }
-
-  showToast('Por favor, aprove o diálogo de pareamento que apareceu na janela do KeePassXC.', 'info');
-
+  showToast('Iniciando pareamento com KeePassXC...', 'info');
   try {
-    const res = await callApi('associate_keepassxc', 'Toolbox');
+    const res = await callApi('associate_keepassxc', 'Toolbox Safe');
     if (res && res.success) {
-      showToast('Associação com KeePassXC realizada com sucesso!', 'success');
+      showToast(res.message || 'Associação concluída com sucesso!', 'success');
       await checkKeePassXCStatus();
+      await loadVaultData();
     } else {
-      showToast(res.message || 'Falha ao associar com KeePassXC.', 'error');
+      showToast(res.message || 'Falha ao parear com KeePassXC. Verifique se autorizou a solicitação na janela do KeePassXC.', 'error');
     }
   } catch (err) {
-    showToast(`Erro de associação: ${err}`, 'error');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="link-2"></i> Parear com KeePassXC';
-      if (window.lucide) window.lucide.createIcons();
-    }
-    await checkKeePassXCStatus();
+    showToast(`Erro ao parear: ${err}`, 'error');
   }
 }
 
@@ -812,6 +839,9 @@ async function handleLockKeePassXC() {
     if (res && res.success) {
       showToast('Cofre do KeePassXC bloqueado.', 'info');
       await checkKeePassXCStatus();
+      await loadVaultData();
+    } else {
+      showToast(res.message || 'Não foi possível bloquear o KeePassXC.', 'warning');
     }
   } catch (err) {
     showToast(`Erro ao bloquear cofre: ${err}`, 'error');
@@ -859,10 +889,13 @@ async function handleSearchKeePassXC() {
               <strong style="color: var(--fg-primary); font-size: 14px; display: block;">${escapeHtml(e.name || 'Sem Título')}</strong>
               <span style="color: var(--fg-secondary); font-size: 12px;">Login: <code>${escapeHtml(e.login || '(sem login)')}</code></span>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               ${e.login ? `<button type="button" class="btn btn-secondary btn-sm" onclick="copyKeePassXCText('${escapeJs(e.login)}', 'Usuário')"><i data-lucide="user"></i> Copiar Login</button>` : ''}
               ${e.password ? `<button type="button" class="btn btn-primary btn-sm" onclick="copyKeePassXCText('${escapeJs(e.password)}', 'Senha')"><i data-lucide="key"></i> Copiar Senha</button>` : ''}
               ${e.uuid ? `<button type="button" class="btn btn-secondary btn-sm" onclick="fetchAndCopyKeePassXCTotp('${escapeJs(e.uuid)}')"><i data-lucide="clock"></i> TOTP</button>` : ''}
+              <button type="button" class="btn btn-secondary btn-sm" onclick="handleImportKeePassXCEntryString('${escapeJs(JSON.stringify(e))}')" title="Salvar no Cofre Central do Toolbox">
+                <i data-lucide="download"></i> Salvar no Cofre
+              </button>
             </div>
           </div>
         `).join('');
@@ -900,8 +933,35 @@ async function fetchAndCopyKeePassXCTotp(uuid) {
   }
 }
 
-function handleSearch(query) {
-  renderSecretsGrid(query);
+async function handleImportKeePassXCEntryString(entryJsonStr) {
+  try {
+    const entry = JSON.parse(entryJsonStr);
+    const res = await callApi('import_keepassxc_entry_to_vault', entry);
+    if (res && res.success) {
+      showToast('Credencial salva no Cofre Central com sucesso!', 'success');
+      await loadVaultData(document.getElementById('search-input')?.value || '');
+    } else {
+      showToast(res.message || 'Erro ao importar credencial.', 'error');
+    }
+  } catch (err) {
+    showToast(`Erro ao importar credencial: ${err}`, 'error');
+  }
+}
+
+async function handleSearch(query) {
+  const q = (query || '').trim();
+  if (kpxcStatusCache && kpxcStatusCache.connected && kpxcStatusCache.unlocked && (currentSourceFilter === 'all' || currentSourceFilter === 'keepassxc')) {
+    try {
+      const kpxcRes = await callApi('search_keepassxc_entries', q);
+      if (kpxcRes && kpxcRes.success) {
+        cachedKpxcEntries = kpxcRes.data || [];
+      }
+    } catch (e) {
+      // Ignora erro
+    }
+  }
+  updateUnifiedStatusText();
+  renderSecretsGrid(q);
 }
 
 function renderSecretsGrid(searchQuery = '') {
@@ -909,17 +969,40 @@ function renderSecretsGrid(searchQuery = '') {
   const emptyState = document.getElementById('empty-state');
   grid.innerHTML = '';
 
-  const q = searchQuery.toLowerCase().trim();
-  const filtered = cachedSecrets.filter(s => {
-    const matchesCat = activeCategory === 'all' || s.category === activeCategory;
-    const matchesSearch = !q || 
-      (s.title && s.title.toLowerCase().includes(q)) || 
-      (s.username_or_key && s.username_or_key.toLowerCase().includes(q)) ||
-      (s.tags && s.tags.some(t => t.toLowerCase().includes(q)));
-    return matchesCat && matchesSearch;
-  });
+  const q = (searchQuery || '').toLowerCase().trim();
 
-  if (filtered.length === 0) {
+  let filteredLocals = [];
+  if (currentSourceFilter === 'all' || currentSourceFilter === 'local') {
+    filteredLocals = cachedSecrets.filter(s => {
+      const matchesCat = activeCategory === 'all' || s.category === activeCategory;
+      const matchesSearch = !q || 
+        (s.title && s.title.toLowerCase().includes(q)) || 
+        (s.username_or_key && s.username_or_key.toLowerCase().includes(q)) ||
+        (s.tags && s.tags.some(t => t.toLowerCase().includes(q)));
+      return matchesCat && matchesSearch;
+    }).map(s => ({ ...s, _isLocal: true }));
+  }
+
+  let filteredKpxc = [];
+  if ((currentSourceFilter === 'all' || currentSourceFilter === 'keepassxc') && (activeCategory === 'all' || activeCategory === 'password')) {
+    filteredKpxc = cachedKpxcEntries.filter(e => {
+      const name = (e.name || '').toLowerCase();
+      const login = (e.login || '').toLowerCase();
+      const uuid = (e.uuid || '').toLowerCase();
+      return !q || name.includes(q) || login.includes(q) || uuid.includes(q);
+    }).map(e => ({
+      id: `kpxc_${e.uuid || e.name}`,
+      title: e.name || 'Sem Título',
+      username_or_key: e.login || '',
+      category: 'password',
+      _isLocal: false,
+      rawEntry: e
+    }));
+  }
+
+  const combined = [...filteredLocals, ...filteredKpxc];
+
+  if (combined.length === 0) {
     grid.classList.add('hidden');
     emptyState.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
@@ -929,41 +1012,70 @@ function renderSecretsGrid(searchQuery = '') {
   grid.classList.remove('hidden');
   emptyState.classList.add('hidden');
 
-  filtered.forEach(secret => {
+  combined.forEach(item => {
     const card = document.createElement('div');
     card.className = 'secret-card';
 
-    const catLabels = {
-      password: 'Senha',
-      api_key: 'API Key',
-      token: 'Token',
-      certificate: 'Certificado',
-      note: 'Nota Segura',
-      general: 'Geral'
-    };
+    if (item._isLocal) {
+      const catLabels = {
+        password: 'Senha',
+        api_key: 'API Key',
+        token: 'Token',
+        certificate: 'Certificado',
+        note: 'Nota Segura',
+        general: 'Geral'
+      };
+      const catLabel = catLabels[item.category] || 'Geral';
+      const userDisplay = item.username_or_key ? escapeHtml(item.username_or_key) : '<span style="color:var(--fg-muted)">Sem login</span>';
 
-    const catLabel = catLabels[secret.category] || 'Geral';
-    const userDisplay = secret.username_or_key ? escapeHtml(secret.username_or_key) : '<span style="color:var(--fg-muted)">Sem login</span>';
-
-    card.innerHTML = `
-      <div class="card-top">
-        <div class="card-title-group">
-          <h4>${escapeHtml(secret.title)}</h4>
-          <div class="card-user">${userDisplay}</div>
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="card-title-group">
+            <h4>${escapeHtml(item.title)}</h4>
+            <div class="card-user">${userDisplay}</div>
+          </div>
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <span class="badge-source badge-source-local">🔒 Local</span>
+            <span class="category-badge ${item.category}">${catLabel}</span>
+          </div>
         </div>
-        <span class="category-badge ${secret.category}">${catLabel}</span>
-      </div>
 
-      <div class="card-footer">
-        <button class="btn btn-secondary btn-sm" onclick="viewSecretDetails('${secret.id}')">
-          <i data-lucide="eye"></i> Ver Segredo
-        </button>
-        <div class="actions">
-          <button class="btn-icon-sm" onclick="editSecret('${secret.id}')" title="Editar"><i data-lucide="edit-2"></i></button>
-          <button class="btn-icon-sm" onclick="deleteSecretConfirm('${secret.id}')" title="Excluir"><i data-lucide="trash-2"></i></button>
+        <div class="card-footer">
+          <button class="btn btn-secondary btn-sm" onclick="viewSecretDetails('${item.id}')">
+            <i data-lucide="eye"></i> Ver Segredo
+          </button>
+          <div class="actions">
+            <button class="btn-icon-sm" onclick="editSecret('${item.id}')" title="Editar"><i data-lucide="edit-2"></i></button>
+            <button class="btn-icon-sm" onclick="deleteSecretConfirm('${item.id}')" title="Excluir"><i data-lucide="trash-2"></i></button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      // Card do KeePassXC
+      const userDisplay = item.username_or_key ? `<code>${escapeHtml(item.username_or_key)}</code>` : '<span style="color:var(--fg-muted)">Sem login</span>';
+      const entryJson = escapeJs(JSON.stringify(item.rawEntry));
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="card-title-group">
+            <h4>${escapeHtml(item.title)}</h4>
+            <div class="card-user">${userDisplay}</div>
+          </div>
+          <span class="badge-source badge-source-kpxc"><i data-lucide="shield-check"></i> KeePassXC</span>
+        </div>
+
+        <div class="card-footer" style="flex-wrap: wrap; gap: 6px;">
+          <div style="display: flex; gap: 6px;">
+            ${item.rawEntry.login ? `<button type="button" class="btn btn-secondary btn-sm" onclick="copyKeePassXCText('${escapeJs(item.rawEntry.login)}', 'Usuário')" title="Copiar Usuário"><i data-lucide="user"></i></button>` : ''}
+            ${item.rawEntry.password ? `<button type="button" class="btn btn-primary btn-sm" onclick="copyKeePassXCText('${escapeJs(item.rawEntry.password)}', 'Senha')" title="Copiar Senha"><i data-lucide="key"></i></button>` : ''}
+            ${item.rawEntry.uuid ? `<button type="button" class="btn btn-secondary btn-sm" onclick="fetchAndCopyKeePassXCTotp('${escapeJs(item.rawEntry.uuid)}')" title="Copiar Código TOTP"><i data-lucide="clock"></i> TOTP</button>` : ''}
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleImportKeePassXCEntryString('${entryJson}')" title="Salvar no Cofre Central do Toolbox">
+            <i data-lucide="download"></i> Salvar no Cofre
+          </button>
+        </div>
+      `;
+    }
 
     grid.appendChild(card);
   });
@@ -1547,4 +1659,9 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+// Exports globais para chamadas inline no HTML
+window.setSourceFilter = setSourceFilter;
+window.handleImportKeePassXCEntryString = handleImportKeePassXCEntryString;
+
 
