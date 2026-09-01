@@ -11,3 +11,11 @@ from .theme_utils import (
     create_info_banner,
     create_modal_window
 )
+from .keepassxc_client import (
+    KeePassXCClient,
+    KeePassXCError,
+    KeePassXCNotRunningError,
+    KeePassXCLockedError,
+    KeePassXCAssociationError,
+)
+
