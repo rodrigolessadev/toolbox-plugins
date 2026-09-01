@@ -126,13 +126,15 @@ function toggleTheme() {
   applyTheme(newTheme);
 }
 
+let appVersion = '';
+
 async function loadPluginVersion() {
   try {
     if (window.pywebview && window.pywebview.api && window.pywebview.api.get_plugin_version) {
       const res = await window.pywebview.api.get_plugin_version();
       if (res.success && res.version) {
-        const badge = document.getElementById('pluginVersionBadge');
-        if (badge) badge.textContent = `v${res.version}`;
+        appVersion = `v${res.version}`;
+        updateTitle();
       }
     }
   } catch (e) {
@@ -655,6 +657,17 @@ function setupEventListeners() {
     });
   }
 
+  // Duplo clique na barra de abas cria uma nova aba (estilo VS Code / navegadores)
+  const tabBarContainer = document.getElementById('tabBarContainer');
+  if (tabBarContainer) {
+    tabBarContainer.addEventListener('dblclick', (e) => {
+      // Não cria aba se clicou sobre uma aba existente ou sobre um botão de controle
+      if (!e.target.closest('.tab-item') && !e.target.closest('button')) {
+        handleNewTab();
+      }
+    });
+  }
+
   // Persistir sessão ao fechar a janela (Hot Exit)
   window.addEventListener('beforeunload', () => {
     persistCurrentSession();
@@ -847,6 +860,11 @@ function updateTitle() {
     const mod = activeTab.isDirty ? ' •' : '';
     el.textContent = `${activeTab.title}${mod}`;
     el.title = activeTab.filePath || activeTab.title;
+    const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : ' — Visualizador de Markdown';
+    document.title = `${activeTab.title}${mod}${versionSuffix}`;
+  } else {
+    const versionSuffix = appVersion ? ` — Visualizador de Markdown ${appVersion}` : 'Visualizador de Markdown';
+    document.title = versionSuffix;
   }
 }
 
