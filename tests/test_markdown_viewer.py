@@ -108,6 +108,9 @@ def test_markdown_viewer_api(tmp_path: Path):
     assert res_ver["success"] is True
     assert "version" in res_ver
 
+    res_title = api.set_window_title("Teste — Visualizador de Markdown v1.6.1")
+    assert res_title["success"] is True
+
 
 def test_markdown_viewer_ui_tab_elements():
     ui_html = ROOT / "plugins" / "markdown-viewer" / "ui" / "index.html"
@@ -124,7 +127,7 @@ def test_markdown_viewer_ui_tab_elements():
     assert 'id="btnNewTab"' in html_content
     assert 'id="tabContextMenu"' in html_content
     assert 'id="modalCloseConfirm"' in html_content
-    assert 'id="pluginVersionBadge"' not in html_content
+    assert 'id="pluginVersionBadge"' in html_content
 
     js_content = ui_js.read_text(encoding="utf-8")
     assert "createTab" in js_content
@@ -135,6 +138,7 @@ def test_markdown_viewer_ui_tab_elements():
     assert "handleTabContextMenu" in js_content
     assert "tabBarContainer.addEventListener('dblclick'" in js_content
     assert "document.title =" in js_content
+    assert "set_window_title" in js_content
 
     css_content = ui_css.read_text(encoding="utf-8")
     assert ".tab-bar-container" in css_content

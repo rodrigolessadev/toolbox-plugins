@@ -161,6 +161,17 @@ class MarkdownViewerApi(BasePluginApi):
         """Limpa todos os snapshots e histórico da sessão."""
         return domain.clear_all_session()
 
+    def set_window_title(self, title: str) -> dict:
+        """Atualiza o título da janela nativa do pywebview se disponível."""
+        try:
+            if webview.windows:
+                webview.windows[0].set_title(title)
+                return {"success": True}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+        return {"success": True}
+
+
 
 
 def main():
