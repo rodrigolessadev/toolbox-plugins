@@ -208,3 +208,46 @@ def test_logger_resilience_to_invalid_or_restricted_dir():
     finally:
         safe_logger.close_logger(logger_instance)
 
+
+def test_get_default_log_dir_toolbox_standard(monkeypatch):
+    """
+    Valida que o diretório padrão de logs do Safe segue o padrão canônico do Toolbox (%APPDATA%/com.toolbox.desktop/logs).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("APPDATA", tmpdir)
+        monkeypatch.setattr(sys, "platform", "win32")
+
+        log_dir = safe_logger.get_default_log_dir()
+        expected = Path(tmpdir) / "com.toolbox.desktop" / "logs"
+        assert log_dir == expected
+
+        from shared.db_utils import get_central_logs_dir
+        shared_logs = get_central_logs_dir()
+        assert shared_logs == expected
+        assert shared_logs.exists()
+
+
+def test_migrate_legacy_safe_logs():
+    """
+    Valida migração transparente de arquivos safe-*.log da pasta legada 'log' para a pasta canônica 'logs'.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        base_dir = Path(tmpdir) / "com.toolbox.desktop"
+        legacy_dir = base_dir / "log"
+        canonical_dir = base_dir / "logs"
+
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        old_file_1 = legacy_dir / "safe-2026-08-25.log"
+        old_file_1.write_text("conteúdo log antigo 1", encoding="utf-8")
+        old_file_2 = legacy_dir / "cofre-2026-08-26.log"
+        old_file_2.write_text("conteúdo log antigo 2", encoding="utf-8")
+
+        # Executa migração
+        migrated = safe_logger.migrate_legacy_safe_logs(target_log_dir=canonical_dir)
+        assert migrated == 2
+        assert (canonical_dir / "safe-2026-08-25.log").exists()
+        assert (canonical_dir / "cofre-2026-08-26.log").exists()
+        assert (canonical_dir / "safe-2026-08-25.log").read_text(encoding="utf-8") == "conteúdo log antigo 1"
+        assert not legacy_dir.exists()
+
+
