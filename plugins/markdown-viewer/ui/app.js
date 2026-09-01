@@ -75,17 +75,32 @@ print(f"Média apurada: {resultado['media']}")
 > Use os atalhos de teclado **Ctrl+T** / **Ctrl+N** (Nova Aba), **Ctrl+W** (Fechar Aba), **Ctrl+Tab** (Alternar Aba) e **Ctrl+S** (Salvar).
 `;
 
-function init() {
+async function init() {
   initTheme();
   loadPluginVersion();
   setupEventListeners();
 
-  // Cria a aba inicial com documento de exemplo se não houver abas
-  if (tabs.length === 0) {
-    createTab('sem-titulo-1.md', '', SAMPLE_MARKDOWN, SAMPLE_MARKDOWN, false, 0, true);
+  let hasInitialFile = false;
+  try {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_initial_file) {
+      const initFileRes = await window.pywebview.api.get_initial_file();
+      if (initFileRes && initFileRes.success) {
+        hasInitialFile = true;
+        createTab(initFileRes.filename, initFileRes.path, initFileRes.content, initFileRes.content, false, initFileRes.mtime || 0, true);
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao ler arquivo inicial:', e);
   }
 
-  updateViewMode('split');
+  if (!hasInitialFile) {
+    const restored = await restoreSession();
+    if (!restored && tabs.length === 0) {
+      createTab('sem-titulo-1.md', '', SAMPLE_MARKDOWN, SAMPLE_MARKDOWN, false, 0, true);
+    }
+  }
+
+  updateViewMode(globalState.viewMode || 'split');
   startFileWatcher();
 }
 
@@ -125,14 +140,131 @@ async function loadPluginVersion() {
   }
 }
 
+// ─────────────────────── Persistência de Sessão & Hot Exit ───────────────────────
+
+let sessionSaveDebounceTimer = null;
+
+function scheduleSessionSave(delay = 750) {
+  if (sessionSaveDebounceTimer) {
+    clearTimeout(sessionSaveDebounceTimer);
+  }
+  sessionSaveDebounceTimer = setTimeout(() => {
+    persistCurrentSession();
+  }, delay);
+}
+
+async function persistCurrentSession() {
+  try {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_session) {
+      return;
+    }
+
+    const currentTab = getActiveTab();
+    const textarea = document.getElementById('editorTextarea');
+    if (currentTab && textarea) {
+      currentTab.content = textarea.value;
+      currentTab.scrollTop = textarea.scrollTop;
+      currentTab.cursorPos = { start: textarea.selectionStart, end: textarea.selectionEnd };
+    }
+
+    const sessionData = {
+      activeTabId: activeTabId,
+      viewMode: globalState.viewMode,
+      theme: globalState.theme,
+      isTocCollapsed: globalState.isTocCollapsed,
+      tabs: tabs.map(t => ({
+        id: t.id,
+        title: t.title,
+        filePath: t.filePath,
+        savedContent: t.savedContent,
+        isDirty: t.isDirty,
+        lastMtime: t.lastMtime,
+        scrollTop: t.scrollTop || 0,
+        cursorPos: t.cursorPos || { start: 0, end: 0 }
+      }))
+    };
+
+    const snapshots = {};
+    tabs.forEach(t => {
+      snapshots[t.id] = t.content || '';
+    });
+
+    await window.pywebview.api.save_session(sessionData, snapshots);
+  } catch (err) {
+    console.error('[MarkdownViewer] Falha ao persistir sessão:', err);
+  }
+}
+
+async function restoreSession() {
+  try {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.load_session) {
+      return false;
+    }
+
+    const res = await window.pywebview.api.load_session();
+    if (res && res.success && res.hasSession && res.data && Array.isArray(res.data.tabs) && res.data.tabs.length > 0) {
+      const data = res.data;
+      tabs = [];
+
+      data.tabs.forEach(t => {
+        const tab = {
+          id: t.id || `tab-${tabIdSeq++}`,
+          title: t.title || 'sem-titulo.md',
+          filePath: t.filePath || '',
+          content: t.content || '',
+          savedContent: t.savedContent || '',
+          isDirty: Boolean(t.isDirty),
+          lastMtime: t.lastMtime || 0,
+          pendingExternalContent: null,
+          pendingExternalMtime: 0,
+          scrollTop: t.scrollTop || 0,
+          cursorPos: t.cursorPos || { start: 0, end: 0 },
+          lastToc: []
+        };
+        const num = parseInt((tab.id || '').replace('tab-', ''), 10);
+        if (!isNaN(num) && num >= tabIdSeq) {
+          tabIdSeq = num + 1;
+        }
+        tabs.push(tab);
+      });
+
+      if (data.viewMode) {
+        globalState.viewMode = data.viewMode;
+      }
+      if (data.isTocCollapsed) {
+        globalState.isTocCollapsed = data.isTocCollapsed;
+      }
+
+      renderTabs();
+
+      const targetActiveId = data.activeTabId && tabs.some(t => t.id === data.activeTabId)
+        ? data.activeTabId
+        : tabs[0].id;
+
+      activateTab(targetActiveId);
+      return true;
+    }
+  } catch (err) {
+    console.error('[MarkdownViewer] Falha ao restaurar sessão:', err);
+  }
+  return false;
+}
+
 // ─────────────────────── Gerenciamento de Abas ───────────────────────
 
 function getActiveTab() {
   return tabs.find(t => t.id === activeTabId) || null;
 }
 
-function createTab(title, filePath = '', content = '', savedContent = '', isDirty = false, lastMtime = 0, activate = true) {
-  const tabId = `tab-${tabIdSeq++}`;
+function createTab(title, filePath = '', content = '', savedContent = '', isDirty = false, lastMtime = 0, activate = true, forcedId = null) {
+  const tabId = forcedId || `tab-${tabIdSeq++}`;
+  if (forcedId) {
+    const num = parseInt(forcedId.replace('tab-', ''), 10);
+    if (!isNaN(num) && num >= tabIdSeq) {
+      tabIdSeq = num + 1;
+    }
+  }
+
   const newTab = {
     id: tabId,
     title: title || `sem-titulo-${tabIdSeq - 1}.md`,
@@ -155,6 +287,7 @@ function createTab(title, filePath = '', content = '', savedContent = '', isDirt
     activateTab(tabId);
   }
 
+  scheduleSessionSave(300);
   return newTab;
 }
 
@@ -229,6 +362,8 @@ function activateTab(tabId) {
   } else {
     dismissExternalBanner();
   }
+
+  scheduleSessionSave(200);
 }
 
 function handleTabClick(tabId, e) {
@@ -268,9 +403,14 @@ function closeTabImmediately(tabId) {
   const wasActive = tabId === activeTabId;
   tabs.splice(tabIndex, 1);
 
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.delete_tab_snapshot) {
+    window.pywebview.api.delete_tab_snapshot(tabId);
+  }
+
   if (tabs.length === 0) {
     // Se fechou todas as abas, cria uma aba limpa imediatamente
     createTab('sem-titulo-1.md', '', '', '', false, 0, true);
+    scheduleSessionSave(50);
     return;
   }
 
@@ -281,7 +421,10 @@ function closeTabImmediately(tabId) {
   } else {
     renderTabs();
   }
+
+  scheduleSessionSave(50);
 }
+
 
 function openCloseConfirmModal(tabId) {
   pendingCloseTabId = tabId;
@@ -462,6 +605,8 @@ function setupEventListeners() {
         if (activeTab.isDirty) tabEl.classList.add('dirty');
         else tabEl.classList.remove('dirty');
       }
+
+      scheduleSessionSave();
     });
 
     textarea.addEventListener('scroll', syncScroll);
@@ -504,10 +649,16 @@ function setupEventListeners() {
             if (activeTab.isDirty) tabEl.classList.add('dirty');
             else tabEl.classList.remove('dirty');
           }
+          scheduleSessionSave();
         }
       }
     });
   }
+
+  // Persistir sessão ao fechar a janela (Hot Exit)
+  window.addEventListener('beforeunload', () => {
+    persistCurrentSession();
+  });
 
   // Fechar menu de contexto ao clicar fora
   window.addEventListener('click', (e) => {
@@ -823,6 +974,7 @@ async function handleSaveFile() {
         renderTabs();
         updateTitle();
         showToast('Arquivo salvo com sucesso!');
+        scheduleSessionSave(50);
         return true;
       }
     } else {
@@ -839,6 +991,7 @@ async function handleSaveFile() {
         renderTabs();
         updateTitle();
         showToast('Arquivo salvo com sucesso!');
+        scheduleSessionSave(50);
         return true;
       }
     }
@@ -871,6 +1024,7 @@ async function handleSaveFileAs() {
       renderTabs();
       updateTitle();
       showToast(`Salvo como: ${res.filename}`);
+      scheduleSessionSave(50);
     }
   } catch (err) {
     console.error('Erro ao salvar como:', err);
@@ -899,6 +1053,7 @@ async function handleSaveAllFiles() {
   renderTabs();
   updateTitle();
   showToast(`${savedCount} arquivo(s) salvo(s) com sucesso!`);
+  scheduleSessionSave(50);
 }
 
 async function handleExportHtml() {
