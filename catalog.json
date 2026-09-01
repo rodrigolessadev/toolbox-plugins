@@ -5,7 +5,7 @@
     {
       "id": "safe",
       "name": "Cofre Seguro",
-      "version": "1.10.0",
+      "version": "1.10.1",
       "description": "Cofre de senhas e Hub de integração com KeePassXC Desktop com criptografia ponta a ponta e API para outros plugins.",
       "author": "Rodrigo Lessa",
       "language": "python",
@@ -20,7 +20,7 @@
       ],
       "icon": "shield-check",
       "command": "safe",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/safe-1.10.0/safe.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/safe-1.10.1/safe.zip",
       "min_toolbox_version": "1.22.3",
       "updated_at": "2026-09-01",
       "theme_version": "material-3"
