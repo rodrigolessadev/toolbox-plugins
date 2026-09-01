@@ -141,6 +141,23 @@ class MarkdownViewerApi(BasePluginApi):
             pass
         return {"success": True, "version": "1.0.0"}
 
+    def save_session(self, session_data: dict, snapshots: Optional[dict] = None) -> dict:
+        """Persiste o estado da sessão e os snapshots temporários das abas."""
+        return domain.save_session(session_data, snapshots)
+
+    def load_session(self) -> dict:
+        """Carrega a sessão prévia e os conteúdos salvos nos snapshots."""
+        return domain.load_session()
+
+    def delete_tab_snapshot(self, tab_id: str) -> dict:
+        """Remove o snapshot de uma aba fechada ou descartada."""
+        return domain.delete_tab_snapshot(tab_id)
+
+    def clear_session(self) -> dict:
+        """Limpa todos os snapshots e histórico da sessão."""
+        return domain.clear_all_session()
+
+
 
 def main():
     if sys.platform == "win32":

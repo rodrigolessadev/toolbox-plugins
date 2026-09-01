@@ -244,3 +244,115 @@ def set_window_taskbar_icon(icon_path: Optional[Path] = None, hwnd: Optional[int
     except Exception:
         pass
     return False
+
+
+def get_session_dir() -> Path:
+    """Retorna o diretório de snapshots e estado de sessão do Visualizador de Markdown."""
+    if sys.platform == "win32" and "APPDATA" in os.environ:
+        base_dir = Path(os.environ["APPDATA"]) / "com.toolbox.desktop" / "markdown_viewer_session"
+    else:
+        base_dir = Path.home() / ".toolbox" / "markdown_viewer_session"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return base_dir
+
+
+def save_session(session_data: dict, snapshots: Optional[dict] = None) -> dict:
+    """Salva os metadados de sessão em session.json e o conteúdo de cada aba em snapshots .tmp."""
+    import json
+    try:
+        s_dir = get_session_dir()
+        session_file = s_dir / "session.json"
+        
+        # Salva o arquivo de índice de sessão
+        session_file.write_text(json.dumps(session_data or {}, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        # Salva os snapshots individuais das abas
+        active_snapshot_files = set()
+        if snapshots and isinstance(snapshots, dict):
+            for tab_id, content in snapshots.items():
+                clean_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(tab_id))
+                tmp_file = s_dir / f"{clean_id}.tmp"
+                tmp_file.write_text(content or "", encoding="utf-8")
+                active_snapshot_files.add(tmp_file.name)
+
+        # Remove arquivos temporários órfãos que não pertencem mais às abas abertas
+        tabs = (session_data or {}).get("tabs", [])
+        referenced_ids = {re.sub(r"[^a-zA-Z0-9_\-]", "_", str(t.get("id"))) for t in tabs if t.get("id")}
+        for f in s_dir.glob("*.tmp"):
+            tab_name_prefix = f.stem
+            if tab_name_prefix not in referenced_ids:
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+
+        return {"success": True}
+    except Exception as exc:
+        return {"success": False, "error": f"Falha ao salvar sessão: {str(exc)}"}
+
+
+def load_session() -> dict:
+    """Carrega o estado prévio da sessão e o conteúdo restaurado de cada snapshot .tmp."""
+    import json
+    try:
+        s_dir = get_session_dir()
+        session_file = s_dir / "session.json"
+        if not session_file.exists():
+            return {"success": True, "hasSession": False, "data": None}
+
+        raw_data = json.loads(session_file.read_text(encoding="utf-8"))
+        tabs = raw_data.get("tabs", [])
+
+        restored_tabs = []
+        for tab in tabs:
+            tab_id = tab.get("id", "")
+            clean_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(tab_id))
+            tmp_file = s_dir / f"{clean_id}.tmp"
+
+            content = None
+            if tmp_file.exists():
+                content = tmp_file.read_text(encoding="utf-8", errors="replace")
+            elif tab.get("path") and Path(tab.get("path")).exists():
+                content = Path(tab.get("path")).read_text(encoding="utf-8", errors="replace")
+
+            if content is not None:
+                tab_copy = dict(tab)
+                tab_copy["content"] = content
+                restored_tabs.append(tab_copy)
+
+        raw_data["tabs"] = restored_tabs
+        has_session = len(restored_tabs) > 0
+
+        return {"success": True, "hasSession": has_session, "data": raw_data}
+    except Exception as exc:
+        return {"success": False, "error": f"Falha ao carregar sessão: {str(exc)}", "hasSession": False}
+
+
+def delete_tab_snapshot(tab_id: str) -> dict:
+    """Remove o snapshot temporário de uma aba específica."""
+    try:
+        if not tab_id:
+            return {"success": True}
+        clean_id = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(tab_id))
+        s_dir = get_session_dir()
+        tmp_file = s_dir / f"{clean_id}.tmp"
+        if tmp_file.exists():
+            tmp_file.unlink()
+        return {"success": True}
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+
+
+def clear_all_session() -> dict:
+    """Limpa todo o histórico de sessão e snapshots temporários."""
+    try:
+        s_dir = get_session_dir()
+        for f in s_dir.glob("*.*"):
+            try:
+                f.unlink()
+            except Exception:
+                pass
+        return {"success": True}
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
+

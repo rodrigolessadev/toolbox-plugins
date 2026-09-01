@@ -276,8 +276,8 @@
     {
       "id": "markdown-viewer",
       "name": "Visualizador de Markdown",
-      "description": "Visualizador e editor de Markdown com suporte a GFM, tabelas, syntax highlighting, alertas e diagramas Mermaid.",
-      "version": "1.4.1",
+      "description": "Visualizador e editor de Markdown com retenção de sessão (Hot Exit), suporte a GFM, tabelas, syntax highlighting e alertas.",
+      "version": "1.5.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -285,12 +285,13 @@
         "viewer",
         "editor",
         "docs",
+        "session",
         "utilidade"
       ],
       "icon": "file-text",
       "command": "markdown-viewer",
       "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/markdown-viewer-1.4.1/markdown-viewer.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/markdown-viewer-1.5.0/markdown-viewer.zip",
       "min_toolbox_version": "1.22.3",
       "theme_version": "material-3",
       "updated_at": "2026-09-01"
