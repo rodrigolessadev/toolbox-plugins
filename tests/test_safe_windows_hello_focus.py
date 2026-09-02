@@ -142,3 +142,25 @@ def test_unprotect_master_key_hello_empty_raises():
     with pytest.raises(ValueError):
         unprotect_master_key_hello(b"", credential_id="any-id")
 
+
+def test_verify_windows_hello_powershell_script_syntax():
+    """Valida que o script PowerShell montado possui delimitadores de here-string válidos e quebras CRLF."""
+    with patch("safe.windows_hello._is_windows", return_value=True), \
+         patch("subprocess.run") as mock_run:
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = "Verified\n"
+        mock_proc.stderr = ""
+        mock_run.return_value = mock_proc
+
+        verify_windows_hello("Teste Sintaxe", window_handle=456)
+        called_cmd = mock_run.call_args[0][0]
+        ps_script = called_cmd[4]
+
+        # Garante que não há espaços após @" ou antes de "@
+        assert "@'\r\n" in ps_script or "@\"\r\n" in ps_script
+        assert "\r\n'@" in ps_script or "\r\n\"@" in ps_script
+        assert "Win32Foreground" in ps_script
+        assert "HelloInterop" in ps_script
+
+

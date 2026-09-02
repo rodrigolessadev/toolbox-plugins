@@ -175,76 +175,79 @@ def verify_windows_hello(
     safe_msg = prompt_message.replace("'", "''")
 
     # Script PowerShell para invocar RequestVerificationAsync ou RequestVerificationForWindowAsync
-    ps_cmd = (
-        "try { "
-        "  Add-Type -TypeDefinition @\" "
-        "    using System; "
-        "    using System.Runtime.InteropServices; "
-        "    public class Win32Foreground { "
-        "      [DllImport(\"user32.dll\")] public static extern bool AllowSetForegroundWindow(int dwProcessId); "
-        "      [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); "
-        "      [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); "
-        "    } "
-        "\"@ -ErrorAction SilentlyContinue; "
-        "  [Win32Foreground]::AllowSetForegroundWindow(-1) | Out-Null; "
-        "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
-        "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null; "
-        f"  $hwnd = [IntPtr]({resolved_hwnd or 0}); "
-        "  $op = $null; "
-        "  if ($hwnd -ne [IntPtr]::Zero) { "
-        "    try { "
-        "      Add-Type -TypeDefinition @\" "
-        "        using System; "
-        "        using System.Runtime.InteropServices; "
-        "        public static class HelloInterop { "
-        "          [ComImport] "
-        "          [Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\")] "
-        "          [InterfaceType(ComInterfaceType.InterfaceIsIInspectable)] "
-        "          public interface IUserConsentVerifierInterop { "
-        "            void RequestVerificationForWindowAsync( "
-        "              IntPtr appWindow, "
-        "              [MarshalAs(UnmanagedType.HString)] string message, "
-        "              [In] ref Guid riid, "
-        "              [MarshalAs(UnmanagedType.IInspectable)] out object asyncOperation "
-        "            ); "
-        "          } "
-        "          [DllImport(\"api-ms-win-core-winrt-l1-1-0.dll\")] "
-        "          public static extern int RoGetActivationFactory( "
-        "            [MarshalAs(UnmanagedType.HString)] string activatableClassId, "
-        "            [In] ref Guid iid, "
-        "            out IUserConsentVerifierInterop factory "
-        "          ); "
-        "          public static object RequestForWindow(IntPtr hWnd, string msg) { "
-        "            Guid iid = new Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\"); "
-        "            IUserConsentVerifierInterop factory; "
-        "            int hr = RoGetActivationFactory(\"Windows.Security.Credentials.UI.UserConsentVerifier\", ref iid, out factory); "
-        "            if (hr != 0) throw new COMException(\"RoGetActivationFactory failed\", hr); "
-        "            Guid opIid = new Guid(\"00000000-0000-0000-C000-000000000046\"); "
-        "            object asyncOp; "
-        "            factory.RequestVerificationForWindowAsync(hWnd, msg, ref opIid, out asyncOp); "
-        "            return asyncOp; "
-        "          } "
-        "        } "
-        "\"@ -ErrorAction Stop; "
-        f"      $op = [HelloInterop]::RequestForWindow($hwnd, '{safe_msg}'); "
-        "    } catch { "
-        f"      $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
-        "    } "
-        "  } else { "
-        f"    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
-        "  } "
-        "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { "
-        "    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 "
-        "  } | Select-Object -First 1; "
-        "  $asTask = $asTaskGen.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]); "
-        "  $task = $asTask.Invoke($null, @($op)); "
-        "  $task.Wait(); "
-        "  Write-Output $task.Result.ToString(); "
-        "} catch { "
-        "  [Console]::Error.WriteLine($_.Exception.ToString()); "
-        "  Write-Output ('Error: ' + $_.Exception.Message); "
-        "}"
-    )
+    ps_lines = [
+        "try {",
+        "  $csharpFg = @'",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public class Win32Foreground {",
+        "    [DllImport(\"user32.dll\")] public static extern bool AllowSetForegroundWindow(int dwProcessId);",
+        "    [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);",
+        "    [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
+        "}",
+        "'@",
+        "  Add-Type -TypeDefinition $csharpFg -ErrorAction SilentlyContinue;",
+        "  [Win32Foreground]::AllowSetForegroundWindow(-1) | Out-Null;",
+        "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop;",
+        "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null;",
+        f"  $hwnd = [IntPtr]({resolved_hwnd or 0});",
+        "  $op = $null;",
+        "  if ($hwnd -ne [IntPtr]::Zero) {",
+        "    try {",
+        "      $csharpInterop = @'",
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public static class HelloInterop {",
+        "    [ComImport]",
+        "    [Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\")]",
+        "    [InterfaceType(ComInterfaceType.InterfaceIsIInspectable)]",
+        "    public interface IUserConsentVerifierInterop {",
+        "        void RequestVerificationForWindowAsync(",
+        "            IntPtr appWindow,",
+        "            [MarshalAs(UnmanagedType.HString)] string message,",
+        "            [In] ref Guid riid,",
+        "            [MarshalAs(UnmanagedType.IInspectable)] out object asyncOperation",
+        "        );",
+        "    }",
+        "    [DllImport(\"api-ms-win-core-winrt-l1-1-0.dll\")]",
+        "    public static extern int RoGetActivationFactory(",
+        "        [MarshalAs(UnmanagedType.HString)] string activatableClassId,",
+        "        [In] ref Guid iid,",
+        "        out IUserConsentVerifierInterop factory",
+        "    );",
+        "    public static object RequestForWindow(IntPtr hWnd, string msg) {",
+        "        Guid iid = new Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\");",
+        "        IUserConsentVerifierInterop factory;",
+        "        int hr = RoGetActivationFactory(\"Windows.Security.Credentials.UI.UserConsentVerifier\", ref iid, out factory);",
+        "        if (hr != 0) throw new COMException(\"RoGetActivationFactory failed\", hr);",
+        "        Guid opIid = new Guid(\"00000000-0000-0000-C000-000000000046\");",
+        "        object asyncOp;",
+        "        factory.RequestVerificationForWindowAsync(hWnd, msg, ref opIid, out asyncOp);",
+        "        return asyncOp;",
+        "    }",
+        "}",
+        "'@",
+        "      Add-Type -TypeDefinition $csharpInterop -ErrorAction Stop;",
+        f"      $op = [HelloInterop]::RequestForWindow($hwnd, '{safe_msg}');",
+        "    } catch {",
+        f"      $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}');",
+        "    }",
+        "  } else {",
+        f"    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}');",
+        "  }",
+        "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {",
+        "    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1",
+        "  } | Select-Object -First 1;",
+        "  $asTask = $asTaskGen.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]);",
+        "  $task = $asTask.Invoke($null, @($op));",
+        "  $task.Wait();",
+        "  Write-Output $task.Result.ToString();",
+        "} catch {",
+        "  [Console]::Error.WriteLine($_.Exception.ToString());",
+        "  Write-Output ('Error: ' + $_.Exception.Message);",
+        "}",
+    ]
+    ps_cmd = "\r\n".join(ps_lines)
 
     try:
         res = subprocess.run(
