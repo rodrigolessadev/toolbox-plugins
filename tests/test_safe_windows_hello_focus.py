@@ -60,8 +60,45 @@ def test_verify_windows_hello_handles_canceled_status():
         
         mock_proc = MagicMock()
         mock_proc.stdout = "Canceled\n"
+        mock_proc.stderr = ""
         mock_run.return_value = mock_proc
 
         ok, msg = verify_windows_hello("Acesso ao Cofre")
         assert ok is False
         assert "cancelada pelo usuário" in msg
+
+
+def test_verify_windows_hello_with_hwnd():
+    """Valida que verify_windows_hello inclui o handle da janela no script PowerShell e tenta interop."""
+    with patch("safe.windows_hello._is_windows", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        
+        mock_proc = MagicMock()
+        mock_proc.stdout = "Verified\n"
+        mock_proc.stderr = ""
+        mock_run.return_value = mock_proc
+
+        ok, msg = verify_windows_hello("Acesso ao Cofre", window_handle=123456)
+        assert ok is True
+        assert "sucesso" in msg
+
+        called_cmd = mock_run.call_args[0][0]
+        ps_script = called_cmd[4]
+        assert "123456" in ps_script
+        assert "IUserConsentVerifierInterop" in ps_script
+
+
+def test_verify_windows_hello_handles_error_status():
+    """Valida o tratamento de erros de runtime do PowerShell/WinRT."""
+    with patch("safe.windows_hello._is_windows", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        
+        mock_proc = MagicMock()
+        mock_proc.stdout = "Error: Falha no subsistema de segurança WinRT\n"
+        mock_proc.stderr = "Exceção em System.Runtime.WindowsRuntime\n"
+        mock_run.return_value = mock_proc
+
+        ok, msg = verify_windows_hello("Acesso ao Cofre")
+        assert ok is False
+        assert "Falha na execução do Windows Hello" in msg
+
