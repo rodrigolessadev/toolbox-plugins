@@ -76,7 +76,13 @@ def analyze_markdown(content: str) -> dict:
     lines = text.splitlines()
     words = re.findall(r"\b\w+\b", text)
     headings = re.findall(r"^(#{1,6})\s+(.+)$", text, flags=re.MULTILINE)
-    code_blocks = len(re.findall(r"^\s*(?:`{3,}|~{3,})", text, flags=re.MULTILINE)) // 2
+    # 1. Contar e isolar blocos cercados (fenced)
+    fenced_blocks = len(re.findall(r"^\s*(?:`{3,}|~{3,})", text, flags=re.MULTILINE)) // 2
+    clean_text_no_fences = re.sub(r"(?ms)^\s*(?:`{3,}|~{3,}).*?^\s*(?:`{3,}|~{3,})", "", text)
+
+    # 2. Contar blocos puramente indentados (4 espaços ou 1 tab após linha em branco)
+    indented_blocks = len(re.findall(r"(?:(?<=\n\n)|^\n*)((?:(?: {4}|\t)[^\n]*\n?)+)", clean_text_no_fences))
+    code_blocks = fenced_blocks + indented_blocks
 
     # Tempo estimado de leitura (base média: 200 palavras/minuto)
     w_count = len(words)

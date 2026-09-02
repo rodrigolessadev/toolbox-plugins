@@ -202,6 +202,7 @@ class SafeService:
         use_hello: bool = False,
         auto_lock_timeout: int = 300,
         lock_on_os_lock: bool = True,
+        window_handle: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Inicializa o cofre gerando a Master Key e persistindo metadados de KDF e proteção.
@@ -229,9 +230,12 @@ class SafeService:
         if auth_mode_clean == "hybrid":
             hello_cred_id = str(uuid.uuid4())
             try:
-                wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_cred_id.encode("utf-8"))
+                if hasattr(windows_hello, "protect_master_key_hello"):
+                    wrapped_hello = windows_hello.protect_master_key_hello(mk_raw, credential_id=hello_cred_id, window_handle=window_handle)
+                else:
+                    wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_cred_id.encode("utf-8"))
             except Exception as e:
-                logger.debug(f"Proteção DPAPI para Windows Hello indisponível no setup: {e}")
+                logger.debug(f"Proteção para Windows Hello indisponível no setup: {e}")
                 wrapped_hello = None
 
         self.db.save_metadata(
@@ -286,7 +290,10 @@ class SafeService:
         wrapped_hello = None
         if new_auth_mode == "hybrid" and hello_id:
             try:
-                wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_id.encode("utf-8"))
+                if hasattr(windows_hello, "protect_master_key_hello"):
+                    wrapped_hello = windows_hello.protect_master_key_hello(mk_raw, credential_id=hello_id)
+                else:
+                    wrapped_hello = windows_hello.protect_data_dpapi(mk_raw, entropy=hello_id.encode("utf-8"))
             except Exception:
                 wrapped_hello = meta.get("wrapped_hello_key")
 
@@ -310,6 +317,7 @@ class SafeService:
         password: Optional[str] = None,
         use_hello: bool = False,
         reason: str = "Acesso ao Cofre Seguro",
+        window_handle: Optional[int] = None,
     ) -> bool:
         """
         Desbloqueia o cofre via Windows Hello ou Senha Mestra.
@@ -330,7 +338,10 @@ class SafeService:
 
         if use_hello and auth_mode in ("windows_hello", "hybrid"):
             # Solicita confirmação biométrica/PIN
-            ok, msg = windows_hello.verify_windows_hello(reason)
+            if window_handle is not None:
+                ok, msg = windows_hello.verify_windows_hello(reason, window_handle=window_handle)
+            else:
+                ok, msg = windows_hello.verify_windows_hello(reason)
             if not ok:
                 logger.warning(f"Desbloqueio via Windows Hello recusado: {msg}")
                 raise SafeAccessDeniedError(f"Windows Hello recusado: {msg}")
@@ -350,13 +361,20 @@ class SafeService:
                 raise SafeAccessDeniedError("Chave de segurança do Windows Hello não encontrada.")
 
             try:
-                mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=hello_id if hello_id else None)
+                if hasattr(windows_hello, "unprotect_master_key_hello"):
+                    mk_bytes = windows_hello.unprotect_master_key_hello(
+                        target_hello_blob,
+                        credential_id=meta.get("hello_credential_id") or "",
+                        window_handle=window_handle
+                    )
+                else:
+                    mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=hello_id if hello_id else None)
             except Exception as e:
                 # Tenta fallback sem entropia para bases legadas
                 try:
                     mk_bytes = windows_hello.unprotect_data_dpapi(target_hello_blob, entropy=None)
                 except Exception:
-                    logger.warning(f"Falha ao desencapsular chave DPAPI do Windows Hello: {e}")
+                    logger.warning(f"Falha ao desencapsular chave do Windows Hello: {e}")
                     raise SafeAccessDeniedError("Não foi possível desencapsular a chave com Windows Hello.") from e
 
         if mk_bytes is None:

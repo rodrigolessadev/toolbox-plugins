@@ -14,7 +14,13 @@ if str(PLUGINS_DIR) not in sys.path:
 if str(SAFE_DIR) not in sys.path:
     sys.path.insert(0, str(SAFE_DIR))
 
-from safe.windows_hello import allow_foreground_focus, verify_windows_hello
+from safe.windows_hello import (
+    allow_foreground_focus,
+    verify_windows_hello,
+    protect_data_dpapi,
+    protect_master_key_hello,
+    unprotect_master_key_hello,
+)
 
 
 def test_allow_foreground_focus_execution():
@@ -60,8 +66,79 @@ def test_verify_windows_hello_handles_canceled_status():
         
         mock_proc = MagicMock()
         mock_proc.stdout = "Canceled\n"
+        mock_proc.stderr = ""
         mock_run.return_value = mock_proc
 
         ok, msg = verify_windows_hello("Acesso ao Cofre")
         assert ok is False
         assert "cancelada pelo usuário" in msg
+
+
+def test_verify_windows_hello_with_hwnd():
+    """Valida que verify_windows_hello inclui o handle da janela no script PowerShell e tenta interop."""
+    with patch("safe.windows_hello._is_windows", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        
+        mock_proc = MagicMock()
+        mock_proc.stdout = "Verified\n"
+        mock_proc.stderr = ""
+        mock_run.return_value = mock_proc
+
+        ok, msg = verify_windows_hello("Acesso ao Cofre", window_handle=123456)
+        assert ok is True
+        assert "sucesso" in msg
+
+        called_cmd = mock_run.call_args[0][0]
+        ps_script = called_cmd[4]
+        assert "123456" in ps_script
+        assert "IUserConsentVerifierInterop" in ps_script
+
+
+def test_verify_windows_hello_handles_error_status():
+    """Valida o tratamento de erros de runtime do PowerShell/WinRT."""
+    with patch("safe.windows_hello._is_windows", return_value=True), \
+         patch("subprocess.run") as mock_run:
+        
+        mock_proc = MagicMock()
+        mock_proc.stdout = "Error: Falha no subsistema de segurança WinRT\n"
+        mock_proc.stderr = "Exceção em System.Runtime.WindowsRuntime\n"
+        mock_run.return_value = mock_proc
+
+        ok, msg = verify_windows_hello("Acesso ao Cofre")
+        assert ok is False
+        assert "Falha na execução do Windows Hello" in msg
+
+
+def test_protect_and_unprotect_master_key_hello_dpp1():
+    """Valida o ciclo completo de encapsulamento e desencapsulamento no formato DPP1 com sal de hardware."""
+    master_key = b"A" * 32
+    credential_id = "test-cred-uuid-12345"
+
+    with patch("safe.windows_hello._is_windows", return_value=True):
+        wrapped = protect_master_key_hello(master_key, credential_id=credential_id, window_handle=999)
+        assert wrapped.startswith(b"DPP1:")
+        assert len(wrapped) > len(master_key)
+
+        unwrapped = unprotect_master_key_hello(wrapped, credential_id=credential_id, window_handle=999)
+        assert unwrapped == master_key
+
+
+def test_unprotect_master_key_hello_legacy_dpapi_fallback():
+    """Valida que envelopes legados em DPAPI crua continuam sendo decifrados perfeitamente."""
+    master_key = b"B" * 32
+    credential_id = "test-legacy-cred-id"
+
+    with patch("safe.windows_hello._is_windows", return_value=True):
+        # Cria envelope legado direto via protect_data_dpapi
+        legacy_blob = protect_data_dpapi(master_key, entropy=credential_id.encode("utf-8"))
+        assert not legacy_blob.startswith(b"DPP1:")
+
+        unwrapped = unprotect_master_key_hello(legacy_blob, credential_id=credential_id)
+        assert unwrapped == master_key
+
+
+def test_unprotect_master_key_hello_empty_raises():
+    """Valida que passar blob vazio dispara ValueError explicativo."""
+    with pytest.raises(ValueError):
+        unprotect_master_key_hello(b"", credential_id="any-id")
+

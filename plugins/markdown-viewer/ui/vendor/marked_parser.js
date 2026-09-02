@@ -113,13 +113,60 @@ function parseMarkdown(md) {
       continue;
     }
 
-    const openCodeMatch = line.match(/^(\s*)(`{3,}|~{3,})([\w-]*)/);
+    const openCodeMatch = line.match(/^(\s*)(`{3,}|~{3,})([^\n\r]*)/);
     if (openCodeMatch) {
       if (inTable) flushTable();
       inCodeBlock = true;
       codeFenceChar = openCodeMatch[2][0];
       codeIndentLen = openCodeMatch[1].replace(/\t/g, '  ').length;
-      codeLang = openCodeMatch[3] ? openCodeMatch[3].toLowerCase().trim() : '';
+      const rawInfo = openCodeMatch[3] ? openCodeMatch[3].trim() : '';
+      codeLang = rawInfo ? rawInfo.split(/\s+/)[0].toLowerCase() : '';
+      continue;
+    }
+
+    // Indented Code Block check (4 espaços ou 1 tab após linha em branco / início de documento)
+    const isIndentedCodeStart = (out.length === 0 || out[out.length - 1] === '') && /^( {4}|\t)/.test(line) && line.trim() !== '';
+    if (isIndentedCodeStart) {
+      if (inTable) flushTable();
+      const rawCodeLines = [];
+      while (i < lines.length) {
+        const curLine = lines[i];
+        if (/^( {4}|\t)/.test(curLine)) {
+          rawCodeLines.push(curLine.replace(/^( {4}|\t)/, ''));
+          i++;
+        } else if (curLine.trim() === '') {
+          let nextIndented = false;
+          for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].trim() === '') continue;
+            if (/^( {4}|\t)/.test(lines[j])) {
+              nextIndented = true;
+            }
+            break;
+          }
+          if (nextIndented) {
+            rawCodeLines.push('');
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      i--; // adjust loop pointer
+      const rawText = rawCodeLines.join('\n');
+      const escaped = escapeHtml(rawText);
+      out.push(`
+        <div class="code-block-wrapper">
+          <div class="code-header">
+            <span class="code-lang">code</span>
+            <button type="button" class="btn-copy-code" onclick="copyCode(this)" title="Copiar código">
+              <span data-icon="copy"></span> Copiar
+            </button>
+          </div>
+          <pre><code>${escaped}</code></pre>
+        </div>
+      `);
       continue;
     }
 
@@ -187,12 +234,25 @@ function parseMarkdown(md) {
     // Check if start of a list (unordered, ordered, or task list)
     if (/^\s*[-*+]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
       const listLines = [];
-      while (i < lines.length && (/^\s*[-*+]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]) || (lines[i].startsWith('  ') && lines[i].trim() !== ''))) {
-        listLines.push(lines[i]);
-        i++;
+      while (i < lines.length) {
+        const curLine = lines[i];
+        if (/^\s*(?:`{3,}|~{3,})/.test(curLine)) {
+          break;
+        }
+        if (/^\s*[-*+]\s+/.test(curLine) || /^\s*\d+\.\s+/.test(curLine)) {
+          listLines.push(curLine);
+          i++;
+        } else if (curLine.startsWith('  ') && curLine.trim() !== '') {
+          listLines.push(curLine);
+          i++;
+        } else {
+          break;
+        }
       }
       i--; // adjust loop pointer
-      out.push(renderNestedList(listLines));
+      if (listLines.length > 0) {
+        out.push(renderNestedList(listLines));
+      }
       continue;
     }
 
