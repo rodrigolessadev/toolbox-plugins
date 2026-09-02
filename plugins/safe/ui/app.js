@@ -734,21 +734,37 @@ function selectCategory(cat, element) {
   const grid = document.getElementById('secrets-grid');
   const emptyState = document.getElementById('empty-state');
   const kpxcPanel = document.getElementById('keepassxc-hub-panel');
+  const kdbxPanel = document.getElementById('kdbx-sources-panel');
   const sourceFilterToolbar = document.getElementById('sourceFilterGroup');
 
   if (cat === 'keepassxc') {
     if (grid) grid.classList.add('hidden');
     if (emptyState) emptyState.classList.add('hidden');
+    if (kdbxPanel) { kdbxPanel.classList.add('hidden'); kdbxPanel.style.display = 'none'; }
     if (sourceFilterToolbar) sourceFilterToolbar.style.display = 'none';
     if (kpxcPanel) {
       kpxcPanel.classList.remove('hidden');
       kpxcPanel.style.display = 'flex';
     }
     checkKeePassXCStatus();
+  } else if (cat === 'kdbx') {
+    if (grid) grid.classList.add('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+    if (kpxcPanel) { kpxcPanel.classList.add('hidden'); kpxcPanel.style.display = 'none'; }
+    if (sourceFilterToolbar) sourceFilterToolbar.style.display = 'none';
+    if (kdbxPanel) {
+      kdbxPanel.classList.remove('hidden');
+      kdbxPanel.style.display = 'flex';
+    }
+    loadKdbxSources();
   } else {
     if (kpxcPanel) {
       kpxcPanel.classList.add('hidden');
       kpxcPanel.style.display = 'none';
+    }
+    if (kdbxPanel) {
+      kdbxPanel.classList.add('hidden');
+      kdbxPanel.style.display = 'none';
     }
     if (sourceFilterToolbar) sourceFilterToolbar.style.display = 'flex';
     renderSecretsGrid(document.getElementById('search-input')?.value || '');
@@ -1663,5 +1679,474 @@ function escapeHtml(str) {
 // Exports globais para chamadas inline no HTML
 window.setSourceFilter = setSourceFilter;
 window.handleImportKeePassXCEntryString = handleImportKeePassXCEntryString;
+
+// ============================================================================
+// Fontes KeePass (.kdbx) Diretas & Headless (Issue #217)
+// ============================================================================
+
+let cachedKdbxSources = [];
+let activeKdbxSource = null;
+let cachedKdbxEntries = [];
+
+async function loadKdbxSources() {
+  const container = document.getElementById('kdbx-sources-list');
+  const badgeCount = document.getElementById('count-kdbx');
+  if (container) {
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--fg-muted); font-size: 13px;">Carregando fontes KeePass (.kdbx)...</div>';
+  }
+
+  try {
+    const res = await callApi('list_kdbx_sources');
+    if (res && res.success) {
+      cachedKdbxSources = res.data || [];
+      if (badgeCount) badgeCount.innerText = cachedKdbxSources.length;
+      renderKdbxSourcesList();
+    } else {
+      if (container) container.innerHTML = '<div style="padding: 12px; color: var(--danger); text-align: center;">Erro ao carregar fontes KeePass.</div>';
+    }
+  } catch (e) {
+    if (container) container.innerHTML = `<div style="padding: 12px; color: var(--danger); text-align: center;">Falha: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderKdbxSourcesList() {
+  const container = document.getElementById('kdbx-sources-list');
+  if (!container) return;
+
+  if (cachedKdbxSources.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 32px 16px; color: var(--fg-muted); background: var(--bg-elev); border-radius: var(--radius-sm); border: 1px dashed var(--border);">
+        <i data-lucide="database" style="width: 32px; height: 32px; margin-bottom: 8px; opacity: 0.5;"></i>
+        <div style="font-size: 14px; font-weight: 500; color: var(--fg);">Nenhuma base KeePass (.kdbx) cadastrada</div>
+        <div style="font-size: 12px; margin-top: 4px;">Cadastre arquivos locais ou remotos via SSH para consultar e importar credenciais sem abrir o KeePassXC.</div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAddKdbxSourceModal()" style="margin-top: 14px;">
+          <i data-lucide="plus"></i> Cadastrar Primeira Base
+        </button>
+      </div>
+    `;
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  let html = '';
+  cachedKdbxSources.forEach(src => {
+    const isSsh = src.source_type === 'ssh';
+    const typeBadge = isSsh
+      ? `<span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">🌐 SSH/SFTP</span>`
+      : `<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: var(--accent);">📁 Local</span>`;
+
+    const lastSync = src.last_sync_at ? new Date(src.last_sync_at).toLocaleString('pt-BR') : 'Nunca sincronizado';
+
+    html += `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-sm); gap: 12px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 240px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <strong style="font-size: 14px; color: var(--fg);">${escapeHtml(src.name)}</strong>
+            ${typeBadge}
+          </div>
+          <div style="font-size: 12px; color: var(--fg-secondary); word-break: break-all;">
+            <code>${escapeHtml(src.file_path)}</code>
+          </div>
+          ${src.keyfile_path ? `<div style="font-size: 11px; color: var(--fg-muted); margin-top: 2px;"><i data-lucide="key" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle;"></i> Keyfile: ${escapeHtml(src.keyfile_path)}</div>` : ''}
+          <div style="font-size: 11px; color: var(--fg-muted); margin-top: 4px;">
+            Último acesso: <span>${lastSync}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="handleOpenKdbxUnlockModal('${src.id}')">
+            <i data-lucide="unlock"></i> Abrir & Navegar
+          </button>
+          ${isSsh ? `
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handleSyncKdbxSource('${src.id}')" title="Sincronizar via SSH">
+              <i data-lucide="refresh-cw"></i> Sincronizar
+            </button>
+          ` : ''}
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openEditKdbxSourceModal('${src.id}')" title="Editar Fonte">
+            <i data-lucide="edit-2"></i>
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="handleDeleteKdbxSource('${src.id}', '${escapeHtml(src.name)}')" title="Excluir Fonte">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function openAddKdbxSourceModal() {
+  document.getElementById('kdbx-source-modal-title').innerHTML = '<i data-lucide="database" style="color: var(--accent);"></i> Cadastrar Fonte KeePass (.kdbx)';
+  document.getElementById('kdbx-source-id').value = '';
+  document.getElementById('kdbx-source-name').value = '';
+  document.querySelector('input[name="kdbx-source-type"][value="local"]').checked = true;
+  document.getElementById('kdbx-source-file-path').value = '';
+  document.getElementById('kdbx-source-keyfile-path').value = '';
+  document.getElementById('kdbx-ssh-host').value = '';
+  document.getElementById('kdbx-ssh-port').value = '22';
+  document.getElementById('kdbx-ssh-user').value = '';
+  document.getElementById('kdbx-source-status-msg').className = 'hidden';
+  toggleKdbxSourceTypeFields();
+  openModal('modal-kdbx-source');
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function openEditKdbxSourceModal(sourceId) {
+  const src = cachedKdbxSources.find(s => s.id === sourceId);
+  if (!src) return;
+
+  document.getElementById('kdbx-source-modal-title').innerHTML = '<i data-lucide="edit-2" style="color: var(--accent);"></i> Editar Fonte KeePass (.kdbx)';
+  document.getElementById('kdbx-source-id').value = src.id;
+  document.getElementById('kdbx-source-name').value = src.name || '';
+  
+  const typeRadio = document.querySelector(`input[name="kdbx-source-type"][value="${src.source_type || 'local'}"]`);
+  if (typeRadio) typeRadio.checked = true;
+
+  document.getElementById('kdbx-source-file-path').value = src.file_path || '';
+  document.getElementById('kdbx-source-keyfile-path').value = src.keyfile_path || '';
+  document.getElementById('kdbx-ssh-host').value = src.ssh_host || '';
+  document.getElementById('kdbx-ssh-port').value = src.ssh_port || 22;
+  document.getElementById('kdbx-ssh-user').value = src.ssh_user || '';
+  document.getElementById('kdbx-source-status-msg').className = 'hidden';
+
+  toggleKdbxSourceTypeFields();
+  openModal('modal-kdbx-source');
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function toggleKdbxSourceTypeFields() {
+  const isSsh = document.querySelector('input[name="kdbx-source-type"]:checked')?.value === 'ssh';
+  const sshBox = document.getElementById('kdbx-ssh-fields');
+  const pathLabel = document.getElementById('kdbx-file-path-label');
+  const btnBrowse = document.getElementById('btn-browse-kdbx');
+
+  if (isSsh) {
+    if (sshBox) sshBox.classList.remove('hidden');
+    if (pathLabel) pathLabel.innerText = 'Caminho Remoto do Arquivo .kdbx *';
+    if (btnBrowse) btnBrowse.style.display = 'none';
+  } else {
+    if (sshBox) sshBox.classList.add('hidden');
+    if (pathLabel) pathLabel.innerText = 'Caminho do Arquivo .kdbx *';
+    if (btnBrowse) btnBrowse.style.display = 'inline-flex';
+  }
+}
+
+async function handleBrowseKdbxFile() {
+  const res = await callApi('select_kdbx_file');
+  if (res && res.success && res.file_path) {
+    document.getElementById('kdbx-source-file-path').value = res.file_path;
+    const nameInput = document.getElementById('kdbx-source-name');
+    if (!nameInput.value.trim() && res.file_name) {
+      nameInput.value = res.file_name.replace(/\.[^/.]+$/, '');
+    }
+  }
+}
+
+async function handleBrowseKdbxKeyfile() {
+  const res = await callApi('select_kdbx_keyfile');
+  if (res && res.success && res.file_path) {
+    document.getElementById('kdbx-source-keyfile-path').value = res.file_path;
+  }
+}
+
+async function handleBrowseUnlockKeyfile() {
+  const res = await callApi('select_kdbx_keyfile');
+  if (res && res.success && res.file_path) {
+    document.getElementById('kdbx-unlock-keyfile').value = res.file_path;
+  }
+}
+
+async function handleSaveKdbxSource() {
+  const sid = document.getElementById('kdbx-source-id').value.trim() || null;
+  const name = document.getElementById('kdbx-source-name').value.trim();
+  const sourceType = document.querySelector('input[name="kdbx-source-type"]:checked')?.value || 'local';
+  const filePath = document.getElementById('kdbx-source-file-path').value.trim();
+  const keyfilePath = document.getElementById('kdbx-source-keyfile-path').value.trim() || null;
+  const sshHost = document.getElementById('kdbx-ssh-host').value.trim() || null;
+  const sshPort = parseInt(document.getElementById('kdbx-ssh-port').value, 10) || 22;
+  const sshUser = document.getElementById('kdbx-ssh-user').value.trim() || null;
+  const statusMsg = document.getElementById('kdbx-source-status-msg');
+
+  if (!name || !filePath) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = 'Preencha o nome amigável e o caminho do arquivo .kdbx.';
+    statusMsg.classList.remove('hidden');
+    return;
+  }
+
+  if (sourceType === 'ssh' && !sshHost) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = 'Para conexões SSH, informe o Host / Servidor.';
+    statusMsg.classList.remove('hidden');
+    return;
+  }
+
+  statusMsg.className = 'hidden';
+  const res = await callApi('save_kdbx_source', name, filePath, sourceType, keyfilePath, sshHost, sshPort, sshUser, sid);
+
+  if (res && res.success) {
+    statusMsg.style.background = 'rgba(74, 222, 128, 0.15)';
+    statusMsg.style.color = 'var(--success)';
+    statusMsg.innerText = res.message || 'Fonte salva com sucesso!';
+    statusMsg.classList.remove('hidden');
+    setTimeout(() => {
+      closeModal('modal-kdbx-source');
+      loadKdbxSources();
+    }, 800);
+  } else {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = res.message || 'Erro ao salvar fonte.';
+    statusMsg.classList.remove('hidden');
+  }
+}
+
+async function handleDeleteKdbxSource(sourceId, name) {
+  if (!confirm(`Deseja realmente excluir a fonte KeePass "${name}"? Os registros já importados permanecerão no cofre.`)) {
+    return;
+  }
+  const res = await callApi('delete_kdbx_source', sourceId);
+  if (res && res.success) {
+    showToast(`Fonte "${name}" removida.`);
+    loadKdbxSources();
+    if (activeKdbxSource && activeKdbxSource.id === sourceId) {
+      closeKdbxExplorer();
+    }
+  } else {
+    showToast(res.message || 'Erro ao excluir fonte.');
+  }
+}
+
+function handleOpenKdbxUnlockModal(sourceId) {
+  const src = cachedKdbxSources.find(s => s.id === sourceId);
+  if (!src) return;
+
+  document.getElementById('kdbx-unlock-source-id').value = src.id;
+  document.getElementById('kdbx-unlock-desc').innerText = `Informe a senha mestra para abrir a base "${src.name}":`;
+  document.getElementById('kdbx-unlock-password').value = '';
+  document.getElementById('kdbx-unlock-keyfile').value = src.keyfile_path || '';
+  document.getElementById('kdbx-unlock-status-msg').className = 'hidden';
+  openModal('modal-kdbx-unlock');
+  setTimeout(() => document.getElementById('kdbx-unlock-password')?.focus(), 150);
+}
+
+async function handleConfirmUnlockKdbx() {
+  const sid = document.getElementById('kdbx-unlock-source-id').value;
+  const pwd = document.getElementById('kdbx-unlock-password').value;
+  const keyfile = document.getElementById('kdbx-unlock-keyfile').value.trim() || null;
+  const statusMsg = document.getElementById('kdbx-unlock-status-msg');
+  const btn = document.getElementById('btn-confirm-unlock-kdbx');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Validando...';
+  if (window.lucide) window.lucide.createIcons();
+
+  try {
+    const res = await callApi('read_kdbx_entries', sid, pwd, keyfile);
+    if (res && res.success) {
+      activeKdbxSource = cachedKdbxSources.find(s => s.id === sid) || { id: sid, name: 'Base Aberta' };
+      cachedKdbxEntries = res.data || [];
+      closeModal('modal-kdbx-unlock');
+      showToast(`${cachedKdbxEntries.length} credenciais carregadas da base!`);
+      openKdbxExplorer();
+      loadKdbxSources(); // Atualiza data de último acesso
+    } else {
+      statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+      statusMsg.style.color = 'var(--danger)';
+      statusMsg.innerText = res.message || 'Falha ao autenticar no KDBX.';
+      statusMsg.classList.remove('hidden');
+    }
+  } catch (e) {
+    statusMsg.style.background = 'rgba(248, 113, 113, 0.15)';
+    statusMsg.style.color = 'var(--danger)';
+    statusMsg.innerText = `Erro: ${e.message}`;
+    statusMsg.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="unlock"></i> Desbloquear & Abrir';
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
+function openKdbxExplorer() {
+  const section = document.getElementById('kdbx-explorer-section');
+  const title = document.getElementById('kdbx-active-source-title');
+  const subtitle = document.getElementById('kdbx-active-source-subtitle');
+  if (!section) return;
+
+  if (title) title.innerHTML = `<i data-lucide="unlock" style="color: var(--success); width: 18px; height: 18px;"></i> Base Aberta: ${escapeHtml(activeKdbxSource?.name || 'KDBX')}`;
+  if (subtitle) subtitle.innerText = `${cachedKdbxEntries.length} entradas encontradas • ${activeKdbxSource?.file_path || ''}`;
+
+  section.classList.remove('hidden');
+  renderKdbxEntriesList();
+  section.scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeKdbxExplorer() {
+  const section = document.getElementById('kdbx-explorer-section');
+  if (section) section.classList.add('hidden');
+  activeKdbxSource = null;
+  cachedKdbxEntries = [];
+}
+
+function handleFilterKdbxEntries(query) {
+  renderKdbxEntriesList(query);
+}
+
+function renderKdbxEntriesList(filterQuery = '') {
+  const container = document.getElementById('kdbx-entries-container');
+  if (!container) return;
+
+  const cleanQ = (filterQuery || '').trim().toLowerCase();
+  const entries = cleanQ
+    ? cachedKdbxEntries.filter(e => {
+        const text = `${e.title} ${e.username_or_key} ${e.url || ''} ${e.notes || ''}`.toLowerCase();
+        return text.includes(cleanQ);
+      })
+    : cachedKdbxEntries;
+
+  if (entries.length === 0) {
+    container.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--fg-muted); font-size: 13px;">Nenhuma entrada corresponde ao filtro.</div>';
+    return;
+  }
+
+  let html = '';
+  entries.forEach((e, idx) => {
+    const meta = e.metadata || {};
+    const groupName = meta.group ? `<span class="badge" style="background: var(--bg-elev-2); font-size: 10px;">${escapeHtml(meta.group)}</span>` : '';
+    const hasTotp = meta.has_totp ? `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10px;">TOTP</span>` : '';
+
+    html += `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-sm); gap: 10px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 220px;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+            <strong style="color: var(--fg); font-size: 13px;">${escapeHtml(e.title)}</strong>
+            ${groupName}
+            ${hasTotp}
+          </div>
+          <div style="font-size: 12px; color: var(--fg-muted);">
+            ${e.username_or_key ? `<span style="color: var(--fg);">${escapeHtml(e.username_or_key)}</span> • ` : ''}
+            <span>${escapeHtml(e.url || 'Sem URL')}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px; align-items: center;">
+          ${e.username_or_key ? `
+            <button type="button" class="btn btn-secondary btn-sm" onclick="copyKdbxField('${escapeHtml(e.username_or_key)}', 'Usuário copiado!')" title="Copiar Usuário">
+              <i data-lucide="user"></i>
+            </button>
+          ` : ''}
+          ${e.password ? `
+            <button type="button" class="btn btn-secondary btn-sm" onclick="copyKdbxField('${escapeHtml(e.password)}', 'Senha copiada com segurança!')" title="Copiar Senha">
+              <i data-lucide="key"></i>
+            </button>
+          ` : ''}
+          <button type="button" class="btn btn-primary btn-sm" onclick="handleImportSingleKdbxEntry(${idx})">
+            <i data-lucide="download"></i> Importar para o Cofre
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function copyKdbxField(text, msg) {
+  if (!text) return;
+  await callApi('copy_secret_to_clipboard', text, 30);
+  showToast(msg || 'Copiado para a área de transferência!');
+}
+
+async function handleImportSingleKdbxEntry(index) {
+  const entry = cachedKdbxEntries[index];
+  if (!entry) return;
+
+  const res = await callApi('import_kdbx_entries_to_vault', [entry], 'overwrite');
+  if (res && res.success) {
+    showToast(`Credencial "${entry.title}" importada para o Cofre Central!`);
+    loadVaultData();
+  } else {
+    showToast(res.message || 'Erro ao importar credencial.');
+  }
+}
+
+async function handleImportAllKdbxEntries() {
+  if (!cachedKdbxEntries || cachedKdbxEntries.length === 0) {
+    showToast('Nenhuma entrada disponível para importação.');
+    return;
+  }
+
+  if (!confirm(`Deseja importar todas as ${cachedKdbxEntries.length} credenciais para o Cofre Central (toolbox.db)?`)) {
+    return;
+  }
+
+  const btn = document.getElementById('btn-import-all-kdbx');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="spin"></i> Importando...';
+  }
+
+  try {
+    const res = await callApi('import_kdbx_entries_to_vault', cachedKdbxEntries, 'skip');
+    if (res && res.success) {
+      showToast(res.message || `${res.imported} credenciais importadas com sucesso!`);
+      loadVaultData();
+    } else {
+      showToast(res.message || 'Erro ao importar credenciais.');
+    }
+  } catch (e) {
+    showToast(`Falha: ${e.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="download"></i> Importar Todos para o Cofre';
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+}
+
+async function handleSyncKdbxSource(sourceId) {
+  const src = cachedKdbxSources.find(s => s.id === sourceId);
+  if (!src) return;
+
+  showToast(`Iniciando sincronização SSH para "${src.name}"...`);
+  try {
+    const res = await callApi('sync_kdbx_source', sourceId);
+    if (res && res.success) {
+      showToast(`Sincronização concluída com sucesso!`);
+      loadKdbxSources();
+    } else {
+      showToast(`Erro na sincronização: ${res.message}`);
+    }
+  } catch (e) {
+    showToast(`Falha na sincronização: ${e.message}`);
+  }
+}
+
+// Exports globais adicionais
+window.loadKdbxSources = loadKdbxSources;
+window.openAddKdbxSourceModal = openAddKdbxSourceModal;
+window.openEditKdbxSourceModal = openEditKdbxSourceModal;
+window.toggleKdbxSourceTypeFields = toggleKdbxSourceTypeFields;
+window.handleBrowseKdbxFile = handleBrowseKdbxFile;
+window.handleBrowseKdbxKeyfile = handleBrowseKdbxKeyfile;
+window.handleBrowseUnlockKeyfile = handleBrowseUnlockKeyfile;
+window.handleSaveKdbxSource = handleSaveKdbxSource;
+window.handleDeleteKdbxSource = handleDeleteKdbxSource;
+window.handleOpenKdbxUnlockModal = handleOpenKdbxUnlockModal;
+window.handleConfirmUnlockKdbx = handleConfirmUnlockKdbx;
+window.closeKdbxExplorer = closeKdbxExplorer;
+window.handleFilterKdbxEntries = handleFilterKdbxEntries;
+window.copyKdbxField = copyKdbxField;
+window.handleImportSingleKdbxEntry = handleImportSingleKdbxEntry;
+window.handleImportAllKdbxEntries = handleImportAllKdbxEntries;
+window.handleSyncKdbxSource = handleSyncKdbxSource;
+
 
 

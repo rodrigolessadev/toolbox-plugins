@@ -334,6 +334,23 @@ class SafeDatabase:
             );
             """)
 
+            # Tabela: Fontes Externas de Arquivos KeePass (.kdbx) - Issue #217
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS plugin_safe_external_kdbx_sources (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'local', -- 'local', 'ssh'
+                file_path TEXT NOT NULL,
+                keyfile_path TEXT,
+                ssh_host TEXT,
+                ssh_port INTEGER DEFAULT 22,
+                ssh_user TEXT,
+                last_sync_at TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+
             conn.commit()
 
     # ========================================================================
@@ -746,3 +763,83 @@ class SafeDatabase:
             cursor.execute("DELETE FROM safe_plugin_grants WHERE id = ?;", (grant_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+    # ========================================================================
+    # Fontes Externas KDBX (Issue #217 - Abordagem B / toolbox.db)
+    # ========================================================================
+
+    def add_kdbx_source(
+        self,
+        source_id: str,
+        name: str,
+        file_path: str,
+        source_type: str = "local",
+        keyfile_path: Optional[str] = None,
+        ssh_host: Optional[str] = None,
+        ssh_port: int = 22,
+        ssh_user: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cadastra ou atualiza uma fonte de arquivo KeePass (.kdbx)."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO plugin_safe_external_kdbx_sources (
+                id, name, source_type, file_path, keyfile_path, ssh_host, ssh_port, ssh_user, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                source_type = excluded.source_type,
+                file_path = excluded.file_path,
+                keyfile_path = excluded.keyfile_path,
+                ssh_host = excluded.ssh_host,
+                ssh_port = excluded.ssh_port,
+                ssh_user = excluded.ssh_user,
+                updated_at = CURRENT_TIMESTAMP;
+            """, (
+                source_id,
+                name,
+                source_type,
+                file_path,
+                keyfile_path,
+                ssh_host,
+                ssh_port,
+                ssh_user,
+            ))
+            conn.commit()
+        return self.get_kdbx_source(source_id) or {}
+
+    def get_kdbx_source(self, source_id: str) -> Optional[Dict[str, Any]]:
+        """Busca uma fonte KDBX pelo identificador."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM plugin_safe_external_kdbx_sources WHERE id = ?;", (source_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def list_kdbx_sources(self) -> List[Dict[str, Any]]:
+        """Retorna todas as fontes KDBX cadastradas ordenadas pelo nome."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM plugin_safe_external_kdbx_sources ORDER BY name ASC;")
+            return [dict(r) for r in cursor.fetchall()]
+
+    def delete_kdbx_source(self, source_id: str) -> bool:
+        """Remove uma fonte KDBX cadastrada."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM plugin_safe_external_kdbx_sources WHERE id = ?;", (source_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_kdbx_source_last_sync(self, source_id: str) -> bool:
+        """Atualiza o carimbo de data/hora do último sync da fonte KDBX."""
+        with self.connect() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            UPDATE plugin_safe_external_kdbx_sources
+            SET last_sync_at = datetime('now'), updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?;
+            """, (source_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+

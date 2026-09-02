@@ -77,9 +77,14 @@ class SafePluginApi(BasePluginApi):
     API exposta ao JavaScript (window.pywebview.api) para a interface do Cofre Seguro.
     """
 
-    def __init__(self, service: Optional[SafeService] = None, window: Optional[Any] = None):
+    def __init__(self, service: Optional[SafeService] = None, window: Optional[Any] = None, db: Optional[Any] = None):
         super().__init__()
-        self._service = service or SafeService()
+        if service is not None:
+            self._service = service
+        elif db is not None:
+            self._service = SafeService(db=db)
+        else:
+            self._service = SafeService()
         self._window = window
         self._service.add_on_lock_listener(self._on_service_lock)
 
@@ -552,6 +557,154 @@ class SafePluginApi(BasePluginApi):
             return self._service.search_unified_entries(query=query, source_filter=source_filter)
         except Exception as e:
             return {"success": False, "message": str(e), "local_entries": [], "keepassxc_entries": []}
+
+    # -------------------------------------------------------------------------
+    # Métodos da API de Fontes KeePass (.kdbx) - Issue #217
+    # -------------------------------------------------------------------------
+    def list_kdbx_sources(self) -> Dict[str, Any]:
+        """Lista todas as fontes KDBX cadastradas."""
+        try:
+            sources = self._service.list_kdbx_sources()
+            return {"success": True, "data": sources}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def save_kdbx_source(
+        self,
+        name: str,
+        file_path: str,
+        source_type: str = "local",
+        keyfile_path: Optional[str] = None,
+        ssh_host: Optional[str] = None,
+        ssh_port: int = 22,
+        ssh_user: Optional[str] = None,
+        source_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cadastra ou atualiza uma fonte .kdbx."""
+        try:
+            res = self._service.add_kdbx_source(
+                name=name,
+                file_path=file_path,
+                source_type=source_type,
+                keyfile_path=keyfile_path,
+                ssh_host=ssh_host,
+                ssh_port=ssh_port,
+                ssh_user=ssh_user,
+                source_id=source_id,
+            )
+            return {"success": True, "data": res, "message": "Fonte KeePass (.kdbx) salva com sucesso!"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def delete_kdbx_source(self, source_id: str) -> Dict[str, Any]:
+        """Exclui uma fonte .kdbx cadastrada."""
+        try:
+            ok = self._service.delete_kdbx_source(source_id)
+            return {"success": ok, "message": "Fonte removida com sucesso."}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def test_kdbx_source(
+        self,
+        source_id_or_path: str,
+        password: Optional[str] = None,
+        keyfile_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Testa se as credenciais do .kdbx são válidas."""
+        try:
+            ok, msg = self._service.test_kdbx_source(
+                source_id_or_path=source_id_or_path,
+                password=password,
+                keyfile_path=keyfile_path,
+            )
+            return {"success": ok, "message": msg}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def read_kdbx_entries(
+        self,
+        source_id_or_path: str,
+        password: Optional[str] = None,
+        keyfile_path: Optional[str] = None,
+        search_query: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Lê diretamente as entradas do arquivo KDBX."""
+        try:
+            entries = self._service.read_kdbx_entries(
+                source_id_or_path=source_id_or_path,
+                password=password,
+                keyfile_path=keyfile_path,
+                search_query=search_query,
+            )
+            return {"success": True, "data": entries, "count": len(entries)}
+        except Exception as e:
+            return {"success": False, "message": str(e), "data": []}
+
+    def sync_kdbx_source(self, source_id: str, password: Optional[str] = None) -> Dict[str, Any]:
+        """Sincroniza fonte remota e valida KDBX."""
+        try:
+            return self._service.sync_kdbx_source(source_id=source_id, password=password)
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def import_kdbx_entries_to_vault(
+        self,
+        entries: List[Dict[str, Any]],
+        conflict_policy: str = "skip",
+        tags: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Importa registros selecionados do KDBX para a base central do cofre."""
+        try:
+            return self._service.import_kdbx_entries_to_vault(
+                entries=entries,
+                conflict_policy=conflict_policy,
+                tags=tags,
+            )
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def select_kdbx_file(self) -> Dict[str, Any]:
+        """Abre caixa de diálogo para seleção de arquivos .kdbx."""
+        try:
+            win = self._window
+            if not win:
+                return {"success": False, "message": "Janela não inicializada."}
+            import webview
+            file_types = sanitize_file_types((
+                "Bases de Dados KeePass (*.kdbx;*.kdb)",
+                "KeePass 2.x Database (*.kdbx)",
+                "KeePass 1.x Database (*.kdb)",
+                "Todos os arquivos (*.*)",
+            ))
+            res = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=file_types)
+            if not res or len(res) == 0:
+                return {"success": False, "message": "Nenhum arquivo selecionado."}
+            chosen = res[0] if isinstance(res, (list, tuple)) else str(res)
+            return {"success": True, "file_path": str(chosen), "file_name": Path(chosen).name}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
+    def select_kdbx_keyfile(self) -> Dict[str, Any]:
+        """Abre caixa de diálogo para seleção de arquivo de chave (Keyfile)."""
+        try:
+            win = self._window
+            if not win:
+                return {"success": False, "message": "Janela não inicializada."}
+            import webview
+            file_types = sanitize_file_types((
+                "Arquivos de Chave (*.key;*.keyx)",
+                "Keyfile (*.key)",
+                "KeePass Keyfile (*.keyx)",
+                "Todos os arquivos (*.*)",
+            ))
+            res = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=file_types)
+            if not res or len(res) == 0:
+                return {"success": False, "message": "Nenhum arquivo selecionado."}
+            chosen = res[0] if isinstance(res, (list, tuple)) else str(res)
+            return {"success": True, "file_path": str(chosen), "file_name": Path(chosen).name}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
 
 
 
