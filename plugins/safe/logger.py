@@ -24,14 +24,52 @@ DEFAULT_LOG_RETENTION_DAYS = 30
 def get_default_log_dir() -> Path:
     """
     Retorna o diretório canônico de logs do ecossistema Toolbox.
-    No Windows: %APPDATA%/com.toolbox.desktop/log
-    Fallback: ~/.toolbox/log
+    No Windows: %APPDATA%/com.toolbox.desktop/logs
+    Fallback: ~/.toolbox/logs
     """
     if sys.platform == "win32" and "APPDATA" in os.environ:
-        base_dir = Path(os.environ["APPDATA"]) / "com.toolbox.desktop" / "log"
+        base_dir = Path(os.environ["APPDATA"]) / "com.toolbox.desktop" / "logs"
     else:
-        base_dir = Path.home() / ".toolbox" / "log"
+        base_dir = Path.home() / ".toolbox" / "logs"
     return base_dir
+
+
+def migrate_legacy_safe_logs(target_log_dir: Optional[Path] = None) -> int:
+    """
+    Migra arquivos de log legados da pasta singular 'log/' (%APPDATA%/com.toolbox.desktop/log)
+    para o diretório padrão canônico 'logs/'.
+    """
+    canonical_dir = (Path(target_log_dir) if target_log_dir else get_default_log_dir()).resolve()
+    legacy_dir = canonical_dir.parent / "log"
+
+    if not legacy_dir.exists() or not legacy_dir.is_dir() or legacy_dir == canonical_dir:
+        return 0
+
+    migrated_count = 0
+    date_regex = re.compile(r"^(?:safe|cofre)-(\d{4})-(\d{2})-(\d{2})(?:\.\d+)?\.log$")
+
+    try:
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        for item in list(legacy_dir.iterdir()):
+            if item.is_file() and date_regex.match(item.name):
+                dest = canonical_dir / item.name
+                if not dest.exists():
+                    try:
+                        item.replace(dest)
+                        migrated_count += 1
+                    except Exception:
+                        pass
+
+        # Se a pasta antiga ficou vazia, remove-a
+        try:
+            if not any(legacy_dir.iterdir()):
+                legacy_dir.rmdir()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    return migrated_count
 
 
 def get_safe_log_filename(target_date: Optional[date] = None) -> str:
@@ -95,6 +133,9 @@ def setup_logger(
         target_dir.mkdir(parents=True, exist_ok=True)
     except Exception:
         pass
+
+    # Executa migração de logs legados se existirem
+    migrate_legacy_safe_logs(target_dir)
 
     log_file = target_dir / get_safe_log_filename(target_date)
     logger = logging.getLogger(logger_name)
