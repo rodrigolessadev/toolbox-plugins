@@ -22,6 +22,7 @@ try:
     import windows_hello
     import windows_session
     import importers
+    import kdbx_reader
     import logger as safe_logger_module
 except ImportError:
     try:
@@ -30,6 +31,7 @@ except ImportError:
         from . import windows_hello
         from . import windows_session
         from . import importers
+        from . import kdbx_reader
         from . import logger as safe_logger_module
     except ImportError:
         from safe import crypto
@@ -44,6 +46,10 @@ except ImportError:
             from safe import importers
         except ImportError:
             importers = None
+        try:
+            from safe import kdbx_reader
+        except ImportError:
+            kdbx_reader = None
 
 try:
     from shared.keepassxc_client import (
@@ -83,8 +89,21 @@ class SafeService:
     Serviço central do Cofre Seguro com gerenciamento de chave mestra em memória.
     """
 
-    def __init__(self, db_path: Optional[Union[str, Path]] = None, keepassxc_client: Optional[Any] = None):
-        self.db = db.SafeDatabase(db_path)
+    def __init__(
+        self,
+        db_path: Optional[Union[str, Path, db.SafeDatabase]] = None,
+        keepassxc_client: Optional[Any] = None,
+        db_instance: Optional[db.SafeDatabase] = None,
+        db: Optional[db.SafeDatabase] = None,
+    ):
+        if db is not None:
+            self.db = db
+        elif db_instance is not None:
+            self.db = db_instance
+        elif isinstance(db_path, getattr(globals().get("db"), "SafeDatabase", type(None))):
+            self.db = db_path
+        else:
+            self.db = globals()["db"].SafeDatabase(db_path)
         self._master_key: Optional[bytearray] = None
         self._last_activity_time: float = time.time()
         self._on_lock_listeners: List[Callable[[str], None]] = []
@@ -1034,6 +1053,218 @@ class SafeService:
             "keepassxc_entries": kpxc_entries,
             "keepassxc_status": kpxc_status
         }
+
+    # =========================================================================
+    # Métodos de Fontes KeePass (.kdbx) Diretas & Headless - Issue #217
+    # =========================================================================
+
+    def add_kdbx_source(
+        self,
+        name: str,
+        file_path: str,
+        source_type: str = "local",
+        keyfile_path: Optional[str] = None,
+        ssh_host: Optional[str] = None,
+        ssh_port: int = 22,
+        ssh_user: Optional[str] = None,
+        source_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Cadastra uma nova fonte .kdbx ou atualiza uma existente no SQLite Central."""
+        sid = source_id or f"kdbx_src_{uuid.uuid4().hex[:8]}"
+        return self.db.add_kdbx_source(
+            source_id=sid,
+            name=name,
+            file_path=file_path,
+            source_type=source_type,
+            keyfile_path=keyfile_path,
+            ssh_host=ssh_host,
+            ssh_port=ssh_port,
+            ssh_user=ssh_user,
+        )
+
+    def list_kdbx_sources(self) -> List[Dict[str, Any]]:
+        """Lista todas as fontes KDBX cadastradas."""
+        return self.db.list_kdbx_sources()
+
+    def get_kdbx_source(self, source_id: str) -> Optional[Dict[str, Any]]:
+        """Recupera detalhes de uma fonte KDBX cadastrada."""
+        return self.db.get_kdbx_source(source_id)
+
+    def delete_kdbx_source(self, source_id: str) -> bool:
+        """Remove uma fonte KDBX cadastrada."""
+        return self.db.delete_kdbx_source(source_id)
+
+    def test_kdbx_source(
+        self,
+        source_id_or_path: str,
+        password: Optional[str] = None,
+        keyfile_path: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        """Testa se a senha e/ou keyfile conseguem abrir a base .kdbx."""
+        if not kdbx_reader:
+            return False, "Módulo de leitura KDBX não carregado."
+
+        src = self.db.get_kdbx_source(source_id_or_path)
+        actual_path = src["file_path"] if src else source_id_or_path
+        actual_keyfile = src.get("keyfile_path") if (src and not keyfile_path) else keyfile_path
+
+        return kdbx_reader.KdbxReader.test_kdbx_credentials(
+            kdbx_path=actual_path,
+            password=password,
+            keyfile_path=actual_keyfile,
+        )
+
+    def read_kdbx_entries(
+        self,
+        source_id_or_path: str,
+        password: Optional[str] = None,
+        keyfile_path: Optional[str] = None,
+        search_query: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lê diretamente as entradas contidas no arquivo .kdbx."""
+        if not kdbx_reader:
+            raise RuntimeError("Módulo de leitura KDBX indisponível.")
+
+        src = self.db.get_kdbx_source(source_id_or_path)
+        actual_path = src["file_path"] if src else source_id_or_path
+        actual_keyfile = src.get("keyfile_path") if (src and not keyfile_path) else keyfile_path
+
+        entries = kdbx_reader.KdbxReader.read_entries(
+            kdbx_path=actual_path,
+            password=password,
+            keyfile_path=actual_keyfile,
+            search_query=search_query,
+        )
+
+        # Se for uma fonte cadastrada no banco, marca última data de sync/leitura com sucesso
+        if src:
+            self.db.update_kdbx_source_last_sync(src["id"])
+
+        return entries
+
+    def sync_kdbx_source(
+        self,
+        source_id: str,
+        password: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Sincroniza uma fonte KDBX (se remota SSH, realiza o download seguro via SCP)
+        e valida a integridade da base.
+        """
+        if not kdbx_reader:
+            return {"success": False, "message": "Módulo kdbx_reader não disponível."}
+
+        src = self.db.get_kdbx_source(source_id)
+        if not src:
+            return {"success": False, "message": f"Fonte não encontrada: {source_id}"}
+
+        target_file = src["file_path"]
+        if src["source_type"] == "ssh":
+            try:
+                downloaded_path = kdbx_reader.KdbxReader.sync_remote_sftp(
+                    ssh_host=src["ssh_host"],
+                    remote_path=src["file_path"],
+                    ssh_user=src.get("ssh_user"),
+                    ssh_port=src.get("ssh_port") or 22,
+                )
+                target_file = str(downloaded_path)
+            except Exception as e:
+                return {"success": False, "message": f"Falha na sincronização SSH: {e}"}
+
+        # Testa as credenciais
+        ok, msg = kdbx_reader.KdbxReader.test_kdbx_credentials(
+            kdbx_path=target_file,
+            password=password,
+            keyfile_path=src.get("keyfile_path"),
+        )
+        if not ok:
+            return {"success": False, "message": f"Arquivo sincronizado, mas validação falhou: {msg}"}
+
+        self.db.update_kdbx_source_last_sync(source_id)
+        return {
+            "success": True,
+            "message": "Fonte sincronizada e validada com sucesso!",
+            "local_path": target_file,
+            "last_sync_at": datetime.now().isoformat(),
+        }
+
+    def import_kdbx_entries_to_vault(
+        self,
+        entries: List[Dict[str, Any]],
+        conflict_policy: str = "skip",
+        tags: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Importa uma lista de entradas extraídas de um arquivo KDBX diretamente para o Cofre Central.
+        Garante armazenamento cifrado em repouso no SQLite central.
+        """
+        if not self.is_unlocked:
+            raise RuntimeError("Cofre bloqueado. Desbloqueie o cofre antes de importar.")
+
+        imported_count = 0
+        skipped_count = 0
+        updated_count = 0
+
+        existing_entries = {e["title"].strip().lower(): e for e in self.list_secrets()}
+
+        for entry in entries:
+            title = (entry.get("title") or "Item Sem Título").strip()
+            username = entry.get("username_or_key") or entry.get("username") or ""
+            password = entry.get("password") or entry.get("payload") or ""
+            category = entry.get("category") or "password"
+            meta = entry.get("metadata") or {}
+            entry_tags = list(entry.get("tags") or ["kdbx"])
+            if tags:
+                for t in tags:
+                    if t not in entry_tags:
+                        entry_tags.append(t)
+
+            norm_title = title.lower()
+            existing = existing_entries.get(norm_title)
+
+            entry_id = None
+            if existing:
+                if conflict_policy == "skip":
+                    skipped_count += 1
+                    continue
+                elif conflict_policy == "overwrite":
+                    entry_id = existing["id"]
+                    updated_count += 1
+                elif conflict_policy == "duplicate":
+                    title = f"{title} (KDBX-{uuid.uuid4().hex[:4]})"
+                    imported_count += 1
+            else:
+                imported_count += 1
+
+            payload = {
+                "username": username,
+                "password": password,
+                "url": meta.get("url") or entry.get("url") or "",
+                "notes": meta.get("notes") or entry.get("notes") or "",
+                "custom_fields": meta.get("custom_fields") or {},
+                "source": "kdbx_direct",
+            }
+            if meta.get("totp_current"):
+                payload["totp_current"] = meta["totp_current"]
+
+            self.save_secret(
+                title=title,
+                category=category,
+                username_or_key=username,
+                secret_payload=payload,
+                tags=entry_tags,
+                entry_id=entry_id,
+            )
+
+        return {
+            "success": True,
+            "imported": imported_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "total": len(entries),
+            "message": f"{imported_count + updated_count} credenciais integradas com sucesso! ({skipped_count} ignoradas).",
+        }
+
 
 
 

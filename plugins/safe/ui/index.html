@@ -220,6 +220,10 @@
             <span class="badge" id="count-note">0</span>
           </button>
           <hr class="nav-divider">
+          <button class="category-item" id="nav-item-kdbx" onclick="selectCategory('kdbx', this)">
+            <i data-lucide="database"></i> Fontes KeePass (.kdbx)
+            <span class="badge" id="count-kdbx">0</span>
+          </button>
           <button class="category-item" id="nav-item-keepassxc" onclick="selectCategory('keepassxc', this)">
             <i data-lucide="shield-check"></i> Hub KeePassXC
             <span class="badge" id="count-keepassxc">⚪</span>
@@ -299,6 +303,64 @@
             </div>
           </div>
         </div>
+
+        <!-- Painel Fontes KeePass (.kdbx) - Issue #217 -->
+        <div id="kdbx-sources-panel" class="hidden" style="display: none; flex-direction: column; gap: 20px; padding: 4px;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+              <div>
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="database" style="color: var(--accent);"></i> Bases KeePass Cadastradas (.kdbx)
+                </h3>
+                <p style="font-size: 12px; color: var(--fg-secondary);">Acesso direto, consulta e sincronização sem necessitar da interface do KeePassXC aberta.</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="loadKdbxSources()">
+                  <i data-lucide="refresh-cw"></i> Atualizar
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openAddKdbxSourceModal()">
+                  <i data-lucide="plus"></i> Cadastrar Fonte .kdbx
+                </button>
+              </div>
+            </div>
+
+            <!-- Lista de Fontes KDBX -->
+            <div id="kdbx-sources-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="text-align: center; padding: 24px; color: var(--fg-muted); font-size: 13px;">
+                Carregando fontes KeePass...
+              </div>
+            </div>
+          </div>
+
+          <!-- Seção de Navegação / Exploração da Base Aberta -->
+          <div id="kdbx-explorer-section" class="hidden" style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h4 id="kdbx-active-source-title" style="font-size: 15px; font-weight: 600; color: var(--fg-primary); display: flex; align-items: center; gap: 8px;">
+                  <i data-lucide="unlock" style="color: var(--success); width: 18px; height: 18px;"></i> Entradas da Base KeePass
+                </h4>
+                <span id="kdbx-active-source-subtitle" style="font-size: 11px; color: var(--fg-muted);">Nenhum arquivo carregado</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeKdbxExplorer()">
+                  <i data-lucide="x"></i> Fechar Base
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-import-all-kdbx" onclick="handleImportAllKdbxEntries()">
+                  <i data-lucide="download"></i> Importar Todos para o Cofre
+                </button>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+              <input type="text" id="kdbx-search-input" class="form-input" placeholder="Filtrar entradas por título, usuário ou URL..." oninput="handleFilterKdbxEntries(this.value)">
+            </div>
+
+            <div id="kdbx-entries-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 480px; overflow-y: auto;">
+              <!-- Entradas renderizadas via JS -->
+            </div>
+          </div>
+        </div>
+
 
         <!-- Toolbar de Filtro de Origem -->
         <div class="source-filter-toolbar" id="sourceFilterGroup" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 4px 0;">
@@ -698,10 +760,130 @@
           <i data-lucide="shield-alert" style="width: 18px; height: 18px; color: var(--warning); flex-shrink: 0; margin-top: 1px;"></i>
           <span style="font-size: 11px; color: var(--fg-muted);"><strong>Recomendação de Segurança:</strong> Arquivos exportados em texto puro (.xml, .csv, .txt, .json) não são criptografados. Utilize sempre o formato <strong>.safepack</strong> para backups seguros.</span>
         </div>
-      </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('modal-import')">Fechar</button>
         <button class="btn btn-primary" id="btn-confirm-import" onclick="handleConfirmImport()"><i data-lucide="upload"></i> Importar Credenciais</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: CADASTRAR / EDITAR FONTE KEEPASS (.KDBX) -->
+  <!-- ===================================================================== -->
+  <div id="modal-kdbx-source" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <h3 id="kdbx-source-modal-title"><i data-lucide="database" style="color: var(--accent);"></i> Cadastrar Fonte KeePass (.kdbx)</h3>
+        <button class="btn-close" onclick="closeModal('modal-kdbx-source')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="kdbx-source-id">
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="kdbx-source-name">Nome Amigável / Rótulo *</label>
+          <input type="text" id="kdbx-source-name" class="form-input" placeholder="Ex: Meu Cofre Pessoal, Servidor Prod...">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label">Tipo de Conexão / Origem</label>
+          <div style="display: flex; gap: 12px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="radio" name="kdbx-source-type" value="local" checked onchange="toggleKdbxSourceTypeFields()">
+              <span>Arquivo Local</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="radio" name="kdbx-source-type" value="ssh" onchange="toggleKdbxSourceTypeFields()">
+              <span>Remoto via SSH / SFTP</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="kdbx-source-file-path" id="kdbx-file-path-label">Caminho do Arquivo .kdbx *</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="kdbx-source-file-path" class="form-input" placeholder="C:\Users\...\meucofre.kdbx" style="flex: 1;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-browse-kdbx" onclick="handleBrowseKdbxFile()">
+              <i data-lucide="folder-open"></i> Procurar
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="kdbx-source-keyfile-path">Arquivo de Chave / Keyfile (Opcional)</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="kdbx-source-keyfile-path" class="form-input" placeholder="Opcional: caminho do keyfile..." style="flex: 1;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handleBrowseKdbxKeyfile()">
+              <i data-lucide="key"></i> Procurar
+            </button>
+          </div>
+        </div>
+
+        <!-- Campos de SSH / Remoto -->
+        <div id="kdbx-ssh-fields" class="hidden" style="margin-top: 10px; padding: 12px; background: var(--bg-elev-2); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--fg);">Parâmetros SSH / SFTP (OpenSSH do Sistema)</div>
+          <div class="form-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <div style="flex: 2;">
+              <label class="form-label" for="kdbx-ssh-host">Host / Servidor *</label>
+              <input type="text" id="kdbx-ssh-host" class="form-input" placeholder="ex: 192.168.1.100 ou sftp.empresa.com">
+            </div>
+            <div style="flex: 1;">
+              <label class="form-label" for="kdbx-ssh-port">Porta SSH</label>
+              <input type="number" id="kdbx-ssh-port" class="form-input" value="22">
+            </div>
+          </div>
+          <div>
+            <label class="form-label" for="kdbx-ssh-user">Usuário SSH</label>
+            <input type="text" id="kdbx-ssh-user" class="form-input" placeholder="ex: admin, ubuntu...">
+          </div>
+        </div>
+
+        <div id="kdbx-source-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 10px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-kdbx-source')">Cancelar</button>
+        <button class="btn btn-primary" onclick="handleSaveKdbxSource()"><i data-lucide="check"></i> Salvar Fonte</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: DESBLOQUEAR / ABRIR BASE KEEPASS (.KDBX) -->
+  <!-- ===================================================================== -->
+  <div id="modal-kdbx-unlock" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3><i data-lucide="lock" style="color: var(--accent);"></i> Desbloquear Base KeePass</h3>
+        <button class="btn-close" onclick="closeModal('modal-kdbx-unlock')"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <p class="subtitle" id="kdbx-unlock-desc">Informe a senha mestra para abrir a base de dados:</p>
+        <input type="hidden" id="kdbx-unlock-source-id">
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="kdbx-unlock-password">Senha Mestra da Base *</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="kdbx-unlock-password" class="form-input" placeholder="Digite a senha do .kdbx..." onkeydown="if(event.key==='Enter') handleConfirmUnlockKdbx()">
+            <button type="button" class="btn-icon" onclick="togglePasswordVisibility('kdbx-unlock-password', this)">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="kdbx-unlock-keyfile">Arquivo de Chave (se aplicável)</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="kdbx-unlock-keyfile" class="form-input" placeholder="Caminho do keyfile (se houver)..." style="flex: 1;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="handleBrowseUnlockKeyfile()">
+              <i data-lucide="key"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="kdbx-unlock-status-msg" class="hidden" style="font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 10px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('modal-kdbx-unlock')">Cancelar</button>
+        <button class="btn btn-primary" id="btn-confirm-unlock-kdbx" onclick="handleConfirmUnlockKdbx()"><i data-lucide="unlock"></i> Desbloquear & Abrir</button>
       </div>
     </div>
   </div>

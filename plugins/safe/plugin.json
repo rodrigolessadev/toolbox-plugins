@@ -1,7 +1,7 @@
 {
   "name": "Cofre Seguro (Safe)",
-  "version": "1.10.3",
-  "description": "Gerenciador local e seguro de credenciais, certificados e segredos, com visualização unificada e integração em tempo real com o KeePassXC Desktop.",
+  "version": "1.11.0",
+  "description": "Gerenciador local e seguro de credenciais, certificados e segredos, com leitura e sincronização direta de arquivos KeePass (.kdbx) e integração com o KeePassXC Desktop.",
   "language": "python",
   "entry": "main.py",
   "icon": "shield-check",
