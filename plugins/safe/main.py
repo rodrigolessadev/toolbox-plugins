@@ -151,9 +151,17 @@ class SafePluginApi(BasePluginApi):
         password: Optional[str] = None,
         use_hello: bool = False,
         reason: str = "Acesso ao Cofre Seguro",
+        window_handle: Optional[int] = None,
     ) -> Dict[str, Any]:
         try:
-            self._service.unlock(password=password, use_hello=use_hello, reason=reason)
+            hwnd = window_handle
+            win = getattr(self, "window", None) or getattr(self, "_window", None)
+            if not hwnd and win and hasattr(win, "native") and win.native:
+                try:
+                    hwnd = int(win.native)
+                except Exception:
+                    hwnd = None
+            self._service.unlock(password=password, use_hello=use_hello, reason=reason, window_handle=hwnd)
             return {"success": True, "message": "Cofre desbloqueado com sucesso!"}
         except Exception as e:
             return {"success": False, "message": str(e)}

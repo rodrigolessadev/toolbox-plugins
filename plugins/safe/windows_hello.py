@@ -7,6 +7,7 @@ encapsulamento de credenciais usando DPAPI (CryptProtectData) com entropia dedic
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
@@ -14,6 +15,8 @@ import time
 from typing import Optional, Tuple
 
 import threading
+
+logger = logging.getLogger("safe.windows_hello")
 
 # Flags DPAPI
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
@@ -68,7 +71,8 @@ def check_windows_hello_sync() -> bool:
             _hello_cache_timestamp = now
             _hello_check_in_progress = False
         return is_available
-    except Exception:
+    except Exception as exc:
+        logger.warning(f"Erro ao checar disponibilidade do Windows Hello: {exc}")
         with _hello_lock:
             _hello_cache_result = False
             _hello_cache_timestamp = now
@@ -139,6 +143,7 @@ def verify_windows_hello(
 ) -> Tuple[bool, str]:
     """
     Dispara o prompt oficial do Windows Hello para autenticação biométrica ou PIN em primeiro plano.
+    Aceita window_handle (HWND) da janela ativa para associação direta.
     Retorna (sucesso, mensagem_status).
     """
     if not _is_windows():
@@ -147,10 +152,21 @@ def verify_windows_hello(
     # 1. Concede permissão de primeiro plano ao processo filho
     allow_foreground_focus()
 
+    # Se window_handle não for informado, tenta resolver foreground window ativa
+    resolved_hwnd = window_handle
+    if not resolved_hwnd:
+        try:
+            import ctypes
+            resolved_hwnd = int(ctypes.windll.user32.GetForegroundWindow() or 0)
+        except Exception:
+            resolved_hwnd = 0
+
+    logger.info(f"Invocando verificação Windows Hello (HWND={resolved_hwnd})...")
+
     # Escapa aspas simples na mensagem do prompt
     safe_msg = prompt_message.replace("'", "''")
 
-    # Script PowerShell para invocar RequestVerificationAsync garantindo foco
+    # Script PowerShell para invocar RequestVerificationAsync ou RequestVerificationForWindowAsync
     ps_cmd = (
         "try { "
         "  Add-Type -TypeDefinition @\" "
@@ -165,15 +181,61 @@ def verify_windows_hello(
         "  [Win32Foreground]::AllowSetForegroundWindow(-1) | Out-Null; "
         "  Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop; "
         "  [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType=WindowsRuntime] | Out-Null; "
+        f"  $hwnd = [IntPtr]({resolved_hwnd or 0}); "
+        "  $op = $null; "
+        "  if ($hwnd -ne [IntPtr]::Zero) { "
+        "    try { "
+        "      Add-Type -TypeDefinition @\" "
+        "        using System; "
+        "        using System.Runtime.InteropServices; "
+        "        public static class HelloInterop { "
+        "          [ComImport] "
+        "          [Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\")] "
+        "          [InterfaceType(ComInterfaceType.InterfaceIsIInspectable)] "
+        "          public interface IUserConsentVerifierInterop { "
+        "            void RequestVerificationForWindowAsync( "
+        "              IntPtr appWindow, "
+        "              [MarshalAs(UnmanagedType.HString)] string message, "
+        "              [In] ref Guid riid, "
+        "              [MarshalAs(UnmanagedType.IInspectable)] out object asyncOperation "
+        "            ); "
+        "          } "
+        "          [DllImport(\"api-ms-win-core-winrt-l1-1-0.dll\")] "
+        "          public static extern int RoGetActivationFactory( "
+        "            [MarshalAs(UnmanagedType.HString)] string activatableClassId, "
+        "            [In] ref Guid iid, "
+        "            out IUserConsentVerifierInterop factory "
+        "          ); "
+        "          public static object RequestForWindow(IntPtr hWnd, string msg) { "
+        "            Guid iid = new Guid(\"39E050C3-4E74-441A-8DC0-B812977A9E6B\"); "
+        "            IUserConsentVerifierInterop factory; "
+        "            int hr = RoGetActivationFactory(\"Windows.Security.Credentials.UI.UserConsentVerifier\", ref iid, out factory); "
+        "            if (hr != 0) throw new COMException(\"RoGetActivationFactory failed\", hr); "
+        "            Guid opIid = new Guid(\"00000000-0000-0000-C000-000000000046\"); "
+        "            object asyncOp; "
+        "            factory.RequestVerificationForWindowAsync(hWnd, msg, ref opIid, out asyncOp); "
+        "            return asyncOp; "
+        "          } "
+        "        } "
+        "\"@ -ErrorAction Stop; "
+        f"      $op = [HelloInterop]::RequestForWindow($hwnd, '{safe_msg}'); "
+        "    } catch { "
+        f"      $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
+        "    } "
+        "  } else { "
+        f"    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
+        "  } "
         "  $asTaskGen = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { "
         "    $_.Name -eq 'AsTask' -and $_.IsGenericMethod -and $_.GetParameters().Count -eq 1 "
         "  } | Select-Object -First 1; "
-        f"  $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync('{safe_msg}'); "
         "  $asTask = $asTaskGen.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]); "
         "  $task = $asTask.Invoke($null, @($op)); "
         "  $task.Wait(); "
         "  Write-Output $task.Result.ToString(); "
-        "} catch { Write-Output ('Error: ' + $_.Exception.Message) }"
+        "} catch { "
+        "  [Console]::Error.WriteLine($_.Exception.ToString()); "
+        "  Write-Output ('Error: ' + $_.Exception.Message); "
+        "}"
     )
 
     try:
@@ -185,6 +247,13 @@ def verify_windows_hello(
             creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
         )
         out = (res.stdout or "").strip()
+        err = (res.stderr or "").strip()
+
+        if err:
+            logger.warning(f"PowerShell Windows Hello stderr: {err}")
+
+        logger.info(f"Windows Hello retorno do processo: out='{out}'")
+
         if "Verified" in out:
             return True, "Autenticação biométrica/PIN confirmada com sucesso."
         elif "Canceled" in out:
@@ -197,9 +266,12 @@ def verify_windows_hello(
             return False, "Windows Hello desabilitado pelas diretivas do sistema."
         elif "DeviceBusy" in out:
             return False, "O dispositivo de autenticação biométrica está ocupado."
+        elif out.startswith("Error:"):
+            return False, f"Falha na execução do Windows Hello: {out[6:].strip()}"
         else:
             return False, f"Autenticação não confirmada pelo Windows Hello ({out or 'Falha'})."
     except Exception as e:
+        logger.error(f"Exceção ao solicitar verificação do Windows Hello: {e}")
         return False, f"Erro ao solicitar verificação do Windows Hello: {e}"
 
 

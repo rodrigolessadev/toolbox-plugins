@@ -310,6 +310,7 @@ class SafeService:
         password: Optional[str] = None,
         use_hello: bool = False,
         reason: str = "Acesso ao Cofre Seguro",
+        window_handle: Optional[int] = None,
     ) -> bool:
         """
         Desbloqueia o cofre via Windows Hello ou Senha Mestra.
@@ -330,7 +331,10 @@ class SafeService:
 
         if use_hello and auth_mode in ("windows_hello", "hybrid"):
             # Solicita confirmação biométrica/PIN
-            ok, msg = windows_hello.verify_windows_hello(reason)
+            if window_handle is not None:
+                ok, msg = windows_hello.verify_windows_hello(reason, window_handle=window_handle)
+            else:
+                ok, msg = windows_hello.verify_windows_hello(reason)
             if not ok:
                 logger.warning(f"Desbloqueio via Windows Hello recusado: {msg}")
                 raise SafeAccessDeniedError(f"Windows Hello recusado: {msg}")
