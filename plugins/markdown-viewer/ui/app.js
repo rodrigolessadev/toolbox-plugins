@@ -75,29 +75,64 @@ print(f"Média apurada: {resultado['media']}")
 > Use os atalhos de teclado **Ctrl+T** / **Ctrl+N** (Nova Aba), **Ctrl+W** (Fechar Aba), **Ctrl+Tab** (Alternar Aba) e **Ctrl+S** (Salvar).
 `;
 
+let isRestoringSession = false;
+
+function waitForApi(timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.load_session) {
+      return resolve(window.pywebview.api);
+    }
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.load_session) {
+        clearInterval(interval);
+        resolve(window.pywebview.api);
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(interval);
+        resolve(null);
+      }
+    }, 50);
+    window.addEventListener('pywebviewready', () => {
+      if (window.pywebview && window.pywebview.api) {
+        clearInterval(interval);
+        resolve(window.pywebview.api);
+      }
+    }, { once: true });
+  });
+}
+
 async function init() {
   initTheme();
-  loadPluginVersion();
   setupEventListeners();
 
-  let hasInitialFile = false;
+  isRestoringSession = true;
   try {
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_initial_file) {
-      const initFileRes = await window.pywebview.api.get_initial_file();
-      if (initFileRes && initFileRes.success) {
-        hasInitialFile = true;
-        createTab(initFileRes.filename, initFileRes.path, initFileRes.content, initFileRes.content, false, initFileRes.mtime || 0, true);
+    const api = await waitForApi();
+    if (api) {
+      await loadPluginVersion();
+    }
+
+    let hasInitialFile = false;
+    if (api && api.get_initial_file) {
+      try {
+        const initFileRes = await api.get_initial_file();
+        if (initFileRes && initFileRes.success && initFileRes.content !== undefined) {
+          hasInitialFile = true;
+          createTab(initFileRes.filename, initFileRes.path, initFileRes.content, initFileRes.content, false, initFileRes.mtime || 0, true);
+        }
+      } catch (e) {
+        console.error('Erro ao ler arquivo inicial:', e);
       }
     }
-  } catch (e) {
-    console.error('Erro ao ler arquivo inicial:', e);
-  }
 
-  if (!hasInitialFile) {
-    const restored = await restoreSession();
-    if (!restored && tabs.length === 0) {
-      createTab('sem-titulo-1.md', '', SAMPLE_MARKDOWN, SAMPLE_MARKDOWN, false, 0, true);
+    if (!hasInitialFile) {
+      const restored = await restoreSession();
+      if (!restored && tabs.length === 0) {
+        createTab('sem-titulo-1.md', '', SAMPLE_MARKDOWN, SAMPLE_MARKDOWN, false, 0, true);
+      }
     }
+  } finally {
+    isRestoringSession = false;
   }
 
   updateViewMode(globalState.viewMode || 'split');
@@ -149,6 +184,9 @@ async function loadPluginVersion() {
 let sessionSaveDebounceTimer = null;
 
 function scheduleSessionSave(delay = 750) {
+  if (isRestoringSession) {
+    return;
+  }
   if (sessionSaveDebounceTimer) {
     clearTimeout(sessionSaveDebounceTimer);
   }
@@ -158,6 +196,9 @@ function scheduleSessionSave(delay = 750) {
 }
 
 async function persistCurrentSession() {
+  if (isRestoringSession) {
+    return;
+  }
   try {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.save_session) {
       return;
@@ -1342,24 +1383,7 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-async function checkInitialFile() {
-  try {
-    if (window.pywebview && window.pywebview.api && window.pywebview.api.get_initial_file) {
-      const res = await window.pywebview.api.get_initial_file();
-      if (res && res.success && res.content !== undefined) {
-        openOrFocusFile(res.filename, res.path, res.content, res.mtime || 0);
-      }
-    }
-  } catch (e) {
-    console.error('Erro ao checar arquivo inicial:', e);
-  }
-}
-
 document.addEventListener('DOMContentLoaded', init);
-window.addEventListener('pywebviewready', () => {
-  loadPluginVersion();
-  checkInitialFile();
-});
 
 // Exports globais para chamadas inline no HTML
 window.copyCode = copyCode;

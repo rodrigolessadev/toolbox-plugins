@@ -12,15 +12,27 @@ from unittest.mock import patch
 
 import pytest
 
-PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
-if str(PLUGINS_DIR) not in sys.path:
-    sys.path.insert(0, str(PLUGINS_DIR))
-MV_DIR = PLUGINS_DIR / "markdown-viewer"
-if str(MV_DIR) not in sys.path:
-    sys.path.insert(0, str(MV_DIR))
+import importlib.util
 
-import domain
-from main import MarkdownViewerApi
+ROOT = Path(__file__).parent.parent
+DOMAIN_PATH = ROOT / "plugins" / "markdown-viewer" / "domain.py"
+MAIN_PATH = ROOT / "plugins" / "markdown-viewer" / "main.py"
+
+orig_domain = sys.modules.get("domain")
+try:
+    spec_domain = importlib.util.spec_from_file_location("md_viewer_domain_session", DOMAIN_PATH)
+    domain = importlib.util.module_from_spec(spec_domain)
+    spec_domain.loader.exec_module(domain)
+
+    spec_main = importlib.util.spec_from_file_location("md_viewer_main_session", MAIN_PATH)
+    md_main = importlib.util.module_from_spec(spec_main)
+    spec_main.loader.exec_module(md_main)
+    MarkdownViewerApi = md_main.MarkdownViewerApi
+finally:
+    if orig_domain is not None:
+        sys.modules["domain"] = orig_domain
+    else:
+        sys.modules.pop("domain", None)
 
 
 def test_session_save_and_load(tmp_path: Path, monkeypatch):
