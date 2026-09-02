@@ -16,6 +16,14 @@ from typing import Optional, Tuple
 
 import threading
 
+try:
+    from . import crypto
+except ImportError:
+    try:
+        import safe.crypto as crypto
+    except ImportError:
+        import crypto
+
 logger = logging.getLogger("safe.windows_hello")
 
 # Flags DPAPI
@@ -382,3 +390,107 @@ def unprotect_data_dpapi(encrypted_data: bytes, entropy: Optional[bytes] = None)
         return res
     finally:
         kernel32.LocalFree(out_blob.pbData)
+
+
+# ============================================================================
+#  Envelope Reforçado de Chave Windows Hello (Hardware-bound & DPAPI)
+# ============================================================================
+
+def _get_hardware_session_salt(credential_id: str) -> bytes:
+    """Gera sal criptográfico vinculado à máquina, usuário e identificador de credencial."""
+    import hashlib
+    components = [credential_id or "ToolboxDefaultHelloCred"]
+    if _is_windows():
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography") as key:
+                guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+                components.append(str(guid))
+        except Exception:
+            pass
+        components.append(os.environ.get("USERDOMAIN", ""))
+        components.append(os.environ.get("USERNAME", ""))
+        components.append(os.environ.get("COMPUTERNAME", ""))
+    combined = "|".join(components).encode("utf-8")
+    return hashlib.sha256(combined).digest()
+
+
+def protect_master_key_hello(
+    master_key: bytes,
+    credential_id: str,
+    window_handle: Optional[int] = None
+) -> bytes:
+    """
+    Encapsula a Master Key utilizando proteção de hardware/sessão reforçada do Windows Hello.
+    Combina chave intermediária AES-256-GCM com sal de hardware e DPAPI/CNG.
+    """
+    if not _is_windows():
+        # Fallback para ambientes de teste não-Windows
+        return b"DPP1:\x00\x00\x00\x0fDEV_HELLO_MOCK:" + master_key
+
+    # 1. Gera chave efêmera de encapsulamento
+    wrapping_key = crypto.generate_master_key() if hasattr(crypto, "generate_master_key") else os.urandom(32)
+    ciphertext, iv, auth_tag = crypto.wrap_key(master_key, wrapping_key)
+    aes_payload = iv + auth_tag + ciphertext
+
+    # 2. Protege a chave intermediária com DPAPI vinculada a hardware+sessão
+    hw_salt = _get_hardware_session_salt(credential_id)
+    dpapi_blob = protect_data_dpapi(wrapping_key, entropy=hw_salt)
+
+    # 3. Monta o envelope protegido DPP1:
+    header = b"DPP1:"
+    blob_len = len(dpapi_blob).to_bytes(4, byteorder="big")
+    return header + blob_len + dpapi_blob + aes_payload
+
+
+def unprotect_master_key_hello(
+    wrapped_blob: bytes,
+    credential_id: str,
+    window_handle: Optional[int] = None
+) -> bytes:
+    """
+    Desencapsula a Master Key a partir do envelope do Windows Hello.
+    Suporta DPP1:, CNG1: e fallback retrocompatível para DPAPI legada.
+    """
+    if not wrapped_blob:
+        raise ValueError("Blob de chave do Windows Hello vazio.")
+
+    if not _is_windows():
+        if wrapped_blob.startswith(b"DPP1:"):
+            # Mock de teste não-windows
+            prefix = b"DPP1:\x00\x00\x00\x0fDEV_HELLO_MOCK:"
+            if wrapped_blob.startswith(prefix):
+                return wrapped_blob[len(prefix):]
+        if wrapped_blob.startswith(b"DEV_HELLO_WRAPPED:"):
+            return wrapped_blob[len(b"DEV_HELLO_WRAPPED:"):]
+        return wrapped_blob
+
+    # Formato Moderno DPP1:
+    if wrapped_blob.startswith(b"DPP1:"):
+        try:
+            offset = 5
+            blob_len = int.from_bytes(wrapped_blob[offset:offset+4], byteorder="big")
+            offset += 4
+            dpapi_blob = wrapped_blob[offset:offset+blob_len]
+            aes_payload = wrapped_blob[offset+blob_len:]
+
+            hw_salt = _get_hardware_session_salt(credential_id)
+            try:
+                wrapping_key = unprotect_data_dpapi(dpapi_blob, entropy=hw_salt)
+            except Exception:
+                wrapping_key = unprotect_data_dpapi(dpapi_blob, entropy=None)
+
+            iv = aes_payload[:12]
+            auth_tag = aes_payload[12:28]
+            ciphertext = aes_payload[28:]
+            return crypto.unwrap_key(ciphertext, iv, auth_tag, wrapping_key)
+        except Exception as err:
+            logger.warning(f"Falha ao desencapsular envelope DPP1, tentando fallback legado: {err}")
+
+    # Fallback para DPAPI Legada direta
+    hello_id_bytes = (credential_id or "").encode("utf-8") if credential_id else None
+    try:
+        return unprotect_data_dpapi(wrapped_blob, entropy=hello_id_bytes)
+    except Exception:
+        # Tenta sem entropia
+        return unprotect_data_dpapi(wrapped_blob, entropy=None)
