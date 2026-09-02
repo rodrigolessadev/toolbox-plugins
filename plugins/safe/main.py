@@ -133,14 +133,23 @@ class SafePluginApi(BasePluginApi):
         use_hello: bool = False,
         timeout: int = 300,
         lock_on_os_lock: bool = True,
+        window_handle: Optional[int] = None,
     ) -> Dict[str, Any]:
         try:
+            hwnd = window_handle
+            win = getattr(self, "window", None) or getattr(self, "_window", None)
+            if not hwnd and win and hasattr(win, "native") and win.native:
+                try:
+                    hwnd = int(win.native.Handle.ToInt64()) if hasattr(win.native, "Handle") else int(win.native)
+                except Exception:
+                    pass
             res = self._service.setup_vault(
                 auth_mode=auth_mode,
                 password=password,
                 use_hello=use_hello,
                 auto_lock_timeout=timeout,
                 lock_on_os_lock=lock_on_os_lock,
+                window_handle=hwnd,
             )
             return {"success": True, "data": res}
         except Exception as e:
