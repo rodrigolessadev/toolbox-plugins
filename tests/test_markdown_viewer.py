@@ -174,9 +174,11 @@ Outro trecho com tis:
 def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
     ui_css = ROOT / "plugins" / "markdown-viewer" / "ui" / "style.css"
     ui_parser = ROOT / "plugins" / "markdown-viewer" / "ui" / "vendor" / "marked_parser.js"
+    ui_html = ROOT / "plugins" / "markdown-viewer" / "ui" / "index.html"
 
     assert ui_css.exists()
     assert ui_parser.exists()
+    assert ui_html.exists()
 
     css_content = ui_css.read_text(encoding="utf-8")
     assert ".preview-pane" in css_content
@@ -185,11 +187,15 @@ def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
     assert ".preview-content *" in css_content
 
     parser_content = ui_parser.read_text(encoding="utf-8")
-    # Confirma que a regex e lógica suportam espaços/tabs antes das cercas e tis
+    # Confirma suporte a cercas com atributos e blocos indentados
     assert "openCodeMatch" in parser_content
     assert "codeIndentLen" in parser_content
     assert "codeFenceChar" in parser_content
     assert "closeFencePattern" in parser_content
+    assert "isIndentedCodeStart" in parser_content
+
+    html_content = ui_html.read_text(encoding="utf-8")
+    assert "?v=" in html_content
 
 
 def test_dynamic_tab_title_helpers():
@@ -201,6 +207,29 @@ def test_dynamic_tab_title_helpers():
     assert "sanitizeHeadingText" in js_content
     assert "getTabDisplayName" in js_content
     assert "getSuggestedFilename" in js_content
+
+
+def test_analyze_markdown_pure_indented_code_blocks():
+    sample = """# Documento com Código Indentado
+
+Parágrafo explicativo.
+
+    def process_data(item):
+        return item * 2
+
+Outro texto após código.
+
+- Item de Lista 1
+  ```sql -- busca avancada
+  SELECT id, nome FROM clientes WHERE status = 'ativo';
+  ```
+- Item de Lista 2
+"""
+    stats = md_domain.analyze_markdown(sample)
+    assert stats["heading_count"] == 1
+    assert stats["code_block_count"] == 2
+    assert stats["line_count"] > 10
+
 
 
 
