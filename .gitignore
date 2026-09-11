@@ -12,7 +12,21 @@ config.json
 
 plugins/release/*
 release
+.issues/
 .issues/*
+.Issues/
+.Issues/*
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+.env
+
+# AI & IDEs
+.agents/
+.cursor/
+.geminiignore
 
 # grapify
 .kiro/*

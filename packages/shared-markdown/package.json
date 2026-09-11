@@ -1,0 +1,28 @@
+{
+  "name": "@toolbox-plugins/shared-markdown",
+  "version": "1.0.0",
+  "description": "Componente compartilhado de visualização e edição de Markdown (MarkdownField) para o ecossistema Toolbox",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "type": "module",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": "./src/index.js",
+    "./style.css": "./src/style.css",
+    "./parser": "./src/parser.js",
+    "./reader": "./src/markdown-reader.js",
+    "./editor": "./src/markdown-editor.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "toolbox",
+    "markdown",
+    "markdown-field",
+    "editor",
+    "reader"
+  ],
+  "author": "Rodrigo",
+  "license": "MIT"
+}
