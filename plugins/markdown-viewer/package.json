@@ -1,0 +1,16 @@
+{
+  "name": "@toolbox-plugins/markdown-viewer",
+  "version": "1.6.4",
+  "description": "Visualizador e editor de Markdown com suporte a múltiplas abas para o ecossistema Toolbox",
+  "private": true,
+  "dependencies": {
+    "@toolbox-plugins/shared-markdown": "^1.0.0"
+  },
+  "keywords": [
+    "toolbox",
+    "markdown",
+    "markdown-viewer"
+  ],
+  "author": "Rodrigo Lessa",
+  "license": "MIT"
+}

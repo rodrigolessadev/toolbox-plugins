@@ -1,7 +1,8 @@
 /**
  * @toolbox-plugins/shared-markdown - Parser & XSS Sanitizer
  * Fast, self-contained Markdown parser with GitHub Flavored Markdown (GFM),
- * strict XSS sanitization, code blocks with copy action, checklists, tables and alerts.
+ * strict XSS sanitization, code blocks with syntax highlighting and copy action,
+ * checklists, tables, blockquotes, and alerts.
  */
 
 export function escapeHtml(str) {
@@ -22,8 +23,8 @@ export function sanitizeHtml(html) {
   sanitized = sanitized.replace(/<(script|iframe|object|embed|applet|meta|link|style|base|form)[\s\S]*?<\/\1>/gi, '');
   sanitized = sanitized.replace(/<(script|iframe|object|embed|applet|meta|link|style|base|form)[^>]*\/?>/gi, '');
 
-  // 2. Remove inline event handlers (onerror, onload, onclick, etc.)
-  sanitized = sanitized.replace(/\s+on[a-z]+(\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+))?/gi, '');
+  // 2. Remove inline event handlers (onerror, onload, etc.), allowing custom onclick for copy
+  sanitized = sanitized.replace(/\s+on(?!click)[a-z]+(\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+))?/gi, '');
 
   // 3. Neutralize dangerous URL schemes in href and src
   sanitized = sanitized.replace(/\b(href|src)\s*=\s*(['"])\s*(javascript|vbscript|data\s*:\s*text\/html):/gi, '$1=$2about:blank#blocked-');
@@ -40,6 +41,50 @@ export function slugify(text) {
     .replace(/[^\w\s-]/g, '')
     .replace(/[\s_-]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+export function highlightSyntax(code, lang) {
+  if (!code) return '';
+
+  const l = (lang || '').toLowerCase();
+
+  if (l === 'json') {
+    return code
+      .replace(/(&quot;[\w-]+&quot;)\s*:/g, '<span class="tok-key">$1</span>:')
+      .replace(/:\s*(&quot;[^&]*&quot;)/g, ': <span class="tok-string">$1</span>')
+      .replace(/:\s*(\b\d+\.?\d*\b)/g, ': <span class="tok-number">$1</span>')
+      .replace(/:\s*(true|false|null)\b/g, ': <span class="tok-keyword">$1</span>');
+  }
+
+  if (l === 'python' || l === 'py') {
+    const kws = ['def', 'class', 'import', 'from', 'return', 'if', 'elif', 'else', 'for', 'while', 'in', 'try', 'except', 'finally', 'with', 'as', 'lambda', 'yield', 'async', 'await', 'None', 'True', 'False', 'self'];
+    const kwRegex = new RegExp(`\\b(${kws.join('|')})\\b`, 'g');
+    return code
+      .replace(/(#.*)$/gm, '<span class="tok-comment">$1</span>')
+      .replace(/(&quot;.*?&quot;|&#039;.*?&#039;)/g, '<span class="tok-string">$1</span>')
+      .replace(kwRegex, '<span class="tok-keyword">$1</span>')
+      .replace(/\b(\d+)\b/g, '<span class="tok-number">$1</span>');
+  }
+
+  if (l === 'sql') {
+    const sqlKws = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'GROUP', 'BY', 'ORDER', 'LIMIT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'CREATE', 'TABLE', 'DROP', 'ALTER', 'AND', 'OR', 'NOT', 'AS', 'ON', 'HAVING', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX'];
+    const sqlRegex = new RegExp(`\\b(${sqlKws.join('|')})\\b`, 'gi');
+    return code
+      .replace(/(--.*)$/gm, '<span class="tok-comment">$1</span>')
+      .replace(/(&quot;.*?&quot;|&#039;.*?&#039;)/g, '<span class="tok-string">$1</span>')
+      .replace(sqlRegex, '<span class="tok-keyword">$1</span>');
+  }
+
+  if (l === 'js' || l === 'javascript' || l === 'ts' || l === 'typescript') {
+    const jsKws = ['const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'import', 'export', 'default', 'from', 'class', 'extends', 'new', 'this', 'async', 'await', 'try', 'catch', 'throw'];
+    const jsRegex = new RegExp(`\\b(${jsKws.join('|')})\\b`, 'g');
+    return code
+      .replace(/(\/\/.*)$/gm, '<span class="tok-comment">$1</span>')
+      .replace(/(&quot;.*?&quot;|&#039;.*?&#039;)/g, '<span class="tok-string">$1</span>')
+      .replace(jsRegex, '<span class="tok-keyword">$1</span>');
+  }
+
+  return code;
 }
 
 function inlineMarkdown(text) {
@@ -87,9 +132,10 @@ function inlineMarkdown(text) {
   return s;
 }
 
-export function parseMarkdown(md) {
+export function parseMarkdown(md, options = {}) {
   if (!md) return { html: '', toc: [] };
 
+  const shouldHighlight = Boolean(options && options.highlight);
   const toc = [];
   const lines = md.split(/\r?\n/);
   const out = [];
@@ -97,6 +143,8 @@ export function parseMarkdown(md) {
   let inCodeBlock = false;
   let codeLang = '';
   let codeBuffer = [];
+  let codeIndentLen = 0;
+  let codeFenceChar = '';
 
   let inTable = false;
   let tableBuffer = [];
@@ -148,41 +196,107 @@ export function parseMarkdown(md) {
     inTable = false;
   }
 
+  function flushCodeBlock() {
+    const rawCode = codeBuffer.join('\n');
+    const escaped = escapeHtml(rawCode);
+    const codeContent = shouldHighlight ? highlightSyntax(escaped, codeLang) : escaped;
+    out.push(
+      `<div class="tb-code-block">` +
+        `<div class="tb-code-header">` +
+          `<span class="tb-code-lang">${escapeHtml(codeLang || 'plaintext')}</span>` +
+          `<button type="button" class="tb-btn-copy-code" onclick="if(window.copyCode){window.copyCode(this);}" title="Copiar código">` +
+            `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>` +
+            `<span class="tb-copy-label">Copiar</span>` +
+          `</button>` +
+        `</div>` +
+        `<pre class="tb-pre"><code class="language-${escapeHtml(codeLang)}">${codeContent}</code></pre>` +
+      `</div>`
+    );
+    codeBuffer = [];
+    inCodeBlock = false;
+    codeLang = '';
+    codeIndentLen = 0;
+    codeFenceChar = '';
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Fenced Code Block start/end
-    if (/^```/.test(line)) {
-      if (inCodeBlock) {
-        const rawCode = codeBuffer.join('\n');
-        const escaped = escapeHtml(rawCode);
-        out.push(
-          `<div class="tb-code-block">` +
-            `<div class="tb-code-header">` +
-              `<span class="tb-code-lang">${escapeHtml(codeLang || 'plaintext')}</span>` +
-              `<button type="button" class="tb-btn-copy-code" title="Copiar código">` +
-                `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>` +
-                `<span class="tb-copy-label">Copiar</span>` +
-              `</button>` +
-            `</div>` +
-            `<pre class="tb-pre"><code class="language-${escapeHtml(codeLang)}">${escaped}</code></pre>` +
-          `</div>`
-        );
-        inCodeBlock = false;
-        codeLang = '';
-        codeBuffer = [];
+    // Fenced Code Block active check
+    if (inCodeBlock) {
+      const closeFencePattern = codeFenceChar === '~' ? /^\s*~{3,}\s*$/ : /^\s*`{3,}\s*$/;
+      if (closeFencePattern.test(line)) {
+        flushCodeBlock();
+        continue;
+      }
+      if (codeIndentLen > 0) {
+        const indentRegex = new RegExp(`^[ ]{0,${codeIndentLen}}`);
+        codeBuffer.push(line.replace(indentRegex, ''));
       } else {
-        flushList();
-        if (inTable) flushTable();
-        inCodeBlock = true;
-        codeLang = line.replace(/^```/, '').trim();
-        codeBuffer = [];
+        codeBuffer.push(line);
       }
       continue;
     }
 
-    if (inCodeBlock) {
-      codeBuffer.push(line);
+    // Fenced Code Block start check (``` or ~~~ with optional attributes)
+    const openCodeMatch = line.match(/^(\s*)(`{3,}|~{3,})([^\n\r]*)/);
+    if (openCodeMatch) {
+      flushList();
+      if (inTable) flushTable();
+      inCodeBlock = true;
+      codeFenceChar = openCodeMatch[2][0];
+      codeIndentLen = openCodeMatch[1].replace(/\t/g, '  ').length;
+      const rawInfo = openCodeMatch[3] ? openCodeMatch[3].trim() : '';
+      codeLang = rawInfo ? rawInfo.split(/\s+/)[0].toLowerCase() : '';
+      codeBuffer = [];
+      continue;
+    }
+
+    // Indented Code Block check (4 spaces or 1 tab after blank line or doc start)
+    const isIndentedCodeStart = (out.length === 0 || out[out.length - 1] === '') && /^( {4}|\t)/.test(line) && line.trim() !== '';
+    if (isIndentedCodeStart) {
+      flushList();
+      if (inTable) flushTable();
+      const rawCodeLines = [];
+      while (i < lines.length) {
+        const curLine = lines[i];
+        if (/^( {4}|\t)/.test(curLine)) {
+          rawCodeLines.push(curLine.replace(/^( {4}|\t)/, ''));
+          i++;
+        } else if (curLine.trim() === '') {
+          let nextIndented = false;
+          for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].trim() === '') continue;
+            if (/^( {4}|\t)/.test(lines[j])) {
+              nextIndented = true;
+            }
+            break;
+          }
+          if (nextIndented) {
+            rawCodeLines.push('');
+            i++;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+      i--; // adjust loop pointer
+      const rawText = rawCodeLines.join('\n');
+      const escaped = escapeHtml(rawText);
+      out.push(
+        `<div class="tb-code-block code-block-wrapper">` +
+          `<div class="tb-code-header code-header">` +
+            `<span class="tb-code-lang code-lang">code</span>` +
+            `<button type="button" class="tb-btn-copy-code btn-copy-code" onclick="if(window.copyCode){window.copyCode(this);}" title="Copiar código">` +
+              `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>` +
+              `<span class="tb-copy-label">Copiar</span>` +
+            `</button>` +
+          `</div>` +
+          `<pre class="tb-pre"><code>${escaped}</code></pre>` +
+        `</div>`
+      );
       continue;
     }
 
@@ -249,7 +363,7 @@ export function parseMarkdown(md) {
       const level = headingMatch[1].length;
       const title = headingMatch[2].trim();
       const id = slugify(title);
-      toc.push({ level, title, id });
+      toc.push({ level, title, id, text: title });
       out.push(`<h${level} id="${id}" class="tb-heading tb-h${level}">${inlineMarkdown(title)}</h${level}>`);
       continue;
     }
@@ -306,8 +420,7 @@ export function parseMarkdown(md) {
   }
 
   if (inCodeBlock) {
-    const rawCode = codeBuffer.join('\n');
-    out.push(`<pre class="tb-pre"><code class="language-${escapeHtml(codeLang)}">${escapeHtml(rawCode)}</code></pre>`);
+    flushCodeBlock();
   }
 
   if (inTable) {
