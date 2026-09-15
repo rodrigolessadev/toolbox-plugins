@@ -20,6 +20,7 @@ OFFICIAL_LUCIDE_ICONS = {
     "novo-ticket": "ticket",
     "logon-aws": "cloud-cog",
     "markdown-viewer": "file-text",
+    "tarefas": "check-square",
 }
 
 def test_catalog_exists_and_valid():
