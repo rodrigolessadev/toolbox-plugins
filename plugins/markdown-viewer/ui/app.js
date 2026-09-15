@@ -861,7 +861,8 @@ function renderDocument() {
   const activeTab = getActiveTab();
   const content = activeTab ? activeTab.content : '';
 
-  const { html, toc } = window.parseMarkdown(content);
+  const parseFn = (window.ToolboxMarkdown && window.ToolboxMarkdown.parseMarkdown) || window.parseMarkdown;
+  const { html, toc } = parseFn(content, { highlight: true });
   if (activeTab) activeTab.lastToc = toc || [];
   preview.innerHTML = html;
 

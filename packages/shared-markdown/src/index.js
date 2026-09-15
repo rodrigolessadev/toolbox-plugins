@@ -6,4 +6,4 @@
 export { MarkdownField } from './markdown-field.js';
 export { MarkdownReader } from './markdown-reader.js';
 export { MarkdownEditor } from './markdown-editor.js';
-export { parseMarkdown, sanitizeHtml, escapeHtml, slugify } from './parser.js';
+export { parseMarkdown, sanitizeHtml, escapeHtml, slugify, highlightSyntax } from './parser.js';

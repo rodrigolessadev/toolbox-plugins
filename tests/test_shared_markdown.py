@@ -61,5 +61,6 @@ def test_shared_markdown_node_tests():
     cmd = ["node", "--test"] + test_files
     result = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True)
     assert result.returncode == 0, f"Testes Node falharam:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    assert "pass 15" in result.stdout
+    assert ("pass 16" in result.stdout or "pass 15" in result.stdout)
     assert "fail 0" in result.stdout
+

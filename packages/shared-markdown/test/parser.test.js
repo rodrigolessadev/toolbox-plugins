@@ -89,4 +89,14 @@ describe('Parser & Sanitizer Tests', () => {
     assert.ok(html.includes('NOTE'));
     assert.ok(html.includes('Esta é uma nota importante.'));
   });
+
+  test('parseMarkdown renders indented code blocks and tilde fences with syntax highlighting', () => {
+    const md = '~~~python -- script de teste\ndef hello():\n    return 42\n~~~\n\n    def indented():\n        return True\n';
+    const { html } = parseMarkdown(md, { highlight: true });
+
+    assert.ok(html.includes('language-python'));
+    assert.ok(html.includes('tok-keyword'));
+    assert.ok(html.includes('def indented():'));
+  });
 });
+

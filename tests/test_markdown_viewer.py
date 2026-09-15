@@ -175,10 +175,12 @@ def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
     ui_css = ROOT / "plugins" / "markdown-viewer" / "ui" / "style.css"
     ui_parser = ROOT / "plugins" / "markdown-viewer" / "ui" / "vendor" / "marked_parser.js"
     ui_html = ROOT / "plugins" / "markdown-viewer" / "ui" / "index.html"
+    shared_parser = ROOT / "packages" / "shared-markdown" / "src" / "parser.js"
 
     assert ui_css.exists()
     assert ui_parser.exists()
     assert ui_html.exists()
+    assert shared_parser.exists()
 
     css_content = ui_css.read_text(encoding="utf-8")
     assert ".preview-pane" in css_content
@@ -186,16 +188,36 @@ def test_markdown_viewer_ui_text_selection_and_indented_code_parser():
     assert "-webkit-user-select: text;" in css_content
     assert ".preview-content *" in css_content
 
+    # Confirma que marked_parser consome o componente compartilhado sem duplicação de regras
     parser_content = ui_parser.read_text(encoding="utf-8")
-    # Confirma suporte a cercas com atributos e blocos indentados
-    assert "openCodeMatch" in parser_content
-    assert "codeIndentLen" in parser_content
-    assert "codeFenceChar" in parser_content
-    assert "closeFencePattern" in parser_content
-    assert "isIndentedCodeStart" in parser_content
+    assert "ToolboxMarkdown" in parser_content
+    assert "getShared" in parser_content
+
+    # Confirma que o parser compartilhado oficial unifica suporte a cercas com atributos e blocos indentados
+    shared_content = shared_parser.read_text(encoding="utf-8")
+    assert "openCodeMatch" in shared_content
+    assert "codeIndentLen" in shared_content
+    assert "codeFenceChar" in shared_content
+    assert "closeFencePattern" in shared_content
+    assert "isIndentedCodeStart" in shared_content
 
     html_content = ui_html.read_text(encoding="utf-8")
     assert "?v=" in html_content
+    assert "markdown-field.js" in html_content
+    assert "markdown-field.css" in html_content
+
+
+def test_markdown_viewer_consumes_shared_markdown_package():
+    """Valida requisitos da Issue #229: dependência no package.json e integração compartilhada."""
+    pkg_json = ROOT / "plugins" / "markdown-viewer" / "package.json"
+    assert pkg_json.exists(), "plugins/markdown-viewer/package.json deve existir"
+
+    import json
+    data = json.loads(pkg_json.read_text(encoding="utf-8"))
+    assert data.get("name") == "@toolbox-plugins/markdown-viewer"
+    assert "dependencies" in data
+    assert "@toolbox-plugins/shared-markdown" in data["dependencies"]
+
 
 
 def test_dynamic_tab_title_helpers():
