@@ -15,6 +15,9 @@ if str(PLUGINS_DIR) not in sys.path:
 
 from safe import logger as safe_logger
 from safe.service import SafeService
+from safe import crypto
+
+pytestmark = pytest.mark.plugin("safe")
 
 
 def test_logger_setup_creates_dir_and_file():
@@ -98,6 +101,8 @@ def test_logger_retention_and_cleanup():
         assert other_file.exists()
 
 
+@pytest.mark.optional_deps
+@pytest.mark.skipif(crypto.Argon2id is None, reason="Requer cryptography com suporte a Argon2id")
 def test_service_logs_sanitization():
     """
     Garante criticamente que senhas mestras e payloads confidenciais NUNCA sejam gravados nos logs.
@@ -198,7 +203,10 @@ def test_logger_resilience_to_invalid_or_restricted_dir():
     Testa se o setup_logger continua retornando um logger funcional com StreamHandler
     mesmo que o diretório de destino não possa ser criado.
     """
-    invalid_path = Path("N:/non_existent_drive_9999/log_dir_xyz")
+    if sys.platform == "win32":
+        invalid_path = Path("N:/non_existent_drive_9999/log_dir_xyz")
+    else:
+        invalid_path = Path("/sys/kernel/security/non_existent_drive_9999/log_dir_xyz")
     logger_instance = safe_logger.setup_logger(log_dir=invalid_path, logger_name="test_resilience")
     try:
         assert logger_instance is not None

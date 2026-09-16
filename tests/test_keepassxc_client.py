@@ -23,6 +23,9 @@ PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
 if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))
 
+pytestmark = [pytest.mark.plugin("safe"), pytest.mark.optional_deps]
+
+pytest.importorskip("nacl", reason="Requer biblioteca opcional pynacl")
 import nacl.public
 import nacl.utils
 from nacl.public import Box, PrivateKey, PublicKey

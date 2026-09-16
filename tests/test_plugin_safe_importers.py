@@ -12,6 +12,9 @@ if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))
 
 from safe.service import SafeService
+from safe import crypto
+
+pytestmark = pytest.mark.plugin("safe")
 from safe.importers import (
     decode_file_bytes,
     parse_safe_xml,
@@ -162,6 +165,8 @@ def test_detect_and_parse_secrets():
     assert len(items_txt) == 1
 
 
+@pytest.mark.optional_deps
+@pytest.mark.skipif(crypto.Argon2id is None, reason="Requer cryptography com suporte a Argon2id")
 def test_service_preview_and_conflict_policies():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "vault.db"
@@ -221,6 +226,8 @@ def test_service_preview_and_conflict_policies():
         assert "AWS Produção (Importado)" in all_titles
 
 
+@pytest.mark.optional_deps
+@pytest.mark.skipif(crypto.Argon2id is None, reason="Requer cryptography com suporte a Argon2id")
 def test_service_batch_import_large_dataset_performance():
     """Valida a atomicidade, integridade e performance do import_secrets em lote único."""
     import json
@@ -266,6 +273,8 @@ def test_service_batch_import_large_dataset_performance():
         assert "tag_2" in sample["tags"]
 
 
+@pytest.mark.optional_deps
+@pytest.mark.skipif(crypto.Argon2id is None, reason="Requer cryptography com suporte a Argon2id")
 def test_service_safepack_export_and_import_flow():
     """Valida o fluxo completo de exportação em container .safepack, preview com senha e restauração."""
     with tempfile.TemporaryDirectory() as tmpdir:

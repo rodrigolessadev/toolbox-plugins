@@ -12,6 +12,9 @@ if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))
 
 from safe.db import SafeDatabase
+import pytest
+
+pytestmark = pytest.mark.plugin("safe")
 
 
 def test_db_schema_initialization():

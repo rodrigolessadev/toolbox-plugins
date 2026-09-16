@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("safe")
+
 PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
 if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))

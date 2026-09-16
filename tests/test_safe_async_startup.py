@@ -20,6 +20,8 @@ from safe.main import SafePluginApi
 from safe.db import SafeDatabase
 import safe.windows_hello as windows_hello
 
+pytestmark = pytest.mark.plugin("safe")
+
 
 def test_safe_get_status_response_time_under_100ms(tmp_path: Path):
     """Garante que get_status responda instantaneamente (< 100ms) sem travar no PowerShell."""
@@ -35,6 +37,7 @@ def test_safe_get_status_response_time_under_100ms(tmp_path: Path):
     assert duration < 0.1, f"get_status demorou {duration:.3f}s (esperado < 0.1s)"
 
 
+@pytest.mark.windows_only
 def test_windows_hello_async_prewarm_and_cache():
     """Valida que is_windows_hello_available retorna de forma não-bloqueante com fallback assíncrono."""
     with patch("safe.windows_hello._is_windows", return_value=True), \
@@ -49,6 +52,7 @@ def test_windows_hello_async_prewarm_and_cache():
         mock_prewarm.assert_called_once()
 
 
+@pytest.mark.windows_only
 def test_api_check_windows_hello_availability(tmp_path: Path):
     """Valida que SafePluginApi.check_windows_hello_availability responde com sucesso."""
     db_path = tmp_path / "api_test.db"

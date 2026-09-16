@@ -14,6 +14,12 @@ if str(PLUGINS_DIR) not in sys.path:
 
 from safe.service import SafeService, SafeAccessDeniedError, SafeVaultLockedError
 from safe.main import SafePluginApi
+from safe import crypto
+
+pytestmark = [pytest.mark.plugin("safe"), pytest.mark.optional_deps]
+
+if crypto.Argon2id is None:
+    pytest.skip("Testes do SafeService requerem cryptography com suporte a Argon2id", allow_module_level=True)
 
 
 def test_service_lifecycle_setup_lock_unlock():
@@ -238,6 +244,7 @@ def test_service_mandatory_password_and_migration():
         assert service.unlock(password="NewStrongPassword456!") is True
 
 
+@pytest.mark.windows_only
 def test_service_os_session_lock():
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "vault.db"
@@ -303,6 +310,7 @@ def test_service_import_export_save_in_cloud():
         assert "Database Staging" in titles
 
 
+@pytest.mark.windows_only
 def test_service_windows_hello_and_password_dual_wrapping(monkeypatch):
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "vault.db"
@@ -384,6 +392,7 @@ def test_service_auto_lock_disabled_mode():
         assert service.get_status()["status"] == "UNLOCKED"
 
 
+@pytest.mark.windows_only
 def test_service_windows_hello_self_healing_from_null_blob(monkeypatch):
     """
     Testa a capacidade de auto-cura (self-healing) quando uma base híbrida existente
@@ -443,6 +452,7 @@ def test_service_windows_hello_self_healing_from_null_blob(monkeypatch):
         assert secret["payload"] == "TokenSecret999"
 
 
+@pytest.mark.windows_only
 def test_service_windows_hello_entropy_fallback(monkeypatch):
     """
     Testa a resiliência do Windows Hello com fallback quando o envelope foi protegido sem entropia.
@@ -514,6 +524,7 @@ def test_service_update_security_settings_persistence():
         assert status3["lock_on_os_lock"] is True
 
 
+@pytest.mark.windows_only
 def test_service_os_session_lock_with_listeners():
     """
     Testa se o listener de bloqueio de sessão do Windows aciona os callbacks registrados

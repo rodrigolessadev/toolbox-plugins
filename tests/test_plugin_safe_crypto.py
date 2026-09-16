@@ -14,6 +14,11 @@ if str(PLUGINS_DIR) not in sys.path:
 
 from safe import crypto
 
+pytestmark = [pytest.mark.plugin("safe"), pytest.mark.optional_deps]
+
+if crypto.AESGCM is None:
+    pytest.skip("Requer biblioteca cryptography com suporte a AESGCM", allow_module_level=True)
+
 
 def test_generate_master_key():
     mk = crypto.generate_master_key()

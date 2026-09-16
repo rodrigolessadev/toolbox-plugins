@@ -33,15 +33,19 @@ def test_toolbox_theme_tokens():
     assert TOOLBOX_THEME["fg"] == "#e8eaed"
 
 
+from unittest.mock import MagicMock, patch
+
+
 def test_base_plugin_api():
     api = BasePluginApi()
     theme = api.get_theme()
     assert theme == TOOLBOX_THEME
 
-    res_copy = api.copy_text("teste de copia")
-    assert isinstance(res_copy, dict)
-    assert "success" in res_copy
-    assert res_copy["success"] is True
+    with patch("shared.web_utils.copy_to_clipboard", return_value=True):
+        res_copy = api.copy_text("teste de copia")
+        assert isinstance(res_copy, dict)
+        assert "success" in res_copy
+        assert res_copy["success"] is True
 
     res_none = api.copy_text(None)
     assert res_none["success"] is False
@@ -56,9 +60,13 @@ def test_base_plugin_api():
 
 def test_copy_to_clipboard_functionality():
     assert copy_to_clipboard(None) is False
-    assert copy_to_clipboard("") is True
-    assert copy_to_clipboard("console.log('Hello World!');\nconst x = 42;") is True
-    assert copy_to_clipboard("Caractéres acentuados e emojis 🚀✨") is True
+    with patch("subprocess.run") as mock_run:
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_run.return_value = mock_proc
+        assert copy_to_clipboard("") is True
+        assert copy_to_clipboard("console.log('Hello World!');\nconst x = 42;") is True
+        assert copy_to_clipboard("Caractéres acentuados e emojis 🚀✨") is True
 
 
 def test_create_plugin_window_validations(tmp_path: Path):

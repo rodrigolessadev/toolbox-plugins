@@ -14,6 +14,8 @@ if str(PLUGINS_DIR) not in sys.path:
 if str(SAFE_DIR) not in sys.path:
     sys.path.insert(0, str(SAFE_DIR))
 
+pytestmark = pytest.mark.plugin("safe")
+
 from safe.windows_hello import (
     allow_foreground_focus,
     verify_windows_hello,
@@ -109,6 +111,7 @@ def test_verify_windows_hello_handles_error_status():
         assert "Falha na execução do Windows Hello" in msg
 
 
+@pytest.mark.windows_only
 def test_protect_and_unprotect_master_key_hello_dpp1():
     """Valida o ciclo completo de encapsulamento e desencapsulamento no formato DPP1 com sal de hardware."""
     master_key = b"A" * 32
@@ -123,6 +126,7 @@ def test_protect_and_unprotect_master_key_hello_dpp1():
         assert unwrapped == master_key
 
 
+@pytest.mark.windows_only
 def test_unprotect_master_key_hello_legacy_dpapi_fallback():
     """Valida que envelopes legados em DPAPI crua continuam sendo decifrados perfeitamente."""
     master_key = b"B" * 32
