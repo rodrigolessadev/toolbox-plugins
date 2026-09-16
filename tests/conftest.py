@@ -20,6 +20,43 @@ if str(ROOT_DIR) not in sys.path:
 if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))
 
+# Mock defensivo para pywebview se não estiver instalado no ambiente de teste
+try:
+    import webview
+except ImportError:
+    import types
+    import re
+    from unittest.mock import MagicMock
+
+    mock_webview = MagicMock()
+    mock_util = types.ModuleType("webview.util")
+
+    def _parse_file_type(file_type: str):
+        pattern = r"^([^;()]+)\s*\(([^()]+)\)$"
+        match = re.match(pattern, file_type)
+        if not match:
+            raise ValueError(f"Invalid file type: {file_type}")
+        return match.group(1).strip(), match.group(2).strip()
+
+    mock_util.parse_file_type = _parse_file_type
+    mock_webview.util = mock_util
+
+    def _mock_create_window(**kwargs):
+        win = MagicMock()
+        win.title = kwargs.get("title")
+        win.width = kwargs.get("width")
+        win.height = kwargs.get("height")
+        win.events = MagicMock()
+        return win
+
+    mock_webview.create_window.side_effect = _mock_create_window
+
+    sys.modules["webview"] = mock_webview
+    sys.modules["webview.util"] = mock_util
+
+
+
+
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """Auto-skip de testes marcados como windows_only quando executados fora do Windows."""

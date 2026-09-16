@@ -189,6 +189,7 @@ def main():
         title="Visualizador de Markdown",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=1000,
         height=720,
         min_size=(720, 520),

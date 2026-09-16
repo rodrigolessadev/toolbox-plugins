@@ -31,95 +31,13 @@ CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 def set_window_taskbar_icon(is_connected: bool, hwnd: Optional[int] = None) -> bool:
-    """Atualiza o ícone da janela e da barra de tarefas no Windows (Verde se conectado, Vermelho se desconectado)."""
-    if sys.platform != "win32":
-        return False
-
-    icon_path = ICON_CONNECTED_PATH if is_connected else ICON_DISCONNECTED_PATH
-    if not icon_path.exists():
-        return False
-
+    """Atualiza o ícone da janela e da barra de tarefas no Windows (delega para shared.web_utils)."""
     try:
-        import ctypes
-        from ctypes import wintypes
-
-        user32 = ctypes.windll.user32
-        IMAGE_ICON = 1
-        LR_LOADFROMFILE = 0x00000010
-        WM_SETICON = 0x0080
-        ICON_SMALL = 0
-        ICON_BIG = 1
-
-        # Flags Win32 para forçar o recálculo do frame da janela e notificação do Shell/Taskbar
-        SWP_NOSIZE = 0x0001
-        SWP_NOMOVE = 0x0002
-        SWP_NOZORDER = 0x0004
-        SWP_NOACTIVATE = 0x0010
-        SWP_FRAMECHANGED = 0x0020
-        SWP_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
-
-        RDW_INVALIDATE = 0x0001
-        RDW_INTERNALPAINT = 0x0002
-        RDW_ERASE = 0x0004
-        RDW_UPDATENOW = 0x0100
-        RDW_FRAME = 0x0400
-        RDW_ALLCHILDREN = 0x0080
-        RDW_FLAGS = RDW_INVALIDATE | RDW_INTERNALPAINT | RDW_ERASE | RDW_UPDATENOW | RDW_FRAME | RDW_ALLCHILDREN
-
-        h_icon_big = user32.LoadImageW(
-            None,
-            str(icon_path),
-            IMAGE_ICON,
-            32,
-            32,
-            LR_LOADFROMFILE,
-        )
-        h_icon_small = user32.LoadImageW(
-            None,
-            str(icon_path),
-            IMAGE_ICON,
-            16,
-            16,
-            LR_LOADFROMFILE,
-        )
-
-        if not h_icon_big and not h_icon_small:
-            return False
-
-        if hwnd:
-            target_hwnds = [hwnd]
-        else:
-            current_pid = os.getpid()
-            target_hwnds = []
-
-            def _enum_windows_cb(handle: int, _: Any) -> bool:
-                lpdw_pid = wintypes.DWORD()
-                user32.GetWindowThreadProcessId(handle, ctypes.byref(lpdw_pid))
-                if lpdw_pid.value == current_pid:
-                    if user32.IsWindowVisible(handle):
-                        target_hwnds.append(handle)
-                return True
-
-            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-            user32.EnumWindows(WNDENUMPROC(_enum_windows_cb), 0)
-
-        success = False
-        for target in target_hwnds:
-            if h_icon_big:
-                user32.SendMessageW(target, WM_SETICON, ICON_BIG, h_icon_big)
-            if h_icon_small:
-                user32.SendMessageW(target, WM_SETICON, ICON_SMALL, h_icon_small)
-            try:
-                user32.SetWindowPos(target, 0, 0, 0, 0, 0, SWP_FLAGS)
-                user32.RedrawWindow(target, None, None, RDW_FLAGS)
-            except Exception:
-                pass
-            success = True
-        return success
-    except Exception:
-        pass
-    return False
-
+        from shared.web_utils import set_window_taskbar_icon as _set_icon
+    except ImportError:
+        from plugins.shared.web_utils import set_window_taskbar_icon as _set_icon
+    icon_path = ICON_CONNECTED_PATH if is_connected else ICON_DISCONNECTED_PATH
+    return _set_icon(icon_path=icon_path, hwnd=hwnd)
 
 def load_config() -> Dict[str, Any]:
     """Carrega as preferências salvas do plugin."""

@@ -149,6 +149,7 @@ def main():
         title="Tarefas",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=980,
         height=720,
         min_size=(720, 560),

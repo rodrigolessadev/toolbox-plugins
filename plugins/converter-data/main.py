@@ -29,6 +29,7 @@ def main():
         title="Converter Data",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=700,
         height=660,
         min_size=(620, 580),

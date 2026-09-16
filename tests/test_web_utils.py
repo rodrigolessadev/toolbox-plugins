@@ -97,3 +97,63 @@ def test_theme_css_exists():
     content = css_path.read_text(encoding="utf-8")
     assert "--bg: #0e1014;" in content
     assert "--accent: #3b82f6;" in content
+
+
+def test_create_plugin_window_with_plugin_dir_and_version(tmp_path: Path):
+    """Valida formatação automática do título oficial com versão '{Nome} v{X.Y.Z} — Toolbox'."""
+    pdir = tmp_path / "meu-plugin"
+    pdir.mkdir(parents=True)
+    ui_dir = pdir / "ui"
+    ui_dir.mkdir(parents=True)
+    assets_dir = ui_dir / "assets"
+    assets_dir.mkdir(parents=True)
+
+    dummy_html = ui_dir / "index.html"
+    dummy_html.write_text("<!DOCTYPE html><html><body>Test</body></html>", encoding="utf-8")
+
+    manifest = pdir / "plugin.json"
+    manifest.write_text('{"id": "meu-plugin", "name": "Meu Plugin", "version": "2.4.1", "icon": "my-icon"}', encoding="utf-8")
+
+    ico_file = assets_dir / "my-icon.ico"
+    ico_file.write_bytes(b"\x00\x00\x01\x00\x01\x00")
+
+    # 1. Título gerado com versão extraída automaticamente do plugin.json
+    win = create_plugin_window(
+        title="Meu Plugin",
+        entry_html=dummy_html,
+        plugin_dir=pdir,
+    )
+    assert win is not None
+    assert win.title == "Meu Plugin v2.4.1 — Toolbox"
+
+    # 2. Título sem duplicar versão se já estiver no título original
+    win2 = create_plugin_window(
+        title="Meu Plugin v2.4.1",
+        entry_html=dummy_html,
+        plugin_dir=pdir,
+    )
+    assert win2.title == "Meu Plugin v2.4.1 — Toolbox"
+
+    # 3. Versão passada explicitamente sobrescreve ou define versão
+    win3 = create_plugin_window(
+        title="Meu Plugin Custom",
+        entry_html=dummy_html,
+        version="3.0.0-beta",
+    )
+    assert win3.title == "Meu Plugin Custom v3.0.0-beta — Toolbox"
+
+
+def test_set_window_taskbar_icon_defensive_execution(tmp_path: Path):
+    """Valida execução defensiva de set_window_taskbar_icon para arquivos ausentes e plataformas."""
+    from shared.web_utils import set_window_taskbar_icon
+
+    # Arquivo None ou inexistente deve retornar False
+    assert set_window_taskbar_icon(None) is False
+    assert set_window_taskbar_icon(tmp_path / "nao_existe.ico") is False
+
+    # Em ambiente não-Windows deve retornar False seguramente sem exceção
+    real_ico = tmp_path / "test.ico"
+    real_ico.write_bytes(b"dummy ico")
+    if sys.platform != "win32":
+        assert set_window_taskbar_icon(real_ico) is False
+

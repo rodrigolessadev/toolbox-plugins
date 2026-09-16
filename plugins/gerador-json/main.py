@@ -103,6 +103,7 @@ def main():
         title="Formatador & Validador de JSON",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=840,
         height=760,
         min_size=(680, 560),

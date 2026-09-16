@@ -78,6 +78,7 @@ def main():
         title="Analysis Orchestrator",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=780,
         height=760,
         min_size=(680, 620),

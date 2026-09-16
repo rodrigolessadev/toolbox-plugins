@@ -92,6 +92,7 @@ def main():
         title="HAR Kibana Planner",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=820,
         height=760,
         min_size=(680, 560),
