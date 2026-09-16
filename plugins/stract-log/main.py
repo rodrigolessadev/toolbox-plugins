@@ -90,6 +90,7 @@ def main():
         title="Stract Log",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=820,
         height=780,
         min_size=(700, 580),

@@ -62,6 +62,7 @@ def main():
         title="Gerador de Marcações SQL",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=840,
         height=820,
         min_size=(740, 640),

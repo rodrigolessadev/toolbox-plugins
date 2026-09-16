@@ -171,10 +171,142 @@ class BasePluginApi:
         return ""
 
 
+def set_window_taskbar_icon(icon_path: Optional[Path | str] = None, hwnd: Optional[int] = None) -> bool:
+    """
+    Atualiza o ícone da janela e da barra de tarefas no Windows (WM_SETICON).
+    Executado de forma segura e idempotente em sistemas Win32.
+    """
+    if sys.platform != "win32":
+        return False
+
+    if not icon_path:
+        return False
+
+    target_icon = Path(icon_path).resolve()
+    if not target_icon.is_file():
+        return False
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x00000010
+        WM_SETICON = 0x0080
+        ICON_SMALL = 0
+        ICON_BIG = 1
+
+        SWP_NOSIZE = 0x0001
+        SWP_NOMOVE = 0x0002
+        SWP_NOZORDER = 0x0004
+        SWP_NOACTIVATE = 0x0010
+        SWP_FRAMECHANGED = 0x0020
+        SWP_FLAGS = SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
+
+        h_icon_big = user32.LoadImageW(
+            None,
+            str(target_icon),
+            IMAGE_ICON,
+            32,
+            32,
+            LR_LOADFROMFILE,
+        )
+        h_icon_small = user32.LoadImageW(
+            None,
+            str(target_icon),
+            IMAGE_ICON,
+            16,
+            16,
+            LR_LOADFROMFILE,
+        )
+
+        if not h_icon_big and not h_icon_small:
+            return False
+
+        if hwnd:
+            target_hwnds = [hwnd]
+        else:
+            current_pid = os.getpid()
+            target_hwnds = []
+
+            def _enum_windows_cb(handle: int, _: Any) -> bool:
+                lpdw_pid = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(handle, ctypes.byref(lpdw_pid))
+                if lpdw_pid.value == current_pid:
+                    if user32.IsWindowVisible(handle):
+                        target_hwnds.append(handle)
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            user32.EnumWindows(WNDENUMPROC(_enum_windows_cb), 0)
+
+        success = False
+        for target in target_hwnds:
+            if h_icon_big:
+                user32.SendMessageW(target, WM_SETICON, ICON_BIG, h_icon_big)
+            if h_icon_small:
+                user32.SendMessageW(target, WM_SETICON, ICON_SMALL, h_icon_small)
+            user32.SetWindowPos(target, 0, 0, 0, 0, 0, SWP_FLAGS)
+            success = True
+        return success
+    except Exception:
+        pass
+    return False
+
+
+def resolve_plugin_metadata(
+    plugin_dir: Optional[Path | str] = None,
+    entry_html: Optional[Path | str] = None
+) -> Dict[str, Any]:
+    """Extrai metadados essenciais de plugin.json a partir de plugin_dir ou entry_html."""
+    pdir: Optional[Path] = None
+    if plugin_dir:
+        pdir = Path(plugin_dir).resolve()
+    elif entry_html:
+        cand = Path(entry_html).resolve().parent.parent
+        if (cand / "plugin.json").is_file():
+            pdir = cand
+
+    if pdir and (pdir / "plugin.json").is_file():
+        try:
+            import json
+            meta = json.loads((pdir / "plugin.json").read_text(encoding="utf-8"))
+            meta["plugin_dir"] = pdir
+            return meta
+        except Exception:
+            pass
+    return {"plugin_dir": pdir} if pdir else {}
+
+
+def resolve_plugin_icon(plugin_dir: Optional[Path], icon_name: Optional[str] = None) -> Optional[Path]:
+    """Localiza o arquivo de ícone .ico oficial do plugin em ui/assets/."""
+    if not plugin_dir or not (plugin_dir / "ui" / "assets").is_dir():
+        return None
+
+    assets_dir = plugin_dir / "ui" / "assets"
+
+    # 1. Ícone específico pelo nome no manifesto
+    if icon_name:
+        specific = assets_dir / f"{icon_name}.ico"
+        if specific.is_file() and specific.stat().st_size > 0:
+            return specific
+
+    # 2. Fallback: qualquer .ico na pasta assets
+    any_icos = sorted(assets_dir.glob("*.ico"))
+    if any_icos and any_icos[0].is_file() and any_icos[0].stat().st_size > 0:
+        return any_icos[0]
+
+    return None
+
+
 def create_plugin_window(
     title: str,
     entry_html: Path | str,
     js_api: Optional[Any] = None,
+    plugin_dir: Optional[Path | str] = None,
+    version: Optional[str] = None,
+    icon_path: Optional[Path | str] = None,
     width: int = 720,
     height: int = 740,
     min_size: Tuple[int, int] = (640, 600),
@@ -183,19 +315,13 @@ def create_plugin_window(
 ) -> Any:
     """
     Cria e configura a janela do plugin com parâmetros oficiais do Toolbox.
+    Formata o título oficial com versão '{Nome} v{X.Y.Z} — Toolbox', registra o AppUserModelID
+    e configura automaticamente o ícone na barra de tarefas no Windows.
     """
     if webview is None:
         raise RuntimeError(
             "pywebview não está instalado. Execute: pip install pywebview>=5.0.0"
         )
-
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            app_id = f"toolbox.plugin.{title.lower().replace(' ', '').replace('&', '').replace('—', '')}"
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
-        except Exception:
-            pass
 
     html_path = Path(entry_html).resolve()
     if not html_path.exists():
@@ -203,8 +329,41 @@ def create_plugin_window(
 
     url = str(html_path)
 
+    # Resolução de metadados do plugin
+    meta = resolve_plugin_metadata(plugin_dir=plugin_dir, entry_html=entry_html)
+    p_dir = meta.get("plugin_dir") or (Path(plugin_dir).resolve() if plugin_dir else None)
+
+    # Resolução de versão
+    effective_version = version or meta.get("version")
+
+    # Formatação do Título Oficial: "{Nome} v{version} — Toolbox"
+    base_title = re.sub(r"\s+[—\-]\s+Toolbox\s*$", "", title).strip()
+    if effective_version and not re.search(rf"\bv?{re.escape(str(effective_version))}\b", base_title):
+        final_title = f"{base_title} v{effective_version} — Toolbox"
+    else:
+        final_title = f"{base_title} — Toolbox"
+
+    # Resolução do ícone da barra de tarefas
+    effective_icon: Optional[Path] = None
+    if icon_path:
+        cand_icon = Path(icon_path).resolve()
+        if cand_icon.is_file():
+            effective_icon = cand_icon
+    if not effective_icon:
+        effective_icon = resolve_plugin_icon(p_dir, meta.get("icon"))
+
+    # Configuração de AppUserModelID no Windows
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            plugin_id = meta.get("id") or (p_dir.name if p_dir else None) or re.sub(r"[^\w]", "", base_title).lower()
+            app_id = f"toolbox.plugin.{plugin_id}"
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except Exception:
+            pass
+
     window = webview.create_window(
-        title=f"{title} — Toolbox",
+        title=final_title,
         url=url,
         js_api=js_api or BasePluginApi(),
         width=width,
@@ -212,4 +371,19 @@ def create_plugin_window(
         min_size=min_size,
         background_color=background_color,
     )
+
+    # Bind automático do ícone da barra de tarefas no Windows
+    if sys.platform == "win32" and effective_icon:
+        try:
+            if hasattr(window, "events") and hasattr(window.events, "shown"):
+                def _auto_taskbar_icon() -> None:
+                    set_window_taskbar_icon(effective_icon)
+                    import threading
+                    threading.Timer(0.5, lambda: set_window_taskbar_icon(effective_icon)).start()
+
+                window.events.shown += _auto_taskbar_icon
+        except Exception:
+            pass
+
     return window
+

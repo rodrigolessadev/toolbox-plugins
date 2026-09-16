@@ -62,6 +62,7 @@ def main():
         title="Calculadora de Jornadas",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=780,
         height=680,
         min_size=(680, 580),

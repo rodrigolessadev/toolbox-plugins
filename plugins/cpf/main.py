@@ -34,6 +34,7 @@ def main():
         title="Validador & Gerador de CPF",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=660,
         height=620,
         min_size=(580, 540),

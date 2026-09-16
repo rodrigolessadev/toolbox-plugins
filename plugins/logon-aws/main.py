@@ -131,6 +131,7 @@ def main() -> None:
         title="Logon AWS & Port Forwarding",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=740,
         height=720,
         min_size=(680, 600),

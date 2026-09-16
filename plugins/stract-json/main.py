@@ -77,6 +77,7 @@ def main():
         title="Stract JSON",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=800,
         height=740,
         min_size=(680, 560),

@@ -193,6 +193,7 @@ def main():
         title="Novo Ticket",
         entry_html=ui_index,
         js_api=api,
+        plugin_dir=PLUGIN_DIR,
         width=740,
         height=760,
         min_size=(660, 620),
