@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("calc-jornadas")
+
 ROOT = Path(__file__).parent.parent
 DOMAIN_PATH = ROOT / "plugins" / "calc-jornadas" / "domain.py"
 MAIN_PATH = ROOT / "plugins" / "calc-jornadas" / "main.py"

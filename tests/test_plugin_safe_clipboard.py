@@ -11,6 +11,8 @@ PLUGINS_DIR = Path(__file__).resolve().parent.parent / "plugins"
 if str(PLUGINS_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGINS_DIR))
 
+pytestmark = [pytest.mark.plugin("safe"), pytest.mark.windows_only]
+
 from safe.clipboard import (
     copy_to_clipboard_secure,
     get_clipboard_text,

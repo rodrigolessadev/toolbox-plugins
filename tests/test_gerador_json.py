@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("gerador-json")
+
 ROOT = Path(__file__).parent.parent
 DOMAIN_PATH = ROOT / "plugins" / "gerador-json" / "domain.py"
 MAIN_PATH = ROOT / "plugins" / "gerador-json" / "main.py"

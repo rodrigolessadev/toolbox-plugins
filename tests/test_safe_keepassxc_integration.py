@@ -21,6 +21,9 @@ if str(SAFE_DIR) not in sys.path:
 
 from safe.service import SafeService
 from safe.main import SafePluginApi
+from safe import crypto
+
+pytestmark = pytest.mark.plugin("safe")
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +154,8 @@ def test_safe_plugin_api_keepassxc_bridge(tmp_path: Path):
     assert lk["success"] is True
 
 
+@pytest.mark.optional_deps
+@pytest.mark.skipif(crypto.Argon2id is None, reason="Requer cryptography com suporte a Argon2id")
 def test_safe_import_keepassxc_entry_and_unified_search(tmp_path: Path):
     """Valida a importação direta de uma credencial do KeePassXC para o banco local e a busca unificada."""
     mock_client = MagicMock()

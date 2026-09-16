@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("markdown-viewer")
+
 ROOT = Path(__file__).parent.parent
 DOMAIN_PATH = ROOT / "plugins" / "markdown-viewer" / "domain.py"
 MAIN_PATH = ROOT / "plugins" / "markdown-viewer" / "main.py"

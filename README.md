@@ -42,7 +42,36 @@ toolbox-plugins/
 │   │   ├── plugin.json     # Manifesto com metadados e ícone Lucide
 │   │   ├── domain.py       # Regras de negócio puras em Python
 │   │   ├── main.py         # Entry point pywebview e classe Api bridge
-│   │   ├── ui/             # Frontend autossuficiente (HTML/CSS/JS)
-│   │   └── tests/          # Testes unitários e isolamento
+│   │   └── ui/             # Frontend autossuficiente (HTML/CSS/JS)
+├── tests/                  # Suíte de testes unitários e de integração
+├── pytest.ini              # Configuração global de marcadores e filtros
 └── .github/
+```
+
+---
+
+## 🧪 Execução de Testes & Convenções
+
+A suíte de testes utiliza [`pytest.ini`](pytest.ini) e [`tests/conftest.py`](tests/conftest.py) com marcadores formais para isolamento e auto-skip de plataforma:
+
+- **`windows_only`**: Testes que exigem Windows nativo, DPAPI (`crypt32.dll`), Windows Hello ou named pipes (pulados automaticamente com `SKIPPED` em ambientes Linux/macOS).
+- **`optional_deps`**: Testes que dependem de bibliotecas opcionais (`pynacl`, `pykeepass`, `cryptography>=42.0.0`).
+- **`plugin(name)`**: Marcador semântico associando cada arquivo ao respectivo plugin.
+
+### Comandos de Validação Rápida:
+
+```bash
+# 1. Validação focada no plugin em modificação + integridade global (< 1s):
+pytest tests/test_plugin_<id>.py tests/test_all_plugins_integrity.py -v
+
+# 2. Execução filtrada por marcador de plugin:
+pytest -m tarefas -v
+pytest -m safe -v
+pytest -m calc_jornadas -v
+
+# 3. Execução agnóstica a plataforma (recomendada para Linux/CI):
+pytest -m "not windows_only" -v
+
+# 4. Execução global completa (com auto-skip limpo de testes de plataforma):
+pytest -v
 ```

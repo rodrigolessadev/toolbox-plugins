@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("tarefas")
+
 REPO_ROOT = Path(__file__).parent.parent
 PLUGINS_DIR = REPO_ROOT / "plugins"
 TAREFAS_DIR = PLUGINS_DIR / "tarefas"

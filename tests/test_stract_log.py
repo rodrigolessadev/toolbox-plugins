@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("stract-log")
+
 ROOT = Path(__file__).parent.parent
 PLUGIN_DIR = ROOT / "plugins" / "stract-log"
 DOMAIN_PATH = PLUGIN_DIR / "domain.py"

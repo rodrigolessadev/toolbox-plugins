@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
+
+pytestmark = pytest.mark.plugin("safe")
 import webview
 from webview.util import parse_file_type
 

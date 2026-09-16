@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("cpf")
+
 ROOT = Path(__file__).parent.parent
 DOMAIN_PATH = ROOT / "plugins" / "cpf" / "domain.py"
 

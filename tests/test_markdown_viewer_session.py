@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytestmark = pytest.mark.plugin("markdown-viewer")
+
 import importlib.util
 
 ROOT = Path(__file__).parent.parent

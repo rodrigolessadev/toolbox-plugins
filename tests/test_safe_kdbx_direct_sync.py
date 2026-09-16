@@ -13,7 +13,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import pykeepass
+
+pytestmark = [pytest.mark.plugin("safe"), pytest.mark.optional_deps]
+
+pykeepass = pytest.importorskip("pykeepass", reason="Requer biblioteca opcional pykeepass")
 
 from plugins.safe.db import SafeDatabase
 from plugins.safe.kdbx_reader import KdbxReader, KdbxReaderError, KdbxAuthenticationError, KdbxNotFoundError

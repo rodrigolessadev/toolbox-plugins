@@ -3,6 +3,8 @@ from datetime import date
 from pathlib import Path
 import pytest
 
+pytestmark = pytest.mark.plugin("gerador-marcacoes")
+
 ROOT = Path(__file__).parent.parent
 DOMAIN_PATH = ROOT / "plugins" / "gerador-marcacoes" / "domain.py"
 
