@@ -227,6 +227,40 @@ def delete_task(task_id: str) -> bool:
     return True
 
 
+def reorder_tasks(ordered_task_ids: List[str]) -> bool:
+    """
+    Reorganiza as tarefas no disco de acordo com a lista ordenada de identificadores recebida.
+    Tarefas presentes em ordered_task_ids são ordenadas na sequência especificada.
+    Tarefas omitidas preservam suas posições relativas sem perda de dados.
+    """
+    if not ordered_task_ids:
+        return True
+
+    tasks = load_tasks()
+    if not tasks:
+        return True
+
+    task_map = {t["id"]: t for t in tasks if t.get("id")}
+    valid_ordered_ids = [tid for tid in ordered_task_ids if tid in task_map]
+    if not valid_ordered_ids:
+        return True
+
+    valid_set = set(valid_ordered_ids)
+    ordered_tasks_queue = [task_map[tid] for tid in valid_ordered_ids]
+
+    new_tasks: List[Dict[str, Any]] = []
+    order_idx = 0
+    for t in tasks:
+        if t.get("id") in valid_set:
+            new_tasks.append(ordered_tasks_queue[order_idx])
+            order_idx += 1
+        else:
+            new_tasks.append(t)
+
+    return save_tasks(new_tasks)
+
+
+
 def add_attachment(task_id: str, file_path: str | Path) -> Dict[str, Any]:
     """
     Copia um arquivo externo para o diretório de anexos da tarefa e

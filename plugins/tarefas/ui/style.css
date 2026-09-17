@@ -780,3 +780,44 @@
   white-space: nowrap;
 }
 
+/* --- Drag and Drop Reordering --- */
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 22px;
+  color: var(--fg-muted);
+  cursor: grab;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  user-select: none;
+  opacity: 0.6;
+}
+
+.drag-handle:hover {
+  color: var(--fg);
+  background-color: var(--bg-hover);
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-card.dragging {
+  opacity: 0.35;
+  border: 1px dashed var(--accent);
+  background-color: var(--accent-soft);
+  transform: none !important;
+}
+
+.task-card.drag-over-top {
+  border-top: 2px solid var(--accent) !important;
+}
+
+.task-card.drag-over-bottom {
+  border-bottom: 2px solid var(--accent) !important;
+}
+
