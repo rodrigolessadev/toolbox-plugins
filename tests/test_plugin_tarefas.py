@@ -380,3 +380,88 @@ def test_tarefas_ui_drag_and_drop_assets():
     icons_js = (ui_dir / "icons.js").read_text(encoding="utf-8")
     assert "grip-vertical" in icons_js
 
+
+def test_domain_sort_tasks_by_status_and_date():
+    """Valida a ordenação determinística: pendentes no topo, concluídas ao final, mais recentes primeiro."""
+    tasks = [
+        {"id": "t1", "completed": True, "created_at": "2026-09-17 10:00:00"},
+        {"id": "t2", "completed": False, "created_at": "2026-09-17 08:00:00"},
+        {"id": "t3", "completed": False, "created_at": "2026-09-17 12:00:00"},
+        {"id": "t4", "completed": True, "created_at": "2026-09-17 14:00:00"},
+    ]
+
+    sorted_tasks = tarefas_domain.sort_tasks_by_status_and_date(tasks, descending=True)
+    sorted_ids = [t["id"] for t in sorted_tasks]
+
+    # Pendentes primeiro por data decrescente (t3 depois t2), seguidas de concluídas por data decrescente (t4 depois t1)
+    assert sorted_ids == ["t3", "t2", "t4", "t1"]
+
+    # Testa ordem ascendente
+    sorted_asc = tarefas_domain.sort_tasks_by_status_and_date(tasks, descending=False)
+    assert [t["id"] for t in sorted_asc] == ["t2", "t3", "t1", "t4"]
+
+
+def test_domain_sort_tasks_with_hierarchy():
+    """Valida ordenação com estrutura hierárquica preservando subtarefas sob seus pais."""
+    tasks = [
+        {"id": "p1", "parent_id": None, "completed": False, "created_at": "2026-09-17 10:00:00"},
+        {"id": "s1_1", "parent_id": "p1", "completed": True, "created_at": "2026-09-17 09:00:00"},
+        {"id": "s1_2", "parent_id": "p1", "completed": False, "created_at": "2026-09-17 09:30:00"},
+        {"id": "p2", "parent_id": None, "completed": True, "created_at": "2026-09-17 12:00:00"},
+        {"id": "p3", "parent_id": None, "completed": False, "created_at": "2026-09-17 11:00:00"},
+    ]
+
+    sorted_tasks = tarefas_domain.sort_tasks_by_status_and_date(tasks, descending=True)
+    sorted_ids = [t["id"] for t in sorted_tasks]
+
+    # Raízes ordenadas: p3 (pendente, 11h), p1 (pendente, 10h), p2 (concluída, 12h)
+    # Sob p1, subtarefas ordenadas: s1_2 (pendente, 09:30), s1_1 (concluída, 09:00)
+    assert sorted_ids == ["p3", "p1", "s1_2", "s1_1", "p2"]
+
+
+def test_domain_load_tasks_with_sort_flag():
+    """Valida que load_tasks aceita o parâmetro sort_by_status_and_date."""
+    tarefas_domain.create_task("Antiga", "")
+    tarefas_domain.create_task("Nova", "")
+
+    # Inverte status da mais recente para concluída
+    all_t = tarefas_domain.load_tasks()
+    tarefas_domain.toggle_task_status(all_t[0]["id"])
+
+    # Sem flag: ordem natural salva em disco
+    raw = tarefas_domain.load_tasks(sort_by_status_and_date=False)
+    # Com flag: pendentes sempre no topo
+    sorted_list = tarefas_domain.load_tasks(sort_by_status_and_date=True)
+
+    assert sorted_list[0]["completed"] is False
+    assert sorted_list[-1]["completed"] is True
+
+
+def test_tarefas_api_sort_tasks():
+    """Valida o método sort_tasks exposto na TarefasApi."""
+    api = TarefasApi()
+    res1 = api.create_task("Tarefa A")
+    res2 = api.create_task("Tarefa B")
+
+    api.toggle_task(res2["task"]["id"])  # Marca B como concluída
+
+    res_sort = api.sort_tasks(descending=True)
+    assert res_sort["success"] is True
+    assert res_sort["tasks"][0]["id"] == res1["task"]["id"]
+    assert res_sort["tasks"][1]["id"] == res2["task"]["id"]
+
+
+def test_tarefas_ui_sorting_and_divider_assets():
+    """Valida que o frontend possui o divisor de concluídas e as rotinas de ordenação."""
+    ui_dir = TAREFAS_DIR / "ui"
+
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "sortTasksByStatusAndDate" in app_js
+    assert "completed-divider" in app_js
+    assert "calculateAdjustedTimestamp" in app_js
+
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".completed-divider" in style_css
+    assert ".completed-divider-line" in style_css
+    assert ".completed-divider-text" in style_css
+

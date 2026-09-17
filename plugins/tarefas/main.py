@@ -79,6 +79,15 @@ class TarefasApi(BasePluginApi):
         except Exception as exc:
             return {"success": False, "error": str(exc), "tasks": domain.load_tasks()}
 
+    def sort_tasks(self, descending: bool = True) -> Dict[str, Any]:
+        """Retorna tarefas ordenadas por status (pendentes primeiro) e data."""
+        try:
+            tasks = domain.load_tasks()
+            sorted_tasks = domain.sort_tasks_by_status_and_date(tasks, descending=descending)
+            return {"success": True, "tasks": sorted_tasks}
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "tasks": domain.load_tasks()}
+
     def add_attachment_dialog(self, task_id: str) -> Dict[str, Any]:
         """Abre diálogo nativo do SO para seleção e vinculação de anexos."""
         try:

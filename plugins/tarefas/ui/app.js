@@ -143,6 +143,10 @@ const mockApi = {
     state.tasks = reordered;
     return { success: true, tasks: state.tasks };
   },
+  sort_tasks: async (descending = true) => {
+    state.tasks = sortTasksByStatusAndDate(state.tasks, descending);
+    return { success: true, tasks: state.tasks };
+  },
   open_attachment: async () => ({ success: true }),
   open_attachment_folder: async () => ({ success: true }),
   get_plugin_version: async () => ({ success: true, version: '1.0.0' }),
@@ -289,12 +293,58 @@ async function handleAddSubtaskFromDetail(parentId) {
   }
 }
 
+// --- Ordenação Inteligente por Status e Data ---
+function sortTasksByStatusAndDate(taskList, descending = true) {
+  if (!taskList || !taskList.length) return [];
+  return [...taskList].sort((a, b) => {
+    // Critério 1: Status (pendentes primeiro, concluídas ao final)
+    const aCompleted = Boolean(a.completed);
+    const bCompleted = Boolean(b.completed);
+    if (aCompleted !== bCompleted) {
+      return aCompleted ? 1 : -1;
+    }
+    // Critério 2: Timestamp (created_at ou updated_at)
+    const aDate = a.created_at || a.updated_at || '';
+    const bDate = b.created_at || b.updated_at || '';
+    const cmp = aDate.localeCompare(bDate);
+    return descending ? -cmp : cmp;
+  });
+}
+
+function calculateAdjustedTimestamp(prevItem, nextItem) {
+  const parseDate = (d) => {
+    if (!d) return Date.now();
+    const t = new Date(d.replace(' ', 'T')).getTime();
+    return isNaN(t) ? Date.now() : t;
+  };
+  const formatDate = (ms) => {
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  if (prevItem && nextItem) {
+    const tPrev = parseDate(prevItem.created_at || prevItem.updated_at);
+    const tNext = parseDate(nextItem.created_at || nextItem.updated_at);
+    const mid = Math.round((tPrev + tNext) / 2);
+    return formatDate(mid);
+  } else if (prevItem) {
+    const tPrev = parseDate(prevItem.created_at || prevItem.updated_at);
+    return formatDate(tPrev - 60000);
+  } else if (nextItem) {
+    const tNext = parseDate(nextItem.created_at || nextItem.updated_at);
+    return formatDate(tNext + 60000);
+  }
+  return formatDate(Date.now());
+}
+
 function renderDetailSubtasksList(parentId) {
   const listEl = document.getElementById(`detailSubtasksList_${parentId}`);
   const countEl = document.getElementById(`detailSubtaskCount_${parentId}`);
   if (!listEl) return;
 
-  const subtasks = state.tasks.filter(t => t.parent_id === parentId);
+  const rawSubtasks = state.tasks.filter(t => t.parent_id === parentId);
+  const subtasks = sortTasksByStatusAndDate(rawSubtasks, true);
   const total = subtasks.length;
   const completed = subtasks.filter(s => s.completed).length;
 
@@ -360,6 +410,9 @@ function renderTasksList() {
     filteredRoots = rootTasks.filter(t => t.completed);
   }
 
+  // Aplica ordenação determinística: pendentes no topo, concluídas ao final, mais recentes primeiro
+  filteredRoots = sortTasksByStatusAndDate(filteredRoots, true);
+
   if (filteredRoots.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
@@ -372,11 +425,11 @@ function renderTasksList() {
     return;
   }
 
-  container.innerHTML = filteredRoots.map(task => {
+  function renderRootCardHtml(task) {
     const isCompleted = Boolean(task.completed);
-    const subtasks = state.tasks.filter(st => st.parent_id === task.id);
-    const subCount = subtasks.length;
-    const subCompleted = subtasks.filter(st => st.completed).length;
+    const rawSubtasks = state.tasks.filter(st => st.parent_id === task.id);
+    const subCount = rawSubtasks.length;
+    const subCompleted = rawSubtasks.filter(st => st.completed).length;
     const isCollapsed = state.collapsedParents.has(task.id);
 
     const attCount = (task.attachments || []).length;
@@ -396,13 +449,14 @@ function renderTasksList() {
          </button>`
       : '';
 
-    // Subtarefas visíveis de acordo com o filtro ativo
-    let visibleSubtasks = subtasks;
+    // Subtarefas visíveis de acordo com o filtro ativo e ordenadas
+    let visibleSubtasks = rawSubtasks;
     if (state.activeFilter === 'pending') {
-      visibleSubtasks = subtasks.filter(st => !st.completed);
+      visibleSubtasks = rawSubtasks.filter(st => !st.completed);
     } else if (state.activeFilter === 'completed') {
-      visibleSubtasks = subtasks.filter(st => st.completed);
+      visibleSubtasks = rawSubtasks.filter(st => st.completed);
     }
+    visibleSubtasks = sortTasksByStatusAndDate(visibleSubtasks, true);
 
     const subtasksHtml = (subCount > 0 && !isCollapsed)
       ? `<div class="subtasks-container" id="subtasks_${task.id}">
@@ -542,8 +596,31 @@ function renderTasksList() {
         ${subtasksHtml}
       </div>
     `;
-  }).join('');
+  }
 
+  const pendingRoots = filteredRoots.filter(t => !t.completed);
+  const completedRoots = filteredRoots.filter(t => t.completed);
+  const showDivider = state.activeFilter === 'all' && pendingRoots.length > 0 && completedRoots.length > 0;
+
+  let renderedHtml = '';
+  if (showDivider) {
+    const pendingHtml = pendingRoots.map(renderRootCardHtml).join('');
+    const dividerHtml = `
+      <div class="completed-divider" id="completedDivider">
+        <span class="completed-divider-line"></span>
+        <span class="completed-divider-text">
+          <span data-icon="check"></span> Concluídas (${completedRoots.length})
+        </span>
+        <span class="completed-divider-line"></span>
+      </div>
+    `;
+    const completedHtml = completedRoots.map(renderRootCardHtml).join('');
+    renderedHtml = pendingHtml + dividerHtml + completedHtml;
+  } else {
+    renderedHtml = filteredRoots.map(renderRootCardHtml).join('');
+  }
+
+  container.innerHTML = renderedHtml;
   if (window.renderIcons) window.renderIcons();
 }
 
@@ -1294,6 +1371,12 @@ async function handleDrop(e, targetTaskId, targetParentId) {
   }
 
   const insertIndex = isTop ? targetIndex : targetIndex + 1;
+  const prevItem = insertIndex > 0 ? remainingSiblings[insertIndex - 1] : null;
+  const nextItem = insertIndex < remainingSiblings.length ? remainingSiblings[insertIndex] : null;
+  const newTs = calculateAdjustedTimestamp(prevItem, nextItem);
+  draggedItem.created_at = newTs;
+  draggedItem.updated_at = newTs;
+
   remainingSiblings.splice(insertIndex, 0, draggedItem);
   const newSiblingIds = remainingSiblings.map(t => t.id);
 
@@ -1329,6 +1412,7 @@ async function handleDrop(e, targetTaskId, targetParentId) {
 
   const api = getApi();
   try {
+    api.update_task(draggedItem.id, { created_at: newTs, updated_at: newTs }).catch(() => {});
     const res = await api.reorder_tasks(finalOrderedIds);
     if (res && res.success && res.tasks) {
       state.tasks = res.tasks;
@@ -1377,3 +1461,4 @@ window.handleDragOver = handleDragOver;
 window.handleDragLeave = handleDragLeave;
 window.handleDragEnd = handleDragEnd;
 window.handleDrop = handleDrop;
+window.sortTasksByStatusAndDate = sortTasksByStatusAndDate;
