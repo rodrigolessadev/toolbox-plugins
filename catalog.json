@@ -300,7 +300,7 @@
       "id": "tarefas",
       "name": "Tarefas",
       "description": "Gerenciador de tarefas com edição ágil no chat, detalhes em abas dinâmicas, Markdown e gestão de anexos.",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "author": "Rodrigo Lessa",
       "language": "python",
       "tags": [
@@ -314,7 +314,7 @@
       "icon": "check-square",
       "command": "tarefas",
       "entry": "main.py",
-      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/tarefas-1.4.0/tarefas.zip",
+      "download_url": "https://github.com/rodrigolessadev/toolbox-plugins/releases/download/tarefas-1.5.0/tarefas.zip",
       "min_toolbox_version": "1.22.3",
       "theme_version": "material-3",
       "updated_at": "2026-09-17"
