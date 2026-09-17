@@ -9,6 +9,15 @@
     if (typeof window !== 'undefined' && window.ToolboxMarkdown) {
       return window.ToolboxMarkdown;
     }
+    if (typeof require !== 'undefined') {
+      try {
+        return require('./markdown-field.js');
+      } catch (_) {
+        try {
+          return require('../../../shared/ui/markdown/markdown-field.js');
+        } catch (__) {}
+      }
+    }
     return null;
   }
 

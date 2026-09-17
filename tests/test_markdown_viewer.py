@@ -255,5 +255,57 @@ Outro texto após código.
     assert stats["line_count"] > 10
 
 
+def test_markdown_viewer_local_assets_and_gfm_rendering():
+    """
+    Valida a resolução da Issue #254:
+    1. Presença dos bundles locais (vendor/markdown-field.js e vendor/markdown-field.css) em plugins/markdown-viewer/ui/.
+    2. Referência local a eles no index.html sem depender de ../../.
+    3. marked_parser.js resolve o bundle compartilhado e parseia Markdown com suporte a TOC e GFM.
+    4. Execução de script Node.js demonstrando que parseMarkdown retorna html rico e toc estruturado, sem disparar o fallback <pre class="tb-pre"><code>.
+    """
+    import subprocess
+
+    ui_dir = ROOT / "plugins" / "markdown-viewer" / "ui"
+    vendor_dir = ui_dir / "vendor"
+    js_file = vendor_dir / "markdown-field.js"
+    css_file = vendor_dir / "markdown-field.css"
+    parser_file = vendor_dir / "marked_parser.js"
+
+    assert js_file.exists(), "vendor/markdown-field.js deve existir no markdown-viewer"
+    assert css_file.exists(), "vendor/markdown-field.css deve existir no markdown-viewer"
+    assert js_file.stat().st_size > 10000, "vendor/markdown-field.js deve ser o bundle autossuficiente completo"
+    assert css_file.stat().st_size > 2000, "vendor/markdown-field.css deve conter as regras de estilo"
+
+    html_content = (ui_dir / "index.html").read_text(encoding="utf-8")
+    assert 'href="vendor/markdown-field.css"' in html_content, "index.html deve importar vendor/markdown-field.css localmente"
+    assert 'src="vendor/markdown-field.js"' in html_content, "index.html deve importar vendor/markdown-field.js localmente"
+
+    # Executa teste com Node.js usando o marked_parser.js para garantir que não cai no fallback de texto puro
+    node_test_script = f"""
+    const path = require('path');
+    const parser = require('{parser_file}');
+    const sample = '# Capitulo 1\\n\\nTexto explicativo com **negrito** e `código inline`.\\n\\n## Secao 1.1\\n\\n- [x] Item Concluido\\n- [ ] Item Pendente\\n\\n```javascript\\nconst a = 1;\\n```\\n\\n| Col 1 | Col 2 |\\n|---|---|\\n| A | B |';
+    const result = parser.parseMarkdown(sample, {{ highlight: true }});
+
+    if (!result || !result.html) {{
+      throw new Error('Resultado nulo de parseMarkdown');
+    }}
+    if (result.html.startsWith('<pre class="tb-pre"><code>')) {{
+      throw new Error('parseMarkdown caiu no fallback de texto puro: ' + result.html);
+    }}
+    if (!result.html.includes('tb-heading') || !result.html.includes('tb-task-checkbox') || !result.html.includes('tb-code-block') || !result.html.includes('tb-table')) {{
+      throw new Error('Elementos GFM essenciais ausentes no HTML: ' + result.html);
+    }}
+    if (!result.toc || result.toc.length !== 2) {{
+      throw new Error('TOC incorreto: ' + JSON.stringify(result.toc));
+    }}
+    console.log('OK');
+    """
+    res = subprocess.run(["node", "-e", node_test_script], capture_output=True, text=True)
+    assert res.returncode == 0, f"Erro ao executar marked_parser no bundle: {res.stderr}"
+    assert "OK" in res.stdout
+
+
+
 
 

@@ -322,8 +322,11 @@ html, body {
 }
 
 .preview-content .code-header,
+.preview-content .tb-code-header,
 .preview-content .btn-copy-code,
+.preview-content .tb-btn-copy-code,
 .preview-content .code-lang,
+.preview-content .tb-code-lang,
 .preview-content .heading-anchor,
 .preview-content .alert-icon,
 .preview-content .alert-title {
