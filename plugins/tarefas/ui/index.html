@@ -74,10 +74,10 @@
         <div class="chat-dock">
           <div class="chat-edit-banner" id="chatEditBanner">
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span data-icon="edit-3"></span>
+              <span data-icon="edit" id="chatEditBannerIcon"></span>
               <span id="chatEditMessage">Editando tarefa...</span>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="cancelQuickEdit()" title="Cancelar edição (Esc)">
+            <button type="button" class="btn btn-secondary btn-sm" id="chatCancelBannerBtn" onclick="handleChatCancel()" title="Cancelar (Esc)">
               <span data-icon="x"></span> Cancelar
             </button>
           </div>

@@ -316,6 +316,7 @@
   border-radius: var(--radius-md);
   padding: 10px 14px;
   gap: 12px;
+  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -324,6 +325,18 @@
   background-color: var(--bg-hover);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+.task-card.selected {
+  border-color: var(--accent);
+  border-left: 3px solid var(--accent);
+  background-color: var(--bg-hover);
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm);
+}
+
+.task-card.selected:hover {
+  border-color: var(--accent-hover);
+  background-color: var(--bg-hover);
 }
 
 .task-card.completed {
@@ -469,6 +482,12 @@
   display: flex;
 }
 
+.chat-edit-banner.subtask-mode {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
 .chat-input-row {
   display: flex;
   align-items: center;
@@ -526,6 +545,17 @@
 
 .chat-btn-alterar:hover {
   background-color: #1d4ed8;
+}
+
+.chat-btn-subtask {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.35);
+}
+
+.chat-btn-subtask:hover {
+  background-color: var(--accent-hover);
 }
 
 /* --- Task Detail View Pane (Aba Dedicada) --- */
