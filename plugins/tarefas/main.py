@@ -35,13 +35,17 @@ class TarefasApi(BasePluginApi):
         except Exception as exc:
             return {"success": False, "error": str(exc), "tasks": []}
 
-    def create_task(self, title: str, description: str = "") -> Dict[str, Any]:
-        """Cria uma nova tarefa e retorna a lista atualizada."""
+    def create_task(self, title: str, description: str = "", parent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Cria uma nova tarefa ou subtarefa e retorna a lista atualizada."""
         try:
-            task = domain.create_task(title=title, description=description)
+            task = domain.create_task(title=title, description=description, parent_id=parent_id)
             return {"success": True, "task": task, "tasks": domain.load_tasks()}
         except Exception as exc:
             return {"success": False, "error": str(exc)}
+
+    def create_subtask(self, parent_id: str, title: str, description: str = "") -> Dict[str, Any]:
+        """Cria uma subtarefa vinculada a uma tarefa pai existente."""
+        return self.create_task(title=title, description=description, parent_id=parent_id)
 
     def update_task(self, task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Atualiza dados (título, descrição, status) de uma tarefa."""

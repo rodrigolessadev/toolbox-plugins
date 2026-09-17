@@ -619,3 +619,164 @@
   gap: 4px;
   flex-shrink: 0;
 }
+
+/* --- Árvore Hierárquica de Tarefas e Subtarefas --- */
+.subtasks-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.btn-chevron {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.btn-chevron:hover {
+  color: var(--fg);
+  background-color: var(--bg-hover);
+}
+
+.btn-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+.subtask-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--accent-soft);
+  color: var(--accent-hover);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.subtasks-container {
+  display: flex;
+  flex-direction: column;
+  margin-left: 24px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  margin-top: 4px;
+  gap: 4px;
+}
+
+.task-card-nested {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  margin-bottom: 0;
+  font-size: 12px;
+  transition: all var(--transition-fast);
+}
+
+.task-card-nested:hover {
+  border-color: var(--border-focus);
+  background-color: var(--bg-hover);
+}
+
+.subtask-indicator {
+  color: var(--fg-muted);
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.6;
+}
+
+/* --- Seção de Subtarefas na Aba de Detalhes --- */
+.detail-subtasks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.subtasks-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.subtask-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subtask-input {
+  flex: 1;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.subtask-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.detail-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.detail-subtask-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.detail-subtask-item:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
+.detail-subtask-item.completed .detail-subtask-title {
+  text-decoration: line-through;
+  color: var(--fg-muted);
+}
+
+.detail-subtask-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.detail-subtask-title {
+  font-size: 12px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

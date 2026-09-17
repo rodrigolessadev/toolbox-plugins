@@ -11,6 +11,7 @@ let state = {
   openTabs: [], // Lista de IDs de tarefas com abas abertas
   activeTabId: 'main', // 'main' ou ID da tarefa
   markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
+  collapsedParents: new Set(JSON.parse(localStorage.getItem('tarefas-collapsed-parents') || '[]')),
 };
 
 // Fallback Mock para desenvolvimento web fora do pywebview
@@ -20,6 +21,7 @@ const mockApi = {
     tasks: [
       {
         id: 'task_demo1',
+        parent_id: null,
         title: 'Criar documentação de arquitetura do sistema',
         description: '# Arquitetura do Sistema\n\n- [x] Levantamento de requisitos\n- [ ] Diagrama C4\n- [ ] Validação com a equipe\n\n```python\nprint("Planejamento concluído")\n```',
         completed: false,
@@ -35,7 +37,18 @@ const mockApi = {
         ]
       },
       {
+        id: 'task_demo1_sub1',
+        parent_id: 'task_demo1',
+        title: 'Esboçar diagrama C4 de contexto',
+        description: 'Mapear integrações entre o frontend e a camada de domínio.',
+        completed: true,
+        created_at: '2026-09-15 10:30:00',
+        updated_at: '2026-09-15 11:00:00',
+        attachments: []
+      },
+      {
         id: 'task_demo2',
+        parent_id: null,
         title: 'Revisar PR de autenticação biométrica',
         description: 'Verificar testes unitários e cobertura do Windows Hello.',
         completed: true,
@@ -45,9 +58,10 @@ const mockApi = {
       }
     ]
   }),
-  create_task: async (title, desc = '') => {
+  create_task: async (title, desc = '', parentId = null) => {
     const newTask = {
       id: 'task_' + Math.random().toString(36).substr(2, 6),
+      parent_id: parentId || null,
       title,
       description: desc || `# ${title}\n\nDetalhes da tarefa aqui.`,
       completed: false,
@@ -57,6 +71,9 @@ const mockApi = {
     };
     state.tasks.unshift(newTask);
     return { success: true, task: newTask, tasks: state.tasks };
+  },
+  create_subtask: async (parentId, title, desc = '') => {
+    return mockApi.create_task(title, desc, parentId);
   },
   update_task: async (id, updates) => {
     const t = state.tasks.find(item => item.id === id);
@@ -75,7 +92,18 @@ const mockApi = {
     return { success: true, task: t, tasks: state.tasks };
   },
   delete_task: async (id) => {
-    state.tasks = state.tasks.filter(t => t.id !== id);
+    const idsToDelete = new Set([id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const t of state.tasks) {
+        if (idsToDelete.has(t.parent_id) && !idsToDelete.has(t.id)) {
+          idsToDelete.add(t.id);
+          changed = true;
+        }
+      }
+    }
+    state.tasks = state.tasks.filter(t => !idsToDelete.has(t.id));
     return { success: true, tasks: state.tasks };
   },
   add_attachment_dialog: async (taskId) => {
@@ -178,6 +206,119 @@ function setFilter(filter) {
   renderTasksList();
 }
 
+// --- Gerenciamento de Árvore e Subtarefas ---
+function saveCollapsedParents() {
+  localStorage.setItem('tarefas-collapsed-parents', JSON.stringify(Array.from(state.collapsedParents)));
+}
+
+function toggleCollapseParent(parentId, event) {
+  if (event) event.stopPropagation();
+  if (state.collapsedParents.has(parentId)) {
+    state.collapsedParents.delete(parentId);
+  } else {
+    state.collapsedParents.add(parentId);
+  }
+  saveCollapsedParents();
+  renderTasksList();
+}
+
+async function promptCreateSubtask(parentId) {
+  const parentTask = state.tasks.find(t => t.id === parentId);
+  const parentTitle = parentTask ? parentTask.title : 'tarefa';
+  const title = prompt(`Nova subtarefa para "${parentTitle}":`);
+  if (!title || !title.trim()) return;
+
+  const api = getApi();
+  try {
+    const res = await api.create_task(title.trim(), '', parentId);
+    if (res && res.success) {
+      state.tasks = res.tasks;
+      state.collapsedParents.delete(parentId);
+      saveCollapsedParents();
+      renderTasksList();
+      updateDetailPaneIfOpen(parentId);
+    } else {
+      alert(res?.error || 'Erro ao criar subtarefa.');
+    }
+  } catch (err) {
+    console.error('Erro ao criar subtarefa:', err);
+    alert('Erro ao conectar à API para criar subtarefa.');
+  }
+}
+
+async function handleAddSubtaskFromDetail(parentId) {
+  const input = document.getElementById(`inputSubtask_${parentId}`);
+  if (!input) return;
+  const title = input.value.trim();
+  if (!title) return;
+
+  const api = getApi();
+  try {
+    const res = await api.create_task(title, '', parentId);
+    if (res && res.success) {
+      state.tasks = res.tasks;
+      input.value = '';
+      state.collapsedParents.delete(parentId);
+      saveCollapsedParents();
+      renderTasksList();
+      renderDetailSubtasksList(parentId);
+      updateDetailPaneIfOpen(parentId);
+    } else {
+      alert(res?.error || 'Erro ao criar subtarefa.');
+    }
+  } catch (err) {
+    console.error('Erro ao adicionar subtarefa a partir de detalhes:', err);
+  }
+}
+
+function renderDetailSubtasksList(parentId) {
+  const listEl = document.getElementById(`detailSubtasksList_${parentId}`);
+  const countEl = document.getElementById(`detailSubtaskCount_${parentId}`);
+  if (!listEl) return;
+
+  const subtasks = state.tasks.filter(t => t.parent_id === parentId);
+  const total = subtasks.length;
+  const completed = subtasks.filter(s => s.completed).length;
+
+  if (countEl) {
+    countEl.textContent = total > 0 ? `${completed}/${total}` : '0';
+  }
+
+  if (total === 0) {
+    listEl.innerHTML = '<div style="font-size: 12px; color: var(--fg-muted); padding: 8px 0;">Nenhuma subtarefa vinculada.</div>';
+    return;
+  }
+
+  listEl.innerHTML = subtasks.map(st => `
+    <div class="detail-subtask-item ${st.completed ? 'completed' : ''}" id="detailSubItem_${st.id}">
+      <div class="detail-subtask-left">
+        <input
+          type="checkbox"
+          class="task-checkbox-custom"
+          ${st.completed ? 'checked' : ''}
+          onchange="handleToggleSubtaskFromDetail('${st.id}', '${parentId}')"
+        />
+        <span class="detail-subtask-title" title="${escapeHtml(st.title)}">${escapeHtml(st.title)}</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <button type="button" class="action-btn action-btn-view" onclick="openTaskTab('${st.id}')" title="Abrir detalhes da subtarefa">
+          <span data-icon="eye"></span>
+        </button>
+        <button type="button" class="action-btn action-btn-delete" onclick="handleDeleteTask('${st.id}')" title="Excluir subtarefa">
+          <span data-icon="trash-2"></span>
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  if (window.renderIcons) window.renderIcons();
+}
+
+async function handleToggleSubtaskFromDetail(subtaskId, parentId) {
+  await handleToggleTask(subtaskId);
+  renderDetailSubtasksList(parentId);
+}
+
 // --- Renderização da Lista de Tarefas ---
 function renderTasksList() {
   const container = document.getElementById('tasksListContainer');
@@ -186,20 +327,22 @@ function renderTasksList() {
 
   const total = state.tasks.length;
   const completedCount = state.tasks.filter(t => t.completed).length;
-  const pendingCount = total - completedCount;
 
   if (statsText) {
     statsText.textContent = `${completedCount} de ${total} concluída${total === 1 ? '' : 's'}`;
   }
 
-  let filtered = state.tasks;
+  // Identifica tarefas raiz
+  const rootTasks = state.tasks.filter(t => !t.parent_id);
+
+  let filteredRoots = rootTasks;
   if (state.activeFilter === 'pending') {
-    filtered = state.tasks.filter(t => !t.completed);
+    filteredRoots = rootTasks.filter(t => !t.completed || state.tasks.some(st => st.parent_id === t.id && !st.completed));
   } else if (state.activeFilter === 'completed') {
-    filtered = state.tasks.filter(t => t.completed);
+    filteredRoots = rootTasks.filter(t => t.completed);
   }
 
-  if (filtered.length === 0) {
+  if (filteredRoots.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <div data-icon="check-square" class="empty-icon"></div>
@@ -211,52 +354,144 @@ function renderTasksList() {
     return;
   }
 
-  container.innerHTML = filtered.map(task => {
+  container.innerHTML = filteredRoots.map(task => {
     const isCompleted = Boolean(task.completed);
+    const subtasks = state.tasks.filter(st => st.parent_id === task.id);
+    const subCount = subtasks.length;
+    const subCompleted = subtasks.filter(st => st.completed).length;
+    const isCollapsed = state.collapsedParents.has(task.id);
+
     const attCount = (task.attachments || []).length;
     const attBadge = attCount > 0
       ? `<span class="task-meta-badge" title="${attCount} anexo(s)"><span data-icon="paperclip"></span> ${attCount}</span>`
       : '';
 
+    const subtaskBadge = subCount > 0
+      ? `<span class="subtask-badge" title="${subCompleted} de ${subCount} subtarefas concluídas">
+           <span data-icon="corner-down-right"></span> ${subCompleted}/${subCount}
+         </span>`
+      : '';
+
+    const chevronBtn = subCount > 0
+      ? `<button type="button" class="btn-chevron ${isCollapsed ? 'collapsed' : ''}" onclick="toggleCollapseParent('${task.id}', event)" title="${isCollapsed ? 'Expandir subtarefas' : 'Recolher subtarefas'}">
+           <span data-icon="${isCollapsed ? 'chevron-right' : 'chevron-down'}"></span>
+         </button>`
+      : '';
+
+    // Subtarefas visíveis de acordo com o filtro ativo
+    let visibleSubtasks = subtasks;
+    if (state.activeFilter === 'pending') {
+      visibleSubtasks = subtasks.filter(st => !st.completed);
+    } else if (state.activeFilter === 'completed') {
+      visibleSubtasks = subtasks.filter(st => st.completed);
+    }
+
+    const subtasksHtml = (subCount > 0 && !isCollapsed)
+      ? `<div class="subtasks-container" id="subtasks_${task.id}">
+          ${visibleSubtasks.map(sub => {
+            const isSubCompleted = Boolean(sub.completed);
+            const subAttCount = (sub.attachments || []).length;
+            const subAttBadge = subAttCount > 0
+              ? `<span class="task-meta-badge" title="${subAttCount} anexo(s)"><span data-icon="paperclip"></span> ${subAttCount}</span>`
+              : '';
+            return `
+              <div class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''}" id="card_${sub.id}">
+                <div class="task-left">
+                  <span class="subtask-indicator" data-icon="corner-down-right"></span>
+                  <input
+                    type="checkbox"
+                    class="task-checkbox-custom"
+                    ${isSubCompleted ? 'checked' : ''}
+                    onchange="handleToggleTask('${sub.id}')"
+                    title="${isSubCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
+                  />
+                  <span class="task-title" title="${escapeHtml(sub.title)}">${escapeHtml(sub.title)}</span>
+                  ${subAttBadge}
+                </div>
+                <div class="task-actions">
+                  <button
+                    type="button"
+                    class="action-btn action-btn-edit"
+                    onclick="startQuickEdit('${sub.id}')"
+                    title="Editar rapidamente no chat"
+                  >
+                    <span data-icon="edit-3"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="action-btn action-btn-view"
+                    onclick="openTaskTab('${sub.id}')"
+                    title="Visualizar detalhes em aba dedicada"
+                  >
+                    <span data-icon="eye"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="action-btn action-btn-delete"
+                    onclick="handleDeleteTask('${sub.id}')"
+                    title="Excluir subtarefa"
+                  >
+                    <span data-icon="trash-2"></span>
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>`
+      : '';
+
     return `
-      <div class="task-card ${isCompleted ? 'completed' : ''}" id="card_${task.id}">
-        <div class="task-left">
-          <input
-            type="checkbox"
-            class="task-checkbox-custom"
-            ${isCompleted ? 'checked' : ''}
-            onchange="handleToggleTask('${task.id}')"
-            title="${isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
-          />
-          <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
-          ${attBadge}
+      <div class="subtasks-wrapper">
+        <div class="task-card ${isCompleted ? 'completed' : ''}" id="card_${task.id}">
+          <div class="task-left">
+            ${chevronBtn}
+            <input
+              type="checkbox"
+              class="task-checkbox-custom"
+              ${isCompleted ? 'checked' : ''}
+              onchange="handleToggleTask('${task.id}')"
+              title="${isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
+            />
+            <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
+            ${attBadge}
+            ${subtaskBadge}
+          </div>
+          <div class="task-actions">
+            <button
+              type="button"
+              class="action-btn action-btn-add-sub"
+              onclick="promptCreateSubtask('${task.id}')"
+              title="Adicionar subtarefa"
+            >
+              <span data-icon="plus"></span>
+            </button>
+            <button
+              type="button"
+              class="action-btn action-btn-edit"
+              onclick="startQuickEdit('${task.id}')"
+              title="Editar rapidamente no chat"
+            >
+              <span data-icon="edit-3"></span>
+            </button>
+            <button
+              type="button"
+              class="action-btn action-btn-view"
+              onclick="openTaskTab('${task.id}')"
+              title="Visualizar detalhes em aba dedicada"
+            >
+              <span data-icon="eye"></span>
+            </button>
+            <button
+              type="button"
+              class="action-btn action-btn-delete"
+              onclick="handleDeleteTask('${task.id}')"
+              title="Excluir tarefa"
+            >
+              <span data-icon="trash-2"></span>
+            </button>
+          </div>
         </div>
-        <div class="task-actions">
-          <button
-            type="button"
-            class="action-btn action-btn-edit"
-            onclick="startQuickEdit('${task.id}')"
-            title="Editar rapidamente no chat"
-          >
-            <span data-icon="edit-3"></span>
-          </button>
-          <button
-            type="button"
-            class="action-btn action-btn-view"
-            onclick="openTaskTab('${task.id}')"
-            title="Visualizar detalhes em aba dedicada"
-          >
-            <span data-icon="eye"></span>
-          </button>
-          <button
-            type="button"
-            class="action-btn action-btn-delete"
-            onclick="handleDeleteTask('${task.id}')"
-            title="Excluir tarefa"
-          >
-            <span data-icon="trash-2"></span>
-          </button>
-        </div>
+        ${subtasksHtml}
       </div>
     `;
   }).join('');
@@ -572,6 +807,30 @@ function createDetailPane(task) {
         </div>
       </div>
 
+      <!-- Seção de Subtarefas -->
+      <div class="detail-subtasks-section">
+        <div class="subtasks-header-row">
+          <div class="detail-section-title" style="margin-bottom: 0;">
+            <span data-icon="corner-down-right"></span> Subtarefas (<span id="detailSubtaskCount_${task.id}">0</span>)
+          </div>
+        </div>
+        <div class="subtask-add-row">
+          <input
+            type="text"
+            class="subtask-input"
+            id="inputSubtask_${task.id}"
+            placeholder="Adicionar subtarefa... (Pressione Enter)"
+            onkeydown="if(event.key === 'Enter') handleAddSubtaskFromDetail('${task.id}')"
+          />
+          <button type="button" class="btn btn-secondary btn-sm" onclick="handleAddSubtaskFromDetail('${task.id}')">
+            <span data-icon="plus"></span> Adicionar
+          </button>
+        </div>
+        <div class="detail-subtasks-list" id="detailSubtasksList_${task.id}">
+          <!-- Subtarefas renderizadas dinamicamente -->
+        </div>
+      </div>
+
       <!-- Seção de Anexos -->
       <div class="detail-attachments-section">
         <div class="attachments-header-row">
@@ -593,6 +852,7 @@ function createDetailPane(task) {
 
   // Instancia o MarkdownField no modo 'view' (Leitor formatado) com allowToggleEdit
   initMarkdownFieldForTask(task);
+  renderDetailSubtasksList(task.id);
   if (window.renderIcons) window.renderIcons();
 }
 
@@ -900,6 +1160,8 @@ function updateDetailPaneIfOpen(taskId) {
 
   const tabText = document.getElementById(`tabText_${taskId}`);
   if (tabText) tabText.textContent = task.title;
+
+  renderDetailSubtasksList(taskId);
 }
 
 // Utilitário de escape de HTML
@@ -932,3 +1194,7 @@ window.handleNativeSaveDesc = handleNativeSaveDesc;
 window.handleNativeCancelDesc = handleNativeCancelDesc;
 window.setFilter = setFilter;
 window.toggleTheme = toggleTheme;
+window.toggleCollapseParent = toggleCollapseParent;
+window.promptCreateSubtask = promptCreateSubtask;
+window.handleAddSubtaskFromDetail = handleAddSubtaskFromDetail;
+window.handleToggleSubtaskFromDetail = handleToggleSubtaskFromDetail;
