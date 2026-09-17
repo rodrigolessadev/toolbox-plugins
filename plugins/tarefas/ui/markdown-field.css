@@ -1,0 +1,439 @@
+/**
+ * @toolbox-plugins/shared-markdown - Estilos Universais
+ * Compatível com toolbox-theme.css (Material 3 Dark/Light) e fallback standalone.
+ */
+
+:root {
+  --tb-md-bg: var(--surface, #1e1e24);
+  --tb-md-surface: var(--surface-container, #282830);
+  --tb-md-surface-hover: var(--surface-container-high, #32323c);
+  --tb-md-fg: var(--fg, var(--text-primary, #e4e4e7));
+  --tb-md-muted: var(--text-muted, #a1a1aa);
+  --tb-md-border: var(--border, var(--border-subtle, #3f3f46));
+  --tb-md-border-focus: var(--accent, #6366f1);
+  --tb-md-accent: var(--accent, #6366f1);
+  --tb-md-accent-hover: var(--accent-hover, #4f46e5);
+  --tb-md-success: var(--success, #10b981);
+  --tb-md-danger: var(--danger, #ef4444);
+  --tb-md-warning: var(--warning, #f59e0b);
+  --tb-md-radius: var(--radius-md, 8px);
+  --tb-md-radius-sm: var(--radius-sm, 4px);
+  --tb-md-font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Menlo, monospace;
+}
+
+[data-theme="light"] {
+  --tb-md-bg: var(--surface, #ffffff);
+  --tb-md-surface: var(--surface-container, #f4f4f5);
+  --tb-md-surface-hover: var(--surface-container-high, #e4e4e7);
+  --tb-md-fg: var(--fg, var(--text-primary, #18181b));
+  --tb-md-muted: var(--text-muted, #71717a);
+  --tb-md-border: var(--border, var(--border-subtle, #e4e4e7));
+  --tb-md-border-focus: var(--accent, #4f46e5);
+  --tb-md-accent: var(--accent, #4f46e5);
+  --tb-md-accent-hover: var(--accent-hover, #4338ca);
+}
+
+/* ==========================================================================
+   Base Container
+   ========================================================================== */
+.tb-markdown-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-family: inherit;
+  color: var(--tb-md-fg);
+  background: transparent;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Reader Mode (Static / Formatted View)
+   ========================================================================== */
+.tb-markdown-reader {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tb-reader-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0;
+  margin-bottom: 6px;
+}
+
+.tb-btn-edit-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--tb-md-surface);
+  border: 1px solid var(--tb-md-border);
+  color: var(--tb-md-fg);
+  padding: 4px 10px;
+  border-radius: var(--tb-md-radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tb-btn-edit-action:hover {
+  background: var(--tb-md-surface-hover);
+  border-color: var(--tb-md-accent);
+  color: var(--tb-md-accent);
+}
+
+.tb-reader-placeholder {
+  color: var(--tb-md-muted);
+  font-style: italic;
+  font-size: 13px;
+  padding: 12px;
+  background: var(--tb-md-surface);
+  border-radius: var(--tb-md-radius);
+  border: 1px dashed var(--tb-md-border);
+}
+
+.tb-reader-body {
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.tb-reader-body > *:first-child {
+  margin-top: 0;
+}
+
+.tb-reader-body > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings */
+.tb-heading {
+  color: var(--tb-md-fg);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+}
+
+.tb-h1 { font-size: 1.75em; border-bottom: 1px solid var(--tb-md-border); padding-bottom: 0.3em; }
+.tb-h2 { font-size: 1.4em; border-bottom: 1px solid var(--tb-md-border); padding-bottom: 0.25em; }
+.tb-h3 { font-size: 1.2em; }
+.tb-h4 { font-size: 1em; }
+.tb-h5 { font-size: 0.9em; }
+.tb-h6 { font-size: 0.85em; color: var(--tb-md-muted); }
+
+/* Text Elements */
+.tb-p {
+  margin: 0.8em 0;
+}
+
+.tb-link {
+  color: var(--tb-md-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tb-link:hover {
+  filter: brightness(1.2);
+}
+
+.tb-inline-code {
+  font-family: var(--tb-md-font-mono);
+  font-size: 0.88em;
+  background: var(--tb-md-surface);
+  color: var(--tb-md-accent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--tb-md-border);
+}
+
+.tb-hr {
+  border: none;
+  height: 1px;
+  background: var(--tb-md-border);
+  margin: 1.5em 0;
+}
+
+.tb-blockquote {
+  margin: 1em 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--tb-md-accent);
+  background: var(--tb-md-surface);
+  border-radius: 0 var(--tb-md-radius-sm) var(--tb-md-radius-sm) 0;
+  color: var(--tb-md-muted);
+}
+
+/* Lists */
+.tb-list {
+  margin: 0.8em 0;
+  padding-left: 24px;
+}
+
+.tb-list li {
+  margin: 0.3em 0;
+}
+
+.tb-task-list {
+  list-style: none;
+  padding-left: 4px;
+}
+
+.tb-task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0.3em 0;
+}
+
+.tb-task-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--tb-md-accent);
+  cursor: default;
+}
+
+/* Code Blocks */
+.tb-code-block {
+  margin: 1em 0;
+  background: var(--tb-md-surface);
+  border: 1px solid var(--tb-md-border);
+  border-radius: var(--tb-md-radius);
+  overflow: hidden;
+}
+
+.tb-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--tb-md-surface-hover);
+  border-bottom: 1px solid var(--tb-md-border);
+  font-size: 11px;
+  font-family: var(--tb-md-font-mono);
+  color: var(--tb-md-muted);
+}
+
+.tb-btn-copy-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--tb-md-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+
+.tb-btn-copy-code:hover {
+  color: var(--tb-md-fg);
+  background: var(--tb-md-surface);
+}
+
+.tb-btn-copy-code.tb-copied {
+  color: var(--tb-md-success);
+}
+
+.tb-pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--tb-md-font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Tables */
+.tb-table-wrapper {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.tb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tb-table th,
+.tb-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--tb-md-border);
+  text-align: left;
+}
+
+.tb-table th {
+  background: var(--tb-md-surface);
+  font-weight: 600;
+}
+
+.tb-table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* GitHub Alerts */
+.tb-alert {
+  margin: 1em 0;
+  padding: 10px 14px;
+  border-left: 4px solid;
+  border-radius: 0 var(--tb-md-radius-sm) var(--tb-md-radius-sm) 0;
+  background: var(--tb-md-surface);
+}
+
+.tb-alert-title {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.tb-alert-note { border-color: #3b82f6; }
+.tb-alert-note .tb-alert-title { color: #3b82f6; }
+.tb-alert-tip { border-color: #10b981; }
+.tb-alert-tip .tb-alert-title { color: #10b981; }
+.tb-alert-important { border-color: #8b5cf6; }
+.tb-alert-important .tb-alert-title { color: #8b5cf6; }
+.tb-alert-warning { border-color: #f59e0b; }
+.tb-alert-warning .tb-alert-title { color: #f59e0b; }
+.tb-alert-caution { border-color: #ef4444; }
+.tb-alert-caution .tb-alert-title { color: #ef4444; }
+
+/* ==========================================================================
+   Editor Mode (Interactive Raw Editor)
+   ========================================================================== */
+.tb-markdown-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--tb-md-border);
+  border-radius: var(--tb-md-radius);
+  background: var(--tb-md-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.tb-markdown-editor:focus-within {
+  border-color: var(--tb-md-border-focus);
+}
+
+/* Toolbar */
+.tb-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--tb-md-surface);
+  border-bottom: 1px solid var(--tb-md-border);
+  flex-wrap: wrap;
+}
+
+.tb-editor-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--tb-md-radius-sm);
+  color: var(--tb-md-fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tb-editor-tool-btn:hover {
+  background: var(--tb-md-surface-hover);
+  border-color: var(--tb-md-border);
+}
+
+/* Textarea */
+.tb-editor-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px 12px;
+  background: var(--tb-md-bg);
+  color: var(--tb-md-fg);
+  border: none;
+  outline: none;
+  font-family: var(--tb-md-font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.tb-editor-textarea::placeholder {
+  color: var(--tb-md-muted);
+}
+
+/* Footer & Actions */
+.tb-editor-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--tb-md-surface);
+  border-top: 1px solid var(--tb-md-border);
+}
+
+.tb-editor-hints {
+  font-size: 11px;
+  color: var(--tb-md-muted);
+}
+
+.tb-hint-key {
+  display: inline-block;
+  padding: 1px 4px;
+  background: var(--tb-md-bg);
+  border: 1px solid var(--tb-md-border);
+  border-radius: 3px;
+  font-family: var(--tb-md-font-mono);
+  font-size: 10px;
+}
+
+.tb-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tb-btn-cancel,
+.tb-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--tb-md-radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tb-btn-cancel {
+  background: transparent;
+  border: 1px solid var(--tb-md-border);
+  color: var(--tb-md-muted);
+}
+
+.tb-btn-cancel:hover {
+  background: var(--tb-md-surface-hover);
+  color: var(--tb-md-fg);
+}
+
+.tb-btn-save {
+  background: var(--tb-md-accent);
+  border: 1px solid var(--tb-md-accent);
+  color: #ffffff;
+}
+
+.tb-btn-save:hover {
+  background: var(--tb-md-accent-hover);
+  border-color: var(--tb-md-accent-hover);
+}
