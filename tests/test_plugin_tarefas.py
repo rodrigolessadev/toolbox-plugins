@@ -465,3 +465,118 @@ def test_tarefas_ui_sorting_and_divider_assets():
     assert ".completed-divider-line" in style_css
     assert ".completed-divider-text" in style_css
 
+
+def test_domain_filter_tasks_default_one_month():
+    """Valida que por padrão (sem datas fornecidas), apenas tarefas do último mês (30 dias) são mantidas."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    recent_date = (now - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    old_date = (now - timedelta(days=45)).strftime("%Y-%m-%d %H:%M:%S")
+
+    tasks = [
+        {"id": "t_recent", "title": "Tarefa Recente", "created_at": recent_date},
+        {"id": "t_old", "title": "Tarefa Antiga", "created_at": old_date},
+    ]
+
+    filtered = tarefas_domain.filter_tasks_by_date_range(tasks, default_one_month=True)
+    assert len(filtered) == 1
+    assert filtered[0]["id"] == "t_recent"
+
+    # Se default_one_month=False e sem datas, retorna todas
+    unfiltered = tarefas_domain.filter_tasks_by_date_range(tasks, default_one_month=False)
+    assert len(unfiltered) == 2
+
+
+def test_domain_filter_tasks_custom_range():
+    """Valida o filtro por intervalo customizado de datas."""
+    tasks = [
+        {"id": "t1", "title": "Maio", "created_at": "2026-05-15 10:00:00"},
+        {"id": "t2", "title": "Junho", "created_at": "2026-06-15 10:00:00"},
+        {"id": "t3", "title": "Julho", "created_at": "2026-07-15 10:00:00"},
+    ]
+
+    filtered = tarefas_domain.filter_tasks_by_date_range(
+        tasks,
+        date_from="2026-06-01",
+        date_to="2026-06-30"
+    )
+    assert len(filtered) == 1
+    assert filtered[0]["id"] == "t2"
+
+    # Apenas date_from
+    filtered_from = tarefas_domain.filter_tasks_by_date_range(
+        tasks,
+        date_from="2026-06-01"
+    )
+    assert [t["id"] for t in filtered_from] == ["t2", "t3"]
+
+    # Apenas date_to
+    filtered_to = tarefas_domain.filter_tasks_by_date_range(
+        tasks,
+        date_to="2026-06-30"
+    )
+    assert [t["id"] for t in filtered_to] == ["t1", "t2"]
+
+
+def test_domain_filter_tasks_parent_with_subtask_in_range():
+    """Valida que uma tarefa-pai antiga é preservada se tiver uma subtarefa no intervalo filtrado."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    recent_date = (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+    old_date = (now - timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
+
+    tasks = [
+        {"id": "parent_old", "parent_id": None, "title": "Pai Antigo", "created_at": old_date},
+        {"id": "sub_recent", "parent_id": "parent_old", "title": "Filho Recente", "created_at": recent_date},
+        {"id": "other_old", "parent_id": None, "title": "Outro Antigo", "created_at": old_date},
+    ]
+
+    filtered = tarefas_domain.filter_tasks_by_date_range(tasks, default_one_month=True)
+    filtered_ids = [t["id"] for t in filtered]
+
+    assert "parent_old" in filtered_ids
+    assert "sub_recent" in filtered_ids
+    assert "other_old" not in filtered_ids
+
+
+def test_tarefas_api_date_filtering():
+    """Valida os métodos get_tasks e filter_tasks_by_date expostos na TarefasApi."""
+    api = TarefasApi()
+    res1 = api.create_task("Task 1")
+    assert res1["success"] is True
+
+    # Chamada de filter_tasks_by_date
+    res_filter = api.filter_tasks_by_date(default_one_month=True)
+    assert res_filter["success"] is True
+    assert len(res_filter["tasks"]) >= 1
+
+    # Chamada com intervalo futuro que não deve conter a tarefa
+    res_empty = api.filter_tasks_by_date(date_from="2099-01-01", date_to="2099-01-31")
+    assert res_empty["success"] is True
+    assert len(res_empty["tasks"]) == 0
+
+
+def test_tarefas_ui_date_filter_components():
+    """Valida que os componentes de filtro por data estão presentes na UI (HTML, CSS e JS)."""
+    ui_dir = TAREFAS_DIR / "ui"
+
+    html = (ui_dir / "index.html").read_text(encoding="utf-8")
+    assert "dateFilterFrom" in html
+    assert "dateFilterTo" in html
+    assert "btnResetDateFilter" in html
+    assert "btnAllDates" in html
+
+    css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".date-filter-group" in css
+    assert ".date-input" in css
+    assert ".date-all-btn" in css
+
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "getDateRangeBoundaries" in app_js
+    assert "isTaskInDateRange" in app_js
+    assert "toggleAllDatesFilter" in app_js
+    assert "filter_tasks_by_date" in app_js
+
+

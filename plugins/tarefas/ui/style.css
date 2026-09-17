@@ -183,6 +183,96 @@
   color: var(--accent);
 }
 
+/* --- Date Range Filter Toolbar --- */
+.date-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-card);
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.date-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  transition: all var(--transition-fast);
+}
+
+.date-input-wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.date-input-icon {
+  color: var(--fg-muted);
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+}
+
+.date-input {
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+[data-theme="light"] .date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.2);
+}
+
+.date-separator {
+  font-size: 11px;
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+.filter-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-btn-icon:hover {
+  background-color: var(--bg-hover);
+  color: var(--accent);
+}
+
+.filter-btn.date-all-btn {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.filter-btn.date-all-btn.active {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .tasks-stats-text {
   font-size: 12px;
   color: var(--fg-muted);
