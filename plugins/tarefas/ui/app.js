@@ -575,7 +575,10 @@ function renderTasksList() {
               <div
                 class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''} ${isSubSelected ? 'selected' : ''}"
                 id="card_${sub.id}"
+                draggable="true"
                 onclick="handleCardClick(event, '${task.id}')"
+                ondragstart="handleDragStart(event, '${sub.id}', '${task.id}')"
+                ondragend="handleDragEnd(event)"
                 ondragover="handleDragOver(event, '${sub.id}', '${task.id}')"
                 ondragleave="handleDragLeave(event)"
                 ondrop="handleDrop(event, '${sub.id}', '${task.id}')"
@@ -639,7 +642,10 @@ function renderTasksList() {
         <div
           class="task-card ${isCompleted ? 'completed' : ''} ${isSelected ? 'selected' : ''}"
           id="card_${task.id}"
+          draggable="true"
           onclick="handleCardClick(event, '${task.id}')"
+          ondragstart="handleDragStart(event, '${task.id}', null)"
+          ondragend="handleDragEnd(event)"
           ondragover="handleDragOver(event, '${task.id}', null)"
           ondragleave="handleDragLeave(event)"
           ondrop="handleDrop(event, '${task.id}', null)"
@@ -1597,11 +1603,28 @@ function updateDetailPaneIfOpen(taskId) {
   renderDetailSubtasksList(taskId);
 }
 
-// --- Drag and Drop (Reordenação Manual) ---
+// --- Drag and Drop (Reordenação Manual e Aninhamento) ---
 let draggedTaskId = null;
 let draggedParentId = null;
 
+function isDescendant(potentialParentId, targetId) {
+  if (!potentialParentId || !targetId) return false;
+  let current = state.tasks.find(t => t.id === targetId);
+  const visited = new Set();
+  while (current && current.parent_id) {
+    if (current.parent_id === potentialParentId) return true;
+    if (visited.has(current.parent_id)) break;
+    visited.add(current.parent_id);
+    current = state.tasks.find(t => t.id === current.parent_id);
+  }
+  return false;
+}
+
 function handleDragStart(e, taskId, parentId) {
+  if (e.target && e.target.closest('button, input, textarea, a, .subtask-collapse-btn')) {
+    e.preventDefault();
+    return;
+  }
   draggedTaskId = taskId;
   draggedParentId = parentId || null;
   if (e.dataTransfer) {
@@ -1616,8 +1639,11 @@ function handleDragStart(e, taskId, parentId) {
 
 function handleDragOver(e, targetTaskId, targetParentId) {
   if (!draggedTaskId || draggedTaskId === targetTaskId) return;
-  const normTargetParent = targetParentId || null;
-  if (draggedParentId !== normTargetParent) return;
+
+  // Prevenção de ciclos: não permitir arrastar pai sobre si mesmo ou qualquer filho/descendente
+  if (isDescendant(draggedTaskId, targetTaskId)) {
+    return;
+  }
 
   e.preventDefault();
   if (e.dataTransfer) {
@@ -1628,20 +1654,24 @@ function handleDragOver(e, targetTaskId, targetParentId) {
   if (!card) return;
 
   const rect = card.getBoundingClientRect();
-  const midY = rect.top + rect.height / 2;
-  if (e.clientY < midY) {
+  const relY = e.clientY - rect.top;
+  const ratio = rect.height > 0 ? relY / rect.height : 0.5;
+
+  card.classList.remove('drag-over-top', 'drag-over-center', 'drag-over-bottom');
+
+  if (ratio < 0.25) {
     card.classList.add('drag-over-top');
-    card.classList.remove('drag-over-bottom');
+  } else if (ratio <= 0.75) {
+    card.classList.add('drag-over-center');
   } else {
     card.classList.add('drag-over-bottom');
-    card.classList.remove('drag-over-top');
   }
 }
 
 function handleDragLeave(e) {
   const card = e.currentTarget;
   if (card && (!e.relatedTarget || !card.contains(e.relatedTarget))) {
-    card.classList.remove('drag-over-top', 'drag-over-bottom');
+    card.classList.remove('drag-over-top', 'drag-over-center', 'drag-over-bottom');
   }
 }
 
@@ -1649,48 +1679,124 @@ function handleDragEnd(e) {
   draggedTaskId = null;
   draggedParentId = null;
   document.querySelectorAll('.task-card').forEach(card => {
-    card.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+    card.classList.remove('dragging', 'drag-over-top', 'drag-over-center', 'drag-over-bottom');
   });
+}
+
+function rebuildTasksOrder() {
+  const roots = state.tasks.filter(t => !t.parent_id);
+  const result = [];
+  for (const root of roots) {
+    result.push(root);
+    const subs = state.tasks.filter(t => t.parent_id === root.id);
+    result.push(...subs);
+  }
+  for (const t of state.tasks) {
+    if (!result.includes(t)) result.push(t);
+  }
+  state.tasks = result;
 }
 
 async function handleDrop(e, targetTaskId, targetParentId) {
   e.preventDefault();
-  const normTargetParent = targetParentId || null;
-  if (!draggedTaskId || draggedTaskId === targetTaskId || draggedParentId !== normTargetParent) {
+  if (!draggedTaskId || draggedTaskId === targetTaskId) {
+    handleDragEnd(e);
+    return;
+  }
+
+  // Prevenção de ciclos
+  if (isDescendant(draggedTaskId, targetTaskId)) {
     handleDragEnd(e);
     return;
   }
 
   const card = document.getElementById(`card_${targetTaskId}`);
+  const isCenter = card ? card.classList.contains('drag-over-center') : false;
   const isTop = card ? card.classList.contains('drag-over-top') : true;
 
-  const siblings = state.tasks.filter(t => (t.parent_id || null) === draggedParentId);
-  const draggedItem = siblings.find(t => t.id === draggedTaskId);
-  if (!draggedItem) {
+  const draggedItem = state.tasks.find(t => t.id === draggedTaskId);
+  const targetItem = state.tasks.find(t => t.id === targetTaskId);
+  if (!draggedItem || !targetItem) {
     handleDragEnd(e);
     return;
   }
 
-  const remainingSiblings = siblings.filter(t => t.id !== draggedTaskId);
-  const targetIndex = remainingSiblings.findIndex(t => t.id === targetTaskId);
+  const api = getApi();
+
+  if (isCenter) {
+    // --- CENÁRIO A: ANINHAMENTO COMO SUBTAREFA ---
+    // Se o alvo for tarefa raiz, vira subtarefa direta dela.
+    // Se o alvo já for subtarefa, adota no mesmo pai daquela subtarefa.
+    const newParentId = targetItem.parent_id || targetItem.id;
+    if (newParentId === draggedTaskId || isDescendant(draggedTaskId, newParentId)) {
+      handleDragEnd(e);
+      return;
+    }
+
+    // Descolapsa o pai para mostrar a nova subtarefa
+    state.collapsedParents.delete(newParentId);
+    saveCollapsedParents();
+
+    // Calcula timestamp para figurar na ordem das subtarefas daquele pai
+    const existingSubs = state.tasks.filter(t => t.parent_id === newParentId && t.id !== draggedTaskId);
+    const lastSub = existingSubs.length > 0 ? existingSubs[existingSubs.length - 1] : null;
+    const newTs = calculateAdjustedTimestamp(lastSub, null);
+
+    draggedItem.parent_id = newParentId;
+    draggedItem.created_at = newTs;
+    draggedItem.updated_at = newTs;
+
+    rebuildTasksOrder();
+    renderTasksList();
+    handleDragEnd(e);
+
+    try {
+      const res = await api.update_task(draggedTaskId, {
+        parent_id: newParentId,
+        created_at: newTs,
+        updated_at: newTs
+      });
+      if (res && res.success && res.tasks) {
+        state.tasks = res.tasks;
+        renderTasksList();
+      }
+    } catch (err) {
+      console.error('Erro ao aninhar subtarefa via drag-and-drop:', err);
+    }
+    return;
+  }
+
+  // --- CENÁRIO B: REORDENAÇÃO ENTRE TAREFAS (TOP OU BOTTOM) ---
+  // O parent_id de destino é o mesmo do alvo onde foi solto (irmãos)
+  const newParentId = targetItem.parent_id || null;
+  if (newParentId === draggedTaskId || isDescendant(draggedTaskId, newParentId)) {
+    handleDragEnd(e);
+    return;
+  }
+
+  const siblings = state.tasks.filter(t => (t.parent_id || null) === newParentId && t.id !== draggedTaskId);
+  const targetIndex = siblings.findIndex(t => t.id === targetTaskId);
   if (targetIndex === -1) {
     handleDragEnd(e);
     return;
   }
 
   const insertIndex = isTop ? targetIndex : targetIndex + 1;
-  const prevItem = insertIndex > 0 ? remainingSiblings[insertIndex - 1] : null;
-  const nextItem = insertIndex < remainingSiblings.length ? remainingSiblings[insertIndex] : null;
+  const prevItem = insertIndex > 0 ? siblings[insertIndex - 1] : null;
+  const nextItem = insertIndex < siblings.length ? siblings[insertIndex] : null;
   const newTs = calculateAdjustedTimestamp(prevItem, nextItem);
+
+  draggedItem.parent_id = newParentId;
   draggedItem.created_at = newTs;
   draggedItem.updated_at = newTs;
 
-  remainingSiblings.splice(insertIndex, 0, draggedItem);
-  const newSiblingIds = remainingSiblings.map(t => t.id);
+  siblings.splice(insertIndex, 0, draggedItem);
+  const orderedSiblingIds = siblings.map(t => t.id);
 
   let finalOrderedIds = [];
-  if (!draggedParentId) {
-    for (const rootId of newSiblingIds) {
+  if (!newParentId) {
+    // Reordenando no nível raiz
+    for (const rootId of orderedSiblingIds) {
       finalOrderedIds.push(rootId);
       const subs = state.tasks.filter(t => t.parent_id === rootId);
       subs.forEach(s => finalOrderedIds.push(s.id));
@@ -1699,14 +1805,13 @@ async function handleDrop(e, targetTaskId, targetParentId) {
       if (!finalOrderedIds.includes(t.id)) finalOrderedIds.push(t.id);
     }
   } else {
-    let insertedSubtasks = false;
+    // Reordenando dentro de um grupo de subtarefas
     for (const t of state.tasks) {
-      if (t.parent_id === draggedParentId) {
-        if (!insertedSubtasks) {
-          finalOrderedIds.push(...newSiblingIds);
-          insertedSubtasks = true;
+      if (t.parent_id === newParentId) {
+        if (!finalOrderedIds.some(id => orderedSiblingIds.includes(id))) {
+          finalOrderedIds.push(...orderedSiblingIds);
         }
-      } else {
+      } else if (!orderedSiblingIds.includes(t.id)) {
         finalOrderedIds.push(t.id);
       }
     }
@@ -1718,10 +1823,14 @@ async function handleDrop(e, targetTaskId, targetParentId) {
   renderTasksList();
   handleDragEnd(e);
 
-  const api = getApi();
+  const apiRef = getApi();
   try {
-    api.update_task(draggedItem.id, { created_at: newTs, updated_at: newTs }).catch(() => {});
-    const res = await api.reorder_tasks(finalOrderedIds);
+    await apiRef.update_task(draggedTaskId, {
+      parent_id: newParentId,
+      created_at: newTs,
+      updated_at: newTs
+    });
+    const res = await apiRef.reorder_tasks(finalOrderedIds);
     if (res && res.success && res.tasks) {
       state.tasks = res.tasks;
     }
@@ -1779,3 +1888,5 @@ window.clearSelection = clearSelection;
 window.selectTask = selectTask;
 window.handleCardClick = handleCardClick;
 window.handleChatCancel = handleChatCancel;
+window.isDescendant = isDescendant;
+window.rebuildTasksOrder = rebuildTasksOrder;

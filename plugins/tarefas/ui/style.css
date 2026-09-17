@@ -950,6 +950,13 @@
   border-top: 2px solid var(--accent) !important;
 }
 
+.task-card.drag-over-center {
+  background-color: var(--accent-soft) !important;
+  border: 2px dashed var(--accent) !important;
+  transform: scale(1.01);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.25);
+}
+
 .task-card.drag-over-bottom {
   border-bottom: 2px solid var(--accent) !important;
 }
