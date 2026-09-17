@@ -427,3 +427,70 @@ body {
   border-color: var(--danger);
   color: var(--fg);
 }
+
+/* ==========================================================================
+   Classes Utilitárias de Ícones e Ações (Regra 4 M3)
+   ========================================================================== */
+.icon-sm {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-md {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-lg {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-sm svg, [data-icon].icon-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-md svg, [data-icon].icon-md svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-lg svg, [data-icon].icon-lg svg {
+  width: 24px;
+  height: 24px;
+}
+
+.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+
