@@ -5,7 +5,7 @@
 
 // --- 1. Parser & Sanitizer ---
 
-export function escapeHtml(str) {
+function escapeHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -14,7 +14,7 @@ export function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-export function sanitizeHtml(html) {
+function sanitizeHtml(html) {
   if (!html) return '';
   let sanitized = String(html);
   sanitized = sanitized.replace(/<(script|iframe|object|embed|applet|meta|link|style|base|form)[\s\S]*?<\/\1>/gi, '');
@@ -24,7 +24,7 @@ export function sanitizeHtml(html) {
   return sanitized;
 }
 
-export function slugify(text) {
+function slugify(text) {
   return String(text ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -58,7 +58,7 @@ function inlineMarkdown(text) {
   return s;
 }
 
-export function highlightSyntax(code, lang) {
+function highlightSyntax(code, lang) {
   if (!code) return '';
 
   const l = (lang || '').toLowerCase();
@@ -102,7 +102,7 @@ export function highlightSyntax(code, lang) {
   return code;
 }
 
-export function parseMarkdown(md, options = {}) {
+function parseMarkdown(md, options = {}) {
   if (!md) return { html: '', toc: [] };
 
   const shouldHighlight = Boolean(options && options.highlight);
@@ -395,7 +395,7 @@ export function parseMarkdown(md, options = {}) {
 
 // --- 2. MarkdownReader ---
 
-export class MarkdownReader {
+class MarkdownReader {
   constructor(options = {}) {
     this.value = options.value ?? '';
     this.allowToggleEdit = Boolean(options.allowToggleEdit);
@@ -510,7 +510,7 @@ export class MarkdownReader {
 
 // --- 3. MarkdownEditor ---
 
-export class MarkdownEditor {
+class MarkdownEditor {
   constructor(options = {}) {
     this.value = options.value ?? '';
     this.placeholder = options.placeholder ?? 'Digite o conteúdo em Markdown...';
@@ -720,7 +720,7 @@ export class MarkdownEditor {
 
 // --- 4. MarkdownField (Componente Híbrido Unificado) ---
 
-export class MarkdownField {
+class MarkdownField {
   constructor(options = {}) {
     this.value = String(options.value ?? '');
     this.initialValue = this.value;
@@ -927,4 +927,18 @@ if (typeof customElements !== 'undefined' && !customElements.get('markdown-field
   }
 
   customElements.define('markdown-field', MarkdownFieldElement);
+}
+
+// Universal module export (Node / CommonJS)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    MarkdownField,
+    MarkdownReader,
+    MarkdownEditor,
+    parseMarkdown,
+    sanitizeHtml,
+    escapeHtml,
+    slugify,
+    highlightSyntax,
+  };
 }

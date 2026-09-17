@@ -10,6 +10,7 @@ let state = {
   editingTaskId: null,
   openTabs: [], // Lista de IDs de tarefas com abas abertas
   activeTabId: 'main', // 'main' ou ID da tarefa
+  markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
 };
 
 // Fallback Mock para desenvolvimento web fora do pywebview
@@ -485,6 +486,10 @@ function closeTaskTab(taskId, event) {
   const pane = document.getElementById(`pane_${taskId}`);
   if (pane) pane.remove();
 
+  if (state.markdownFields && state.markdownFields[taskId]) {
+    delete state.markdownFields[taskId];
+  }
+
   if (state.activeTabId === taskId) {
     switchToTab('main');
   }
@@ -546,12 +551,23 @@ function createDetailPane(task) {
         </div>
       </div>
 
-      <!-- Seção Descrição com Shared-Markdown (Modo Leitor formatado por padrão) -->
+      <!-- Seção Descrição com Shared-Markdown -->
       <div class="detail-markdown-section">
-        <div class="detail-section-title">
-          <span data-icon="file-text"></span> Descrição & Detalhes (Markdown)
+        <div class="description-header-row">
+          <div class="detail-section-title" style="margin-bottom: 0;">
+            <span data-icon="file-text"></span> Descrição & Detalhes (Markdown)
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            id="btnEditDesc_${task.id}"
+            onclick="handleToggleDescriptionEdit('${task.id}')"
+            title="Alternar entre modo de visualização e edição"
+          >
+            <span data-icon="edit-3"></span> <span id="btnEditDescText_${task.id}">Editar Descrição</span>
+          </button>
         </div>
-        <div id="markdownContainer_${task.id}" style="flex: 1;">
+        <div id="markdownContainer_${task.id}" style="flex: 1; min-height: 180px;">
           <!-- Componente <markdown-field> montado aqui -->
         </div>
       </div>
@@ -580,6 +596,100 @@ function createDetailPane(task) {
   if (window.renderIcons) window.renderIcons();
 }
 
+function updateDescHeaderButton(taskId, mode) {
+  const btnText = document.getElementById(`btnEditDescText_${taskId}`);
+  const btn = document.getElementById(`btnEditDesc_${taskId}`);
+  if (btnText) {
+    btnText.textContent = mode === 'edit' ? 'Visualizar' : 'Editar Descrição';
+  }
+  if (btn) {
+    const iconSpan = btn.querySelector('[data-icon]');
+    if (iconSpan) {
+      iconSpan.setAttribute('data-icon', mode === 'edit' ? 'eye' : 'edit-3');
+      if (window.renderIcons) window.renderIcons();
+    }
+  }
+}
+
+function handleToggleDescriptionEdit(taskId) {
+  const mf = state.markdownFields ? state.markdownFields[taskId] : null;
+  if (mf && typeof mf.getMode === 'function') {
+    const curMode = mf.getMode();
+    const targetMode = curMode === 'view' ? 'edit' : 'view';
+    mf.setMode(targetMode);
+    updateDescHeaderButton(taskId, targetMode);
+    return;
+  }
+
+  // Fallback nativo: alterna visibilidade entre viewer e editor
+  const nativeViewer = document.getElementById(`nativeDescViewer_${taskId}`);
+  const nativeEditor = document.getElementById(`nativeDescEditor_${taskId}`);
+  if (nativeViewer && nativeEditor) {
+    const isEditing = nativeEditor.style.display !== 'none';
+    const targetMode = isEditing ? 'view' : 'edit';
+    nativeEditor.style.display = isEditing ? 'none' : 'flex';
+    nativeViewer.style.display = isEditing ? 'block' : 'none';
+    updateDescHeaderButton(taskId, targetMode);
+  }
+}
+
+function renderNativeDescriptionFallback(task, container, descVal) {
+  container.innerHTML = `
+    <div id="nativeDescViewer_${task.id}" class="native-desc-viewer">
+      <pre class="native-desc-content">${escapeHtml(descVal)}</pre>
+    </div>
+    <div id="nativeDescEditor_${task.id}" class="native-desc-editor" style="display: none; flex-direction: column; gap: 8px;">
+      <textarea
+        id="nativeDescTextarea_${task.id}"
+        class="native-desc-textarea"
+        placeholder="Descreva a tarefa..."
+        rows="8"
+      >${escapeHtml(descVal)}</textarea>
+      <div class="native-desc-actions" style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="handleNativeCancelDesc('${task.id}')">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="handleNativeSaveDesc('${task.id}')">
+          Salvar
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+async function handleNativeSaveDesc(taskId) {
+  const textarea = document.getElementById(`nativeDescTextarea_${taskId}`);
+  if (!textarea) return;
+  const newContent = textarea.value;
+
+  const api = getApi();
+  try {
+    const res = await api.update_task(taskId, { description: newContent });
+    if (res && res.success) {
+      state.tasks = res.tasks;
+      const t = state.tasks.find(item => item.id === taskId);
+      if (t) t.description = newContent;
+
+      const viewer = document.getElementById(`nativeDescViewer_${taskId}`);
+      if (viewer) {
+        viewer.innerHTML = `<pre class="native-desc-content">${escapeHtml(newContent)}</pre>`;
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao salvar descrição (nativo):', err);
+  }
+  handleToggleDescriptionEdit(taskId);
+}
+
+function handleNativeCancelDesc(taskId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  const textarea = document.getElementById(`nativeDescTextarea_${taskId}`);
+  if (task && textarea) {
+    textarea.value = task.description || '';
+  }
+  handleToggleDescriptionEdit(taskId);
+}
+
 function initMarkdownFieldForTask(task) {
   const container = document.getElementById(`markdownContainer_${task.id}`);
   if (!container) return;
@@ -598,14 +708,32 @@ function initMarkdownFieldForTask(task) {
           const res = await api.update_task(task.id, { description: newContent });
           if (res && res.success) {
             state.tasks = res.tasks;
+            const t = state.tasks.find(item => item.id === task.id);
+            if (t) t.description = newContent;
           }
         } catch (err) {
           console.error('Erro ao salvar descrição markdown:', err);
         }
+        updateDescHeaderButton(task.id, 'view');
+      },
+      onCancel: () => {
+        updateDescHeaderButton(task.id, 'view');
       }
     });
+
+    // Sobrescreve setMode para sincronizar o botão do cabeçalho
+    const origSetMode = mf.setMode.bind(mf);
+    mf.setMode = (newMode, keepVal) => {
+      origSetMode(newMode, keepVal);
+      updateDescHeaderButton(task.id, mf.getMode());
+    };
+
+    if (!state.markdownFields) state.markdownFields = {};
+    state.markdownFields[task.id] = mf;
+
+    container.innerHTML = '';
     container.appendChild(mf.element);
-  } else {
+  } else if (typeof customElements !== 'undefined' && customElements.get('markdown-field')) {
     // Fallback para Web Component se declarado
     const mfEl = document.createElement('markdown-field');
     mfEl.setAttribute('mode', 'view');
@@ -617,12 +745,19 @@ function initMarkdownFieldForTask(task) {
         const res = await api.update_task(task.id, { description: e.detail.value });
         if (res && res.success) {
           state.tasks = res.tasks;
+          const t = state.tasks.find(item => item.id === task.id);
+          if (t) t.description = e.detail.value;
         }
       } catch (err) {
         console.error('Erro ao salvar descrição:', err);
       }
+      updateDescHeaderButton(task.id, 'view');
     });
+    container.innerHTML = '';
     container.appendChild(mfEl);
+  } else {
+    // Fallback Nativo Resiliente com textarea e preview
+    renderNativeDescriptionFallback(task, container, descVal);
   }
 }
 
@@ -792,5 +927,8 @@ window.handleOpenAttachment = handleOpenAttachment;
 window.handleOpenAttachmentFolder = handleOpenAttachmentFolder;
 window.handleDetailTitleChange = handleDetailTitleChange;
 window.handleDetailToggleTask = handleDetailToggleTask;
+window.handleToggleDescriptionEdit = handleToggleDescriptionEdit;
+window.handleNativeSaveDesc = handleNativeSaveDesc;
+window.handleNativeCancelDesc = handleNativeCancelDesc;
 window.setFilter = setFilter;
 window.toggleTheme = toggleTheme;

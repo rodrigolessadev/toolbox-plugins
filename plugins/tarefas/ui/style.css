@@ -507,6 +507,51 @@
   min-height: 240px;
 }
 
+.description-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.native-desc-viewer {
+  padding: 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.native-desc-content {
+  margin: 0;
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+.native-desc-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.native-desc-textarea:focus {
+  border-color: var(--border-focus);
+}
+
+
 .detail-attachments-section {
   background-color: var(--bg-card);
   border: 1px solid var(--border);
