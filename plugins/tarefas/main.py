@@ -71,6 +71,14 @@ class TarefasApi(BasePluginApi):
         except Exception as exc:
             return {"success": False, "error": str(exc)}
 
+    def reorder_tasks(self, task_ids: list) -> Dict[str, Any]:
+        """Reorganiza tarefas no disco conforme a lista de IDs recebida."""
+        try:
+            success = domain.reorder_tasks(task_ids)
+            return {"success": success, "tasks": domain.load_tasks()}
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "tasks": domain.load_tasks()}
+
     def add_attachment_dialog(self, task_id: str) -> Dict[str, Any]:
         """Abre diálogo nativo do SO para seleção e vinculação de anexos."""
         try:

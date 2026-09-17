@@ -294,3 +294,89 @@ def test_tarefas_api_subtasks():
     assert ".subtask-badge" in style_css
     assert ".detail-subtasks-section" in style_css
 
+
+def test_domain_reorder_tasks():
+    """Valida a persistência da reordenação manual de tarefas raiz."""
+    t1 = tarefas_domain.create_task("Tarefa 1")
+    t2 = tarefas_domain.create_task("Tarefa 2")
+    t3 = tarefas_domain.create_task("Tarefa 3")
+
+    initial = [t["id"] for t in tarefas_domain.load_tasks()]
+    assert initial == [t3["id"], t2["id"], t1["id"]]
+
+    # Reordena para [T1, T3, T2]
+    new_order = [t1["id"], t3["id"], t2["id"]]
+    success = tarefas_domain.reorder_tasks(new_order)
+    assert success is True
+
+    reordered = [t["id"] for t in tarefas_domain.load_tasks()]
+    assert reordered == new_order
+
+
+def test_domain_reorder_with_subtasks():
+    """Valida reordenação entre subtarefas do mesmo pai sem corromper hierarquia."""
+    parent = tarefas_domain.create_task("Tarefa Principal")
+    pid = parent["id"]
+
+    sub1 = tarefas_domain.create_task("Subtarefa Alpha", parent_id=pid)
+    sub2 = tarefas_domain.create_task("Subtarefa Beta", parent_id=pid)
+    sub3 = tarefas_domain.create_task("Subtarefa Gamma", parent_id=pid)
+
+    # Inverte a ordem das subtarefas para [sub3, sub1, sub2]
+    success = tarefas_domain.reorder_tasks([sub3["id"], sub1["id"], sub2["id"]])
+    assert success is True
+
+    subtasks = tarefas_domain.get_subtasks(pid)
+    assert [s["id"] for s in subtasks] == [sub3["id"], sub1["id"], sub2["id"]]
+    # Garante que parent_id permanece intacto
+    for s in subtasks:
+        assert s["parent_id"] == pid
+
+
+def test_domain_reorder_partial_and_invalid():
+    """Valida que reordenação com IDs inválidos ou parciais não apaga tarefas existentes."""
+    t1 = tarefas_domain.create_task("Item A")
+    t2 = tarefas_domain.create_task("Item B")
+
+    # Passa IDs inválidos ou vazios
+    assert tarefas_domain.reorder_tasks(["id_fantasma_1", "id_fantasma_2"]) is True
+    # Tarefas reais permanecem intactas (ordem de inserção prepend: B, A)
+    assert [t["id"] for t in tarefas_domain.load_tasks()] == [t2["id"], t1["id"]]
+
+
+def test_tarefas_api_reorder_tasks():
+    """Valida o método reorder_tasks exposto na TarefasApi para a WebView."""
+    api = TarefasApi()
+    res1 = api.create_task("Alpha")
+    res2 = api.create_task("Beta")
+
+    id1 = res1["task"]["id"]
+    id2 = res2["task"]["id"]
+
+    res_reorder = api.reorder_tasks([id2, id1])
+    assert res_reorder["success"] is True
+    assert [t["id"] for t in res_reorder["tasks"]] == [id2, id1]
+
+
+def test_tarefas_ui_drag_and_drop_assets():
+    """Valida que os componentes de UI para drag and drop estão presentes."""
+    ui_dir = TAREFAS_DIR / "ui"
+
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "handleDragStart" in app_js
+    assert "handleDragOver" in app_js
+    assert "handleDragLeave" in app_js
+    assert "handleDrop" in app_js
+    assert "handleDragEnd" in app_js
+    assert "reorder_tasks" in app_js
+    assert "drag-handle" in app_js
+
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".drag-handle" in style_css
+    assert ".task-card.dragging" in style_css
+    assert ".task-card.drag-over-top" in style_css
+    assert ".task-card.drag-over-bottom" in style_css
+
+    icons_js = (ui_dir / "icons.js").read_text(encoding="utf-8")
+    assert "grip-vertical" in icons_js
+
