@@ -638,6 +638,26 @@
   margin-bottom: 12px;
 }
 
+/* Shared-Markdown integration in Tarefas */
+.detail-markdown-section .tb-reader-header {
+  display: none; /* Oculta cabecalho redundante em favor do botao unificado no cabecalho da secao */
+}
+
+.detail-markdown-section .tb-markdown-field {
+  width: 100%;
+}
+
+.detail-markdown-section .tb-reader-body {
+  padding: 12px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100px;
+}
+
 .native-desc-viewer {
   padding: 12px;
   background-color: var(--bg-input);

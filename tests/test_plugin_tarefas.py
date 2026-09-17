@@ -60,6 +60,8 @@ def test_tarefas_ui_files_exist():
     assert (ui_dir / "icons.js").exists()
     assert (ui_dir / "app.js").exists()
     assert (ui_dir / "toolbox-theme.css").exists()
+    assert (ui_dir / "markdown-field.js").exists()
+    assert (ui_dir / "markdown-field.css").exists()
 
     # Valida menções no HTML aos elementos exigidos na issue
     html_content = (ui_dir / "index.html").read_text(encoding="utf-8")
@@ -719,6 +721,73 @@ def test_tarefas_drag_and_drop_reorder_and_nesting():
     # Tenta fazer A virar filha de C (ciclo!)
     with pytest.raises(ValueError, match="ciclos de dependência"):
         tarefas_domain.update_task(task_a_id, {"parent_id": task_c_id})
+
+
+def test_tarefas_markdown_rendering_and_local_assets():
+    """
+    Valida a resolução da Issue #253:
+    1. Presença dos bundles locais de markdown (markdown-field.js e markdown-field.css) em plugins/tarefas/ui/.
+    2. Referência direta aos assets locais em plugins/tarefas/ui/index.html.
+    3. Inicialização e ciclo de vida do MarkdownField em plugins/tarefas/ui/app.js.
+    4. Estilização de integração no plugins/tarefas/ui/style.css.
+    5. Execução do bundle com Node.js para garantir exportação de window.ToolboxMarkdown e parsing GFM sem erros.
+    """
+    import subprocess
+
+    ui_dir = TAREFAS_DIR / "ui"
+    js_file = ui_dir / "markdown-field.js"
+    css_file = ui_dir / "markdown-field.css"
+
+    # 1. Existência e integridade dos arquivos
+    assert js_file.exists(), "markdown-field.js deve existir na pasta ui do plugin tarefas"
+    assert css_file.exists(), "markdown-field.css deve existir na pasta ui do plugin tarefas"
+    assert js_file.stat().st_size > 10000, "markdown-field.js deve ser o bundle autossuficiente completo"
+    assert css_file.stat().st_size > 2000, "markdown-field.css deve conter as regras de estilo"
+
+    # 2. index.html carrega localmente os assets
+    html_content = (ui_dir / "index.html").read_text(encoding="utf-8")
+    assert 'href="markdown-field.css"' in html_content, "index.html deve referenciar markdown-field.css localmente"
+    assert 'src="markdown-field.js"' in html_content, "index.html deve referenciar markdown-field.js localmente"
+
+    # 3. app.js instancia window.ToolboxMarkdown.MarkdownField em modo view
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "window.ToolboxMarkdown.MarkdownField" in app_js
+    assert "mode: 'view'" in app_js
+    assert "updateDescHeaderButton(task.id, 'view')" in app_js
+    assert "handleToggleDescriptionEdit" in app_js
+
+    # 4. style.css possui regras de integração
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".detail-markdown-section .tb-reader-header" in style_css
+    assert ".detail-markdown-section .tb-reader-body" in style_css
+
+    # 5. Execução do bundle via Node para validar parsing GFM (títulos, listas, checklists, blocos de código)
+    node_test_script = f"""
+    const fs = require('fs');
+    const vm = require('vm');
+    const code = fs.readFileSync('{js_file}', 'utf8');
+    const window = {{}};
+    const sandbox = {{ window, console, setTimeout, clearTimeout }};
+    vm.createContext(sandbox);
+    vm.runInContext(code, sandbox);
+
+    if (!sandbox.window.ToolboxMarkdown || !sandbox.window.ToolboxMarkdown.parseMarkdown) {{
+      throw new Error('ToolboxMarkdown não exportado corretamente no window');
+    }}
+
+    const {{ parseMarkdown }} = sandbox.window.ToolboxMarkdown;
+    const testMd = '# Titulo Principal\\n\\n- [x] Item 1 concluido\\n- [ ] Item 2 pendente\\n\\n```python\\nprint("hello")\\n```';
+    const {{ html }} = parseMarkdown(testMd);
+
+    if (!html.includes('tb-h1') || !html.includes('tb-task-checkbox') || !html.includes('tb-code-block')) {{
+      throw new Error('Falha na renderização de elementos GFM: ' + html);
+    }}
+    console.log('OK');
+    """
+    result = subprocess.run(["node", "-e", node_test_script], capture_output=True, text=True)
+    assert result.returncode == 0, f"Erro ao executar parseMarkdown no bundle: {result.stderr}"
+    assert "OK" in result.stdout
+
 
 
 

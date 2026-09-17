@@ -1161,6 +1161,11 @@ function closeTaskTab(taskId, event) {
   if (pane) pane.remove();
 
   if (state.markdownFields && state.markdownFields[taskId]) {
+    try {
+      if (typeof state.markdownFields[taskId].destroy === 'function') {
+        state.markdownFields[taskId].destroy();
+      }
+    } catch (_) {}
     delete state.markdownFields[taskId];
   }
 
@@ -1314,9 +1319,17 @@ function handleToggleDescriptionEdit(taskId) {
   const mf = state.markdownFields ? state.markdownFields[taskId] : null;
   if (mf && typeof mf.getMode === 'function') {
     const curMode = mf.getMode();
-    const targetMode = curMode === 'view' ? 'edit' : 'view';
-    mf.setMode(targetMode);
-    updateDescHeaderButton(taskId, targetMode);
+    if (curMode === 'edit') {
+      if (typeof mf.save === 'function') {
+        mf.save();
+      } else {
+        mf.setMode('view');
+        updateDescHeaderButton(taskId, 'view');
+      }
+      return;
+    }
+    mf.setMode('edit');
+    updateDescHeaderButton(taskId, 'edit');
     return;
   }
 
@@ -1399,7 +1412,7 @@ function initMarkdownFieldForTask(task) {
     const mf = new window.ToolboxMarkdown.MarkdownField({
       value: descVal,
       mode: 'view', // Exigência da issue: inicia no modo Leitor formatado
-      allowToggleEdit: true, // Botão "Editar" comuta para edição
+      allowToggleEdit: false, // Controlado primariamente pelo botão unificado no cabeçalho da seção
       placeholder: 'Descreva a tarefa com Markdown...',
       onSave: async (newContent) => {
         const api = getApi();
@@ -1432,6 +1445,7 @@ function initMarkdownFieldForTask(task) {
 
     container.innerHTML = '';
     container.appendChild(mf.element);
+    updateDescHeaderButton(task.id, 'view');
   } else if (typeof customElements !== 'undefined' && customElements.get('markdown-field')) {
     // Fallback para Web Component se declarado
     const mfEl = document.createElement('markdown-field');
