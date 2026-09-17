@@ -193,12 +193,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadInitialData() {
   const api = getApi();
   try {
-    const verRes = await api.get_plugin_version();
-    if (verRes && verRes.version) {
-      const badge = document.getElementById('versionBadge');
-      if (badge) badge.textContent = `v${verRes.version}`;
-    }
-
     const res = await api.get_tasks();
     if (res && res.success) {
       state.tasks = res.tasks || [];
@@ -630,7 +624,7 @@ function renderTasksList() {
                     onclick="startQuickEdit('${sub.id}')"
                     title="Editar rapidamente no chat"
                   >
-                    <span data-icon="edit-3"></span>
+                    <span data-icon="edit"></span>
                   </button>
                   <button
                     type="button"
@@ -701,7 +695,7 @@ function renderTasksList() {
               onclick="startQuickEdit('${task.id}')"
               title="Editar rapidamente no chat"
             >
-              <span data-icon="edit-3"></span>
+              <span data-icon="edit"></span>
             </button>
             <button
               type="button"
@@ -1052,7 +1046,7 @@ function createDetailPane(task) {
             onclick="handleToggleDescriptionEdit('${task.id}')"
             title="Alternar entre modo de visualização e edição"
           >
-            <span data-icon="edit-3"></span> <span id="btnEditDescText_${task.id}">Editar Descrição</span>
+            <span data-icon="edit"></span> <span id="btnEditDescText_${task.id}">Editar Descrição</span>
           </button>
         </div>
         <div id="markdownContainer_${task.id}" style="flex: 1; min-height: 180px;">
@@ -1118,7 +1112,7 @@ function updateDescHeaderButton(taskId, mode) {
   if (btn) {
     const iconSpan = btn.querySelector('[data-icon]');
     if (iconSpan) {
-      iconSpan.setAttribute('data-icon', mode === 'edit' ? 'eye' : 'edit-3');
+      iconSpan.setAttribute('data-icon', mode === 'edit' ? 'eye' : 'edit');
       if (window.renderIcons) window.renderIcons();
     }
   }
