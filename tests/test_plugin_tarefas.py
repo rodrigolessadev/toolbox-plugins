@@ -580,3 +580,27 @@ def test_tarefas_ui_date_filter_components():
     assert "filter_tasks_by_date" in app_js
 
 
+def test_tarefas_ui_quick_edit_icons_and_version_badge_compliance():
+    """Valida a correção do ícone de edição rápida, conformidade da exclusividade de versão e layout flexbox."""
+    ui_dir = TAREFAS_DIR / "ui"
+
+    # 1. Validação de ausência de versão duplicada na UI (deve ficar apenas na barra de títulos)
+    html = (ui_dir / "index.html").read_text(encoding="utf-8")
+    assert "versionBadge" not in html, "Badge de versão não deve estar presente no HTML interno da UI"
+
+    # 2. Validação dos ícones de edição rápida (deve usar 'edit', nunca 'edit-3')
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert 'data-icon="edit-3"' not in app_js, "Nenhum botão deve usar o ícone inválido 'edit-3'"
+    assert 'data-icon="edit"' in app_js, "Os botões de edição rápida devem usar o ícone 'edit'"
+    assert "versionBadge" not in app_js, "app.js não deve manipular elementos de badge de versão na UI"
+
+    # 3. Validação de regras de layout para espaçamento e flex-shrink em abas detalhadas
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".detail-header-card" in style_css
+    assert ".detail-markdown-section" in style_css
+    assert ".detail-subtasks-section" in style_css
+    assert ".native-desc-actions" in style_css
+    assert "flex-shrink: 0;" in style_css
+
+
+

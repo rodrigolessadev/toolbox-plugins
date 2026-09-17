@@ -539,6 +539,7 @@
 }
 
 .detail-header-card {
+  flex-shrink: 0;
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -588,6 +589,7 @@
 }
 
 .detail-markdown-section {
+  flex-shrink: 0;
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -595,6 +597,8 @@
   display: flex;
   flex-direction: column;
   min-height: 240px;
+  position: relative;
+  overflow: visible;
 }
 
 .description-header-row {
@@ -641,8 +645,16 @@
   border-color: var(--border-focus);
 }
 
+.native-desc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+}
 
 .detail-attachments-section {
+  flex-shrink: 0;
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -787,6 +799,7 @@
 
 /* --- Seção de Subtarefas na Aba de Detalhes --- */
 .detail-subtasks-section {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
