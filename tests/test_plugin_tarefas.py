@@ -603,4 +603,66 @@ def test_tarefas_ui_quick_edit_icons_and_version_badge_compliance():
     assert "flex-shrink: 0;" in style_css
 
 
+def test_tarefas_subtask_creation_via_chat_and_card_selection():
+    """
+    Valida os requisitos da issue #251:
+    - Criação de subtarefa via chat sem window.prompt().
+    - Funções prepareSubtaskCreation, cancelSubtaskCreation, clearSelection, selectTask, handleCardClick e handleChatCancel.
+    - Estilos de destaque para card selecionado (.task-card.selected) e botões de subtarefa.
+    - Criação de subtarefa via TarefasApi mantendo integridade dos dados e parent_id.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    index_html = (ui_dir / "index.html").read_text(encoding="utf-8")
+
+    # 1. Sem prompt() modal intrusivo no app.js
+    import re
+    assert not re.search(r'\bprompt\(', app_js), "window.prompt() não deve ser chamado em app.js"
+
+    # 2. Funções obrigatórias presentes e exportadas
+    required_fns = [
+        "prepareSubtaskCreation",
+        "cancelSubtaskCreation",
+        "clearSelection",
+        "selectTask",
+        "handleCardClick",
+        "handleChatCancel",
+    ]
+    for fn in required_fns:
+        assert fn in app_js, f"Função {fn} deve estar definida em app.js"
+        assert f"window.{fn} = {fn};" in app_js, f"Função {fn} deve ser exportada para window em app.js"
+
+    # 3. Estado reativo no app.js
+    assert "selectedTaskId" in app_js
+    assert "subtaskTargetId" in app_js
+
+    # 4. Estilos CSS para card selecionado e elementos de subtarefa
+    assert ".task-card.selected" in style_css
+    assert "border-left:" in style_css or "border-color:" in style_css
+    assert ".chat-btn-subtask" in style_css
+    assert ".chat-edit-banner.subtask-mode" in style_css
+
+    # 5. HTML contém botão de cancelamento configurado
+    assert "handleChatCancel()" in index_html
+
+    # 6. Teste de API: criação de tarefa raiz e posterior subtarefa via API
+    api = TarefasApi()
+    res_parent = api.create_task("Tarefa Principal Pai", "Descrição da tarefa pai")
+    assert res_parent["success"] is True
+    parent_id = res_parent["task"]["id"]
+
+    res_sub = api.create_task("Subtarefa Criada via Chat", "Detalhes da subtarefa", parent_id=parent_id)
+    assert res_sub["success"] is True
+    assert res_sub["task"]["parent_id"] == parent_id
+    assert res_sub["task"]["title"] == "Subtarefa Criada via Chat"
+
+    # Valida presença na lista completa
+    tasks = res_sub["tasks"]
+    sub_found = next((t for t in tasks if t["id"] == res_sub["task"]["id"]), None)
+    assert sub_found is not None
+    assert sub_found["parent_id"] == parent_id
+
+
+
 

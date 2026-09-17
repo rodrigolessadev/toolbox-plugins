@@ -8,6 +8,8 @@ let state = {
   tasks: [],
   activeFilter: 'all', // 'all' | 'pending' | 'completed'
   editingTaskId: null,
+  selectedTaskId: null,
+  subtaskTargetId: null,
   openTabs: [], // Lista de IDs de tarefas com abas abertas
   activeTabId: 'main', // 'main' ou ID da tarefa
   markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
@@ -339,27 +341,7 @@ function toggleCollapseParent(parentId, event) {
 }
 
 async function promptCreateSubtask(parentId) {
-  const parentTask = state.tasks.find(t => t.id === parentId);
-  const parentTitle = parentTask ? parentTask.title : 'tarefa';
-  const title = prompt(`Nova subtarefa para "${parentTitle}":`);
-  if (!title || !title.trim()) return;
-
-  const api = getApi();
-  try {
-    const res = await api.create_task(title.trim(), '', parentId);
-    if (res && res.success) {
-      state.tasks = res.tasks;
-      state.collapsedParents.delete(parentId);
-      saveCollapsedParents();
-      renderTasksList();
-      updateDetailPaneIfOpen(parentId);
-    } else {
-      alert(res?.error || 'Erro ao criar subtarefa.');
-    }
-  } catch (err) {
-    console.error('Erro ao criar subtarefa:', err);
-    alert('Erro ao conectar à API para criar subtarefa.');
-  }
+  prepareSubtaskCreation(parentId);
 }
 
 async function handleAddSubtaskFromDetail(parentId) {
@@ -588,10 +570,12 @@ function renderTasksList() {
             const subAttBadge = subAttCount > 0
               ? `<span class="task-meta-badge" title="${subAttCount} anexo(s)"><span data-icon="paperclip"></span> ${subAttCount}</span>`
               : '';
+            const isSubSelected = state.selectedTaskId === sub.id;
             return `
               <div
-                class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''}"
+                class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''} ${isSubSelected ? 'selected' : ''}"
                 id="card_${sub.id}"
+                onclick="handleCardClick(event, '${task.id}')"
                 ondragover="handleDragOver(event, '${sub.id}', '${task.id}')"
                 ondragleave="handleDragLeave(event)"
                 ondrop="handleDrop(event, '${sub.id}', '${task.id}')"
@@ -649,11 +633,13 @@ function renderTasksList() {
         </div>`
       : '';
 
+    const isSelected = state.selectedTaskId === task.id;
     return `
       <div class="subtasks-wrapper">
         <div
-          class="task-card ${isCompleted ? 'completed' : ''}"
+          class="task-card ${isCompleted ? 'completed' : ''} ${isSelected ? 'selected' : ''}"
           id="card_${task.id}"
+          onclick="handleCardClick(event, '${task.id}')"
           ondragover="handleDragOver(event, '${task.id}', null)"
           ondragleave="handleDragLeave(event)"
           ondrop="handleDrop(event, '${task.id}', null)"
@@ -684,7 +670,7 @@ function renderTasksList() {
             <button
               type="button"
               class="action-btn action-btn-add-sub"
-              onclick="promptCreateSubtask('${task.id}')"
+              onclick="prepareSubtaskCreation('${task.id}')"
               title="Adicionar subtarefa"
             >
               <span data-icon="plus"></span>
@@ -783,7 +769,7 @@ async function handleDeleteTask(taskId) {
   }
 }
 
-// --- Edição Rápida no Chat (Requisito #2) ---
+// --- Edição Rápida e Criação de Subtarefas no Chat (Requisitos #2 e #4) ---
 function setupChatListeners() {
   const chatInput = document.getElementById('chatInput');
   if (!chatInput) return;
@@ -794,14 +780,50 @@ function setupChatListeners() {
       handleChatSubmit();
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      cancelQuickEdit();
+      handleChatCancel();
     }
   });
+
+  // Tecla Esc global para cancelar edição ou desselecionar tarefa
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      handleChatCancel();
+    }
+  });
+
+  // Clicar fora de cards desmarca a tarefa selecionada
+  document.addEventListener('click', (e) => {
+    if (!state.selectedTaskId && !state.subtaskTargetId) return;
+    if (
+      e.target.closest('.task-card') ||
+      e.target.closest('.chat-dock') ||
+      e.target.closest('.modal-overlay') ||
+      e.target.closest('.tasks-toolbar') ||
+      e.target.closest('.tab-item')
+    ) {
+      return;
+    }
+    clearSelection();
+  });
+}
+
+function handleChatCancel() {
+  if (state.editingTaskId) {
+    cancelQuickEdit();
+  }
+  if (state.subtaskTargetId || state.selectedTaskId) {
+    clearSelection();
+  }
 }
 
 function startQuickEdit(taskId) {
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
+
+  // Limpa modo de criação de subtarefa se ativo
+  if (state.selectedTaskId || state.subtaskTargetId) {
+    clearSelection();
+  }
 
   // Garante que a aba principal está visível
   switchToTab('main');
@@ -810,6 +832,7 @@ function startQuickEdit(taskId) {
 
   const input = document.getElementById('chatInput');
   const banner = document.getElementById('chatEditBanner');
+  const bannerIcon = document.getElementById('chatEditBannerIcon');
   const bannerMsg = document.getElementById('chatEditMessage');
   const btn = document.getElementById('chatSubmitBtn');
   const btnText = document.getElementById('chatSubmitText');
@@ -823,7 +846,11 @@ function startQuickEdit(taskId) {
   }
 
   if (banner) {
+    banner.classList.remove('subtask-mode');
     banner.classList.add('active');
+  }
+  if (bannerIcon) {
+    bannerIcon.setAttribute('data-icon', 'edit');
   }
   if (bannerMsg) {
     bannerMsg.textContent = `Editando: "${task.title}"`;
@@ -847,6 +874,8 @@ function cancelQuickEdit() {
 
   const input = document.getElementById('chatInput');
   const banner = document.getElementById('chatEditBanner');
+  const bannerIcon = document.getElementById('chatEditBannerIcon');
+  const bannerMsg = document.getElementById('chatEditMessage');
   const btn = document.getElementById('chatSubmitBtn');
   const btnText = document.getElementById('chatSubmitText');
   const btnIcon = document.getElementById('chatSubmitIcon');
@@ -858,6 +887,13 @@ function cancelQuickEdit() {
 
   if (banner) {
     banner.classList.remove('active');
+    banner.classList.remove('subtask-mode');
+  }
+  if (bannerIcon) {
+    bannerIcon.setAttribute('data-icon', 'edit');
+  }
+  if (bannerMsg) {
+    bannerMsg.textContent = 'Editando tarefa...';
   }
 
   if (btn) {
@@ -871,6 +907,131 @@ function cancelQuickEdit() {
   }
 
   if (window.renderIcons) window.renderIcons();
+}
+
+function prepareSubtaskCreation(parentId) {
+  const parentTask = state.tasks.find(t => t.id === parentId);
+  if (!parentTask) return;
+
+  // Se estava em edição rápida, limpa
+  if (state.editingTaskId) {
+    state.editingTaskId = null;
+  }
+
+  // Garante que a aba principal está visível
+  switchToTab('main');
+
+  // Se o item clicado for uma subtarefa, o alvo de criação é o pai raiz
+  const targetParentId = parentTask.parent_id || parentTask.id;
+  const rootParent = state.tasks.find(t => t.id === targetParentId) || parentTask;
+
+  state.subtaskTargetId = targetParentId;
+  state.selectedTaskId = targetParentId;
+
+  // Atualiza classes visuais (.selected)
+  document.querySelectorAll('.task-card').forEach(card => card.classList.remove('selected'));
+  const cardEl = document.getElementById('card_' + targetParentId);
+  if (cardEl) {
+    cardEl.classList.add('selected');
+    cardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  const input = document.getElementById('chatInput');
+  const banner = document.getElementById('chatEditBanner');
+  const bannerIcon = document.getElementById('chatEditBannerIcon');
+  const bannerMsg = document.getElementById('chatEditMessage');
+  const btn = document.getElementById('chatSubmitBtn');
+  const btnText = document.getElementById('chatSubmitText');
+  const btnIcon = document.getElementById('chatSubmitIcon');
+
+  if (input) {
+    input.value = '';
+    input.placeholder = `Nova subtarefa para "${rootParent.title}"... (Enter para criar, Esc para cancelar)`;
+    input.focus();
+  }
+
+  if (banner) {
+    banner.classList.add('active');
+    banner.classList.add('subtask-mode');
+  }
+  if (bannerIcon) {
+    bannerIcon.setAttribute('data-icon', 'corner-down-right');
+  }
+  if (bannerMsg) {
+    bannerMsg.textContent = `Subtarefa para: "${rootParent.title}"`;
+  }
+
+  if (btn) {
+    btn.className = 'chat-btn chat-btn-subtask';
+  }
+  if (btnText) {
+    btnText.textContent = 'Adicionar Subtarefa';
+  }
+  if (btnIcon) {
+    btnIcon.setAttribute('data-icon', 'corner-down-right');
+  }
+
+  if (window.renderIcons) window.renderIcons();
+}
+
+function clearSelection() {
+  state.selectedTaskId = null;
+  state.subtaskTargetId = null;
+
+  document.querySelectorAll('.task-card.selected').forEach(card => card.classList.remove('selected'));
+
+  const input = document.getElementById('chatInput');
+  const banner = document.getElementById('chatEditBanner');
+  const bannerIcon = document.getElementById('chatEditBannerIcon');
+  const bannerMsg = document.getElementById('chatEditMessage');
+  const btn = document.getElementById('chatSubmitBtn');
+  const btnText = document.getElementById('chatSubmitText');
+  const btnIcon = document.getElementById('chatSubmitIcon');
+
+  if (input && !state.editingTaskId) {
+    input.value = '';
+    input.placeholder = 'Adicionar uma nova tarefa... (Pressione Enter)';
+  }
+
+  if (banner && !state.editingTaskId) {
+    banner.classList.remove('active');
+    banner.classList.remove('subtask-mode');
+    if (bannerIcon) bannerIcon.setAttribute('data-icon', 'edit');
+    if (bannerMsg) bannerMsg.textContent = 'Editando tarefa...';
+  }
+
+  if (btn && !state.editingTaskId) {
+    btn.className = 'chat-btn chat-btn-submit';
+  }
+  if (btnText && !state.editingTaskId) {
+    btnText.textContent = 'Enviar';
+  }
+  if (btnIcon && !state.editingTaskId) {
+    btnIcon.setAttribute('data-icon', 'send');
+  }
+
+  if (window.renderIcons) window.renderIcons();
+}
+
+function cancelSubtaskCreation() {
+  clearSelection();
+}
+
+function selectTask(taskId) {
+  if (state.selectedTaskId === taskId) {
+    clearSelection();
+    return;
+  }
+  prepareSubtaskCreation(taskId);
+}
+
+function handleCardClick(event, taskId) {
+  if (event && event.target) {
+    if (event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a')) {
+      return;
+    }
+  }
+  selectTask(taskId);
 }
 
 async function handleChatSubmit() {
@@ -895,6 +1056,31 @@ async function handleChatSubmit() {
       }
     } catch (err) {
       console.error('Erro ao atualizar tarefa:', err);
+    }
+  } else if (state.subtaskTargetId) {
+    // MODO CRIAÇÃO DE SUBTAREFA VIA CHAT
+    const parentId = state.subtaskTargetId;
+    try {
+      const res = await api.create_task(text, '', parentId);
+      if (res && res.success) {
+        state.tasks = res.tasks;
+        state.collapsedParents.delete(parentId);
+        saveCollapsedParents();
+        input.value = '';
+        renderTasksList();
+        updateDetailPaneIfOpen(parentId);
+
+        // Mantém a tarefa selecionada para criação contínua e foca no input
+        const cardEl = document.getElementById('card_' + parentId);
+        if (cardEl) {
+          cardEl.classList.add('selected');
+        }
+        input.focus();
+      } else {
+        alert(res?.error || 'Erro ao criar subtarefa.');
+      }
+    } catch (err) {
+      console.error('Erro ao criar subtarefa:', err);
     }
   } else {
     // MODO CRIAÇÃO DE NOVA TAREFA
@@ -1587,3 +1773,9 @@ window.sortTasksByStatusAndDate = sortTasksByStatusAndDate;
 window.handleDateFilterChange = handleDateFilterChange;
 window.resetDateFilter = resetDateFilter;
 window.toggleAllDatesFilter = toggleAllDatesFilter;
+window.prepareSubtaskCreation = prepareSubtaskCreation;
+window.cancelSubtaskCreation = cancelSubtaskCreation;
+window.clearSelection = clearSelection;
+window.selectTask = selectTask;
+window.handleCardClick = handleCardClick;
+window.handleChatCancel = handleChatCancel;
