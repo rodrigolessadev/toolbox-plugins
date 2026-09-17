@@ -283,7 +283,7 @@ def get_task_subtask_stats(task_id: str) -> Dict[str, int]:
 
 
 def update_task(task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
-    """Atualiza campos de uma tarefa existente."""
+    """Atualiza campos de uma tarefa existente com suporte a mudança hierárquica e prevenção de ciclos."""
     tasks = load_tasks()
     found = False
     updated_task = {}
@@ -291,9 +291,34 @@ def update_task(task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     for i, t in enumerate(tasks):
         if t.get("id") == task_id:
             found = True
-            for key in ["title", "description", "completed", "parent_id"]:
+            for key in ["title", "description", "completed", "created_at"]:
                 if key in updates:
                     t[key] = updates[key]
+
+            if "parent_id" in updates:
+                new_pid = updates["parent_id"]
+                if new_pid is not None and str(new_pid).strip():
+                    clean_pid = str(new_pid).strip()
+                    if clean_pid == task_id:
+                        raise ValueError("Uma tarefa não pode ser pai de si mesma.")
+                    parent_task = next((x for x in tasks if x.get("id") == clean_pid), None)
+                    if not parent_task:
+                        raise ValueError(f"Tarefa pai com ID {clean_pid} não encontrada.")
+                    # Prevenção de ciclos: o novo pai não pode ser descendente da tarefa
+                    descendant_ids = set()
+                    to_check = [task_id]
+                    while to_check:
+                        curr = to_check.pop()
+                        for x in tasks:
+                            if x.get("parent_id") == curr and x.get("id") not in descendant_ids:
+                                descendant_ids.add(x.get("id"))
+                                to_check.append(x.get("id"))
+                    if clean_pid in descendant_ids:
+                        raise ValueError("Não é permitido criar ciclos de dependência entre tarefas pai e filhas.")
+                    t["parent_id"] = clean_pid
+                else:
+                    t["parent_id"] = None
+
             t["updated_at"] = _now_iso()
             tasks[i] = t
             updated_task = t

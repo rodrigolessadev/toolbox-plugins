@@ -664,5 +664,63 @@ def test_tarefas_subtask_creation_via_chat_and_card_selection():
     assert sub_found["parent_id"] == parent_id
 
 
+def test_tarefas_drag_and_drop_reorder_and_nesting():
+    """
+    Valida os requisitos da issue #252:
+    - Suporte a 3 zonas de drag no frontend (top, center, bottom).
+    - Presença do estilo .drag-over-center no CSS.
+    - Prevenção de ciclos no frontend e no domínio.
+    - Conversão de tarefa em subtarefa (aninhamento) via update_task.
+    - Promoção de subtarefa para raiz via update_task(parent_id=None).
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+
+    # 1. Valida classes e lógica de 3 zonas no app.js
+    assert "drag-over-top" in app_js
+    assert "drag-over-center" in app_js
+    assert "drag-over-bottom" in app_js
+    assert "isDescendant" in app_js
+    assert "window.isDescendant = isDescendant;" in app_js
+
+    # 2. Valida estilos no CSS
+    assert ".task-card.drag-over-center" in style_css
+    assert ".task-card.drag-over-top" in style_css
+    assert ".task-card.drag-over-bottom" in style_css
+
+    # 3. Teste de domínio: conversão de tarefa raiz em subtarefa (aninhamento)
+    api = TarefasApi()
+    res1 = api.create_task("Tarefa Raiz A")
+    res2 = api.create_task("Tarefa Raiz B")
+    task_a_id = res1["task"]["id"]
+    task_b_id = res2["task"]["id"]
+
+    # Aninha Tarefa B sob Tarefa A
+    res_nest = api.update_task(task_b_id, {"parent_id": task_a_id})
+    assert res_nest["success"] is True
+    assert res_nest["task"]["parent_id"] == task_a_id
+
+    # 4. Desaninhamento: promove subtarefa B de volta para raiz
+    res_unnest = api.update_task(task_b_id, {"parent_id": None})
+    assert res_unnest["success"] is True
+    assert res_unnest["task"]["parent_id"] is None
+
+    # 5. Prevenção defensiva de ciclos
+    # A não pode ser pai de si mesma
+    with pytest.raises(ValueError, match="não pode ser pai de si mesma"):
+        tarefas_domain.update_task(task_a_id, {"parent_id": task_a_id})
+
+    # Cria hierarquia A -> B -> C
+    api.update_task(task_b_id, {"parent_id": task_a_id})
+    res3 = api.create_task("Subtarefa C", parent_id=task_b_id)
+    task_c_id = res3["task"]["id"]
+
+    # Tenta fazer A virar filha de C (ciclo!)
+    with pytest.raises(ValueError, match="ciclos de dependência"):
+        tarefas_domain.update_task(task_a_id, {"parent_id": task_c_id})
+
+
+
 
 
