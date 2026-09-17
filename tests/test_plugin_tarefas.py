@@ -68,6 +68,21 @@ def test_tarefas_ui_files_exist():
     assert "markdown-field" in html_content
     assert "tabsContainer" in html_content
 
+    # Garante que markdown-field.js é carregado como script clássico (sem type="module") para evitar bloqueio CORS em file://
+    import re
+    assert not re.search(r'<script\s+type=["\']module["\']\s+src=["\'][^"\']*markdown-field\.js', html_content), \
+        "markdown-field.js não deve ter type='module' no index.html para compatibilidade pywebview file://"
+
+    # Valida suporte a alternância e edição no app.js e style.css
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "handleToggleDescriptionEdit" in app_js
+    assert "renderNativeDescriptionFallback" in app_js
+    assert "handleNativeSaveDesc" in app_js
+    assert "btnEditDesc_" in app_js
+
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".description-header-row" in style_css
+
 
 def test_domain_crud_and_status():
     """Testa criação, leitura, atualização e alternância de status de tarefas."""

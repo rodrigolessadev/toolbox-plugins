@@ -44,12 +44,18 @@ def test_distribution_bundle_structure():
     assert (SHARED_UI_MD_DIR / "index.js").exists(), "index.js deve existir"
 
     bundle_content = (SHARED_UI_MD_DIR / "markdown-field.js").read_text(encoding="utf-8")
-    assert "export class MarkdownField" in bundle_content
-    assert "export class MarkdownReader" in bundle_content
-    assert "export class MarkdownEditor" in bundle_content
-    assert "export function parseMarkdown" in bundle_content
-    assert "export function sanitizeHtml" in bundle_content
+    assert "class MarkdownField" in bundle_content
+    assert "class MarkdownReader" in bundle_content
+    assert "class MarkdownEditor" in bundle_content
+    assert "function parseMarkdown" in bundle_content
+    assert "function sanitizeHtml" in bundle_content
     assert "ToolboxMarkdown" in bundle_content
+    assert "customElements.define('markdown-field'" in bundle_content
+
+    # Garante que o bundle não possui palavras-chave 'export ' soltas que quebram scripts clássicos em pywebview
+    import re
+    assert not re.search(r"^\s*export\s+(function|class|const|let|var|default)\b", bundle_content, re.MULTILINE), \
+        "markdown-field.js não deve conter declarações 'export' no escopo global para compatibilidade com script clássico"
 
 
 def test_shared_markdown_node_tests():
