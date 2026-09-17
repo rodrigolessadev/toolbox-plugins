@@ -1,48 +1,96 @@
 /* ==========================================================================
    Toolbox Official Theme & CSS Tokens (Dark Mode)
-   Extraído diretamente de src/styles/global.css e components.css do Toolbox
+   Identidade visual unificada para plugins pywebview
    ========================================================================== */
 
-:root {
-  /* Superfícies Dark Mode */
-  --bg:           #0e1014;   /* Fundo principal */
-  --bg-elev-1:    #161a21;   /* Cards e painéis */
-  --bg-elev-2:    #1f242d;   /* Headers, containers internos */
-  --bg-elev-3:    #262c36;   /* Efeito hover de cards e botões secundários */
-  --bg-elev-4:    #2d3440;   /* Hover ativo */
-  
-  /* Inputs */
-  --input-bg:     #12151c;   /* Fundo de campos */
-  --input-border: #262c36;   /* Borda de campos */
-  --border:       #262c36;   /* Bordas gerais */
-  --border-focus: #6aa3ff;   /* Foco em inputs */
+:root, [data-theme="dark"] {
+  /* Cores de Fundo (Dark Mode M3) */
+  --bg: #0e1014;
+  --bg-card: #161a21;
+  --bg-surface: #161a21;
+  --bg-input: #12151c;
+  --bg-hover: #1e232d;
+  --bg-elevated: #1f2530;
+  --bg-elev-2: #252d3a;
 
-  /* Tipografia */
-  --fg:           #e8eaed;   /* Texto principal (alto contraste) */
-  --fg-muted:     #8b94a3;   /* Texto secundário e labels */
-  --fg-disabled:  #5a6270;   /* Placeholders */
+  /* Cores de Texto */
+  --fg: #e8eaed;
+  --fg-muted: #8b94a3;
+  --fg-subtle: #5b6577;
 
-  /* Destaques & Acentos */
-  --accent:       #6aa3ff;   /* Botões primários e seleções */
-  --accent-hover: #7bb3ff;   /* Hover primário */
-  --accent-active:#5a93ef;   /* Clique primário */
-  --accent-soft:  rgba(106, 163, 255, 0.16); /* Badges e fundos sutis */
+  /* Bordas */
+  --border: #2b3240;
+  --border-subtle: #1e2430;
+  --border-focus: #6aa3ff;
 
-  /* Status */
-  --success:      #4cc38a;
-  --success-soft: rgba(76, 195, 138, 0.18);
-  --warning:      #f5a524;
-  --warning-soft: rgba(245, 165, 36, 0.18);
-  --danger:       #ff6369;
-  --danger-soft:  rgba(255, 99, 105, 0.18);
+  /* Acento e Destaques */
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-fg: #ffffff;
 
-  /* Geometria */
-  --radius:       10px;
-  --radius-sm:    6px;
-  --radius-lg:    14px;
+  /* Status e Alertas */
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.15);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.15);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.15);
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+
+  /* Geometria e Transições */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono: "Consolas", "Courier New", monospace;
 }
 
-/* Reset Global & Alto Contraste */
+[data-theme="light"] {
+  /* Cores de Fundo (Light Mode M3) */
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-input: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --bg-elevated: #ffffff;
+  --bg-elev-2: #f1f5f9;
+
+  /* Cores de Texto */
+  --fg: #0f172a;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
+
+  /* Bordas */
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --border-focus: #2563eb;
+
+  /* Acento e Destaques */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-fg: #ffffff;
+
+  /* Status e Alertas */
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.12);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.12);
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Reset Básico */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -50,51 +98,399 @@
   -webkit-font-smoothing: antialiased;
 }
 
-html, body {
-  background-color: var(--bg) !important;
-  color: var(--fg) !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   user-select: none;
   overflow-x: hidden;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Inputs, Selects e Textareas - Alto Contraste Forçado */
-input, select, textarea {
-  background-color: var(--input-bg) !important;
-  color: var(--fg) !important;
-  border: 1px solid var(--input-border) !important;
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  font-family: inherit;
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-input::placeholder, textarea::placeholder {
-  color: var(--fg-disabled) !important;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: var(--border-focus) !important;
-  box-shadow: 0 0 0 1px var(--border-focus);
-}
-
-/* Scrollbars */
+/* Scrollbars Modernas e Discretas */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-elev-3);
+  background: #2b3240;
   border-radius: 3px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-elev-4);
+  background: #3e4758;
 }
+
+/* Containers e Layout */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+}
+
+.header-desc {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* Cards */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-hover);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Abas (Tabs) */
+.tabs-nav {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-input);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tab-btn:hover {
+  color: var(--fg);
+  background-color: var(--bg-hover);
+}
+
+.tab-btn.active {
+  color: var(--accent-fg);
+  background-color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.tab-pane {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+}
+
+.tab-pane.active {
+  display: flex;
+}
+
+/* Inputs e Formulários */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input {
+  background-color: var(--bg-input);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
+}
+
+.input-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Botões */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: var(--bg-input);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--fg-muted);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-accent {
+  background-color: var(--accent-soft);
+  color: var(--accent-hover);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-success {
+  background-color: var(--success-soft);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-muted {
+  background-color: var(--bg-hover);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+
+/* Checkbox Moderno e Árvore */
+.tree-container {
+  background-color: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-y: auto;
+  max-height: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background-color var(--transition-fast);
+  cursor: pointer;
+}
+
+.tree-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.tree-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-checkbox {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.tree-checkbox:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.tree-checkbox:checked::after {
+  content: "✔";
+  color: white;
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* Feedback e Alertas */
+.feedback-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.feedback-success {
+  background-color: var(--success-soft);
+  border-color: var(--success);
+  color: var(--fg);
+}
+
+.feedback-danger {
+  background-color: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--fg);
+}
+
+/* ==========================================================================
+   Classes Utilitárias de Ícones e Ações (Regra 4 M3)
+   ========================================================================== */
+.icon-sm {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-md {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-lg {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-sm svg, [data-icon].icon-sm svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-md svg, [data-icon].icon-md svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-lg svg, [data-icon].icon-lg svg {
+  width: 24px;
+  height: 24px;
+}
+
+.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+

@@ -7,7 +7,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não publicado]
 
+### ♻️ Refactor / 🎨 UI/UX
+- **Fonte Única da Verdade para Estilos M3 e Ícones Comuns (`shared/ui`):**
+  - Expandido o catálogo oficial de ícones SVG Lucide em `plugins/shared/ui/icons.js` com novos ícones padronizados: alternância de tema (`sun`, `moon`), edição (`edit`, `pencil`), exclusão (`trash`, `trash-2`), configurações (`settings`), ajuda (`info`, `help-circle`), fechamento (`x`, `close`), ações gerais (`plus`, `filter`, `download`, `upload`, `eye`, `eye-off`).
+  - Adicionadas classes utilitárias de ícones (`.icon-sm` com 16px, `.icon-md` com 20px, `.icon-lg` com 24px, `.btn-with-icon`, `.btn-icon`) e suporte completo a tema claro/escuro M3 no `plugins/shared/ui/toolbox-theme.css`.
+  - Propagada a sincronização atômica dos arquivos mestre de UI para todos os 15 plugins do catálogo via hash SHA-256.
+  - Implementado o teste automatizado `test_all_plugins_shared_ui_sync` em `tests/test_all_plugins_integrity.py` para prevenir qualquer divergência de estilo ou ícones contra a fonte mestre compartilhada (#237).
+
 ## [1.2.0] - 2026-09-17
+
 
 ### ♻️ Refactor / Arquitetura
 - **Centralização de Versão e Ícone na Barra de Tarefas (`shared/web_utils.py`):**
