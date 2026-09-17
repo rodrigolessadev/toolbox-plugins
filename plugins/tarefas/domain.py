@@ -102,11 +102,18 @@ def get_task(task_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def create_task(title: str, description: str = "") -> Dict[str, Any]:
-    """Cria e persiste uma nova tarefa."""
+def create_task(title: str, description: str = "", parent_id: Optional[str] = None) -> Dict[str, Any]:
+    """Cria e persiste uma nova tarefa ou subtarefa."""
     clean_title = (title or "").strip()
     if not clean_title:
         raise ValueError("O título da tarefa não pode ser vazio.")
+
+    clean_parent_id: Optional[str] = None
+    if parent_id is not None and str(parent_id).strip():
+        clean_parent_id = str(parent_id).strip()
+        parent_task = get_task(clean_parent_id)
+        if not parent_task:
+            raise ValueError(f"Tarefa pai com ID {clean_parent_id} não encontrada.")
 
     now = _now_iso()
     task_id = f"task_{uuid.uuid4().hex[:8]}"
@@ -115,6 +122,7 @@ def create_task(title: str, description: str = "") -> Dict[str, Any]:
 
     new_task: Dict[str, Any] = {
         "id": task_id,
+        "parent_id": clean_parent_id,
         "title": clean_title,
         "description": desc,
         "completed": False,
@@ -129,6 +137,23 @@ def create_task(title: str, description: str = "") -> Dict[str, Any]:
     return new_task
 
 
+def get_subtasks(parent_id: str) -> List[Dict[str, Any]]:
+    """Retorna todas as tarefas filhas vinculadas à tarefa com parent_id."""
+    clean_pid = str(parent_id).strip() if parent_id else ""
+    if not clean_pid:
+        return []
+    tasks = load_tasks()
+    return [t for t in tasks if t.get("parent_id") == clean_pid]
+
+
+def get_task_subtask_stats(task_id: str) -> Dict[str, int]:
+    """Retorna a contagem de subtarefas totais e concluídas para uma tarefa pai."""
+    subtasks = get_subtasks(task_id)
+    total = len(subtasks)
+    completed = sum(1 for st in subtasks if bool(st.get("completed", False)))
+    return {"total": total, "completed": completed}
+
+
 def update_task(task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     """Atualiza campos de uma tarefa existente."""
     tasks = load_tasks()
@@ -138,7 +163,7 @@ def update_task(task_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     for i, t in enumerate(tasks):
         if t.get("id") == task_id:
             found = True
-            for key in ["title", "description", "completed"]:
+            for key in ["title", "description", "completed", "parent_id"]:
                 if key in updates:
                     t[key] = updates[key]
             t["updated_at"] = _now_iso()
@@ -167,23 +192,37 @@ def toggle_task_status(task_id: str) -> Dict[str, Any]:
 
 
 def delete_task(task_id: str) -> bool:
-    """Exclui uma tarefa e seu diretório correspondente de anexos."""
+    """Exclui uma tarefa e recursivamente todas as suas subtarefas e pastas de anexos."""
     tasks = load_tasks()
     initial_len = len(tasks)
-    tasks = [t for t in tasks if t.get("id") != task_id]
+
+    # Identifica recursivamente todos os IDs a serem removidos (a tarefa e suas filhas)
+    ids_to_delete = {task_id}
+    changed = True
+    while changed:
+        changed = False
+        for t in tasks:
+            tid = t.get("id")
+            pid = t.get("parent_id")
+            if pid in ids_to_delete and tid not in ids_to_delete:
+                ids_to_delete.add(tid)
+                changed = True
+
+    tasks = [t for t in tasks if t.get("id") not in ids_to_delete]
 
     if len(tasks) == initial_len:
         return False
 
     save_tasks(tasks)
 
-    # Exclui pasta de anexos correspondente se existir
-    task_att_dir = get_attachments_dir(task_id)
-    if task_att_dir.exists():
-        try:
-            shutil.rmtree(task_att_dir, ignore_errors=True)
-        except Exception:
-            pass
+    # Exclui pasta de anexos correspondente para cada tarefa removida
+    for did in ids_to_delete:
+        task_att_dir = get_attachments_dir(did)
+        if task_att_dir.exists():
+            try:
+                shutil.rmtree(task_att_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     return True
 

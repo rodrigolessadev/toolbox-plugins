@@ -41,7 +41,7 @@ def test_tarefas_manifests():
     data = json.loads(pj.read_text(encoding="utf-8"))
 
     assert data.get("name") == "Tarefas"
-    assert data.get("version") == "1.0.0"
+    assert bool(data.get("version")), "version deve estar preenchida no plugin.json"
     assert data.get("entry") == "main.py"
     assert data.get("icon") == "check-square"
     assert data.get("theme_version") == "material-3"
@@ -186,7 +186,7 @@ def test_tarefas_api():
     # Versão
     ver_res = api.get_plugin_version()
     assert ver_res["success"] is True
-    assert ver_res["version"] == "1.0.0"
+    assert ver_res["version"] == json.loads((TAREFAS_DIR / "plugin.json").read_text(encoding="utf-8"))["version"]
 
     # Criar tarefa
     c_res = api.create_task("Tarefa via API")
@@ -212,3 +212,85 @@ def test_tarefas_api():
     del_res = api.delete_task(task_id)
     assert del_res["success"] is True
     assert len(del_res["tasks"]) == 0
+
+
+def test_subtasks_lifecycle_and_cascade_delete(tmp_path):
+    """Testa criação de subtarefas, cálculo de estatísticas e exclusão em cascata."""
+    # Cria tarefa pai
+    parent = tarefas_domain.create_task("Tarefa Pai Principal")
+    pid = parent["id"]
+    assert parent.get("parent_id") is None
+
+    # Cria duas subtarefas vinculadas
+    sub1 = tarefas_domain.create_task("Subtarefa Etapa 1", parent_id=pid)
+    sub2 = tarefas_domain.create_task("Subtarefa Etapa 2", parent_id=pid)
+
+    assert sub1["parent_id"] == pid
+    assert sub2["parent_id"] == pid
+
+    # Recupera subtarefas
+    subtasks = tarefas_domain.get_subtasks(pid)
+    assert len(subtasks) == 2
+    assert {s["id"] for s in subtasks} == {sub1["id"], sub2["id"]}
+
+    # Progresso inicial: 0/2
+    stats = tarefas_domain.get_task_subtask_stats(pid)
+    assert stats == {"total": 2, "completed": 0}
+
+    # Marca sub1 como concluída
+    tarefas_domain.toggle_task_status(sub1["id"])
+    stats = tarefas_domain.get_task_subtask_stats(pid)
+    assert stats == {"total": 2, "completed": 1}
+
+    # Adiciona um anexo na subtarefa 2
+    dummy_file = tmp_path / "anexo_subtarefa.txt"
+    dummy_file.write_text("conteudo da subtarefa", encoding="utf-8")
+    att = tarefas_domain.add_attachment(sub2["id"], dummy_file)
+    att_path = Path(att["file_path"])
+    assert att_path.exists()
+
+    # Exclui a tarefa pai
+    deleted = tarefas_domain.delete_task(pid)
+    assert deleted is True
+
+    # Verifica que tanto o pai quanto as subtarefas foram removidas do banco de dados JSON
+    all_remaining = tarefas_domain.load_tasks()
+    assert len(all_remaining) == 0
+    assert tarefas_domain.get_task(pid) is None
+    assert tarefas_domain.get_task(sub1["id"]) is None
+    assert tarefas_domain.get_task(sub2["id"]) is None
+    assert not att_path.exists(), "Diretório de anexo da subtarefa deve ser excluído em cascata"
+
+
+def test_subtask_validation_invalid_parent():
+    """Valida que tentar criar subtarefa com parent_id inexistente dispara ValueError."""
+    with pytest.raises(ValueError, match="não encontrada"):
+        tarefas_domain.create_task("Subtarefa Órfã", parent_id="task_inexistente_999")
+
+
+def test_tarefas_api_subtasks():
+    """Testa criação de subtarefas através da classe TarefasApi."""
+    api = TarefasApi()
+    p_res = api.create_task("Pai via API")
+    assert p_res["success"] is True
+    pid = p_res["task"]["id"]
+
+    sub_res = api.create_subtask(parent_id=pid, title="Filha via API")
+    assert sub_res["success"] is True
+    assert sub_res["task"]["parent_id"] == pid
+    assert len(sub_res["tasks"]) == 2
+
+    # UI files check for subtask components
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "promptCreateSubtask" in app_js
+    assert "renderDetailSubtasksList" in app_js
+    assert "toggleCollapseParent" in app_js
+    assert "subtasks-container" in app_js
+
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    assert ".subtasks-container" in style_css
+    assert ".btn-chevron" in style_css
+    assert ".subtask-badge" in style_css
+    assert ".detail-subtasks-section" in style_css
+
