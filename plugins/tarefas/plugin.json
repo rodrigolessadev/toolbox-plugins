@@ -1,6 +1,6 @@
 {
   "name": "Tarefas",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Gerenciador de tarefas com edição ágil no chat, detalhes em abas dinâmicas, Markdown e gestão de anexos.",
   "language": "python",
   "entry": "main.py",
