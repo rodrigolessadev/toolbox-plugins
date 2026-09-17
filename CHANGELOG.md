@@ -7,6 +7,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Não publicado]
 
+### 🐛 Bug Fix / 🎨 UI/UX
+- **Correção de Carregamento de Markdown e Edição de Descrição no Plugin Tarefas (`plugins/tarefas`):**
+  - Eliminado bloqueio de CORS em arquivos locais `file://` ao migrar o carregamento de `markdown-field.js` para script clássico em `plugins/tarefas/ui/index.html`.
+  - Empacotado `plugins/shared/ui/markdown/markdown-field.js` como bundle autossuficiente compatível com scripts clássicos, eliminando declarações soltas de `export` que causavam `SyntaxError` no navegador.
+  - Adicionado botão explícito de ação `Editar Descrição` / `Visualizar` no cabeçalho da seção de detalhes da tarefa em `plugins/tarefas/ui/app.js` e `style.css`.
+  - Implementado fallback nativo resiliente com `<textarea>`, preview e persistência de dados caso scripts externos não estejam disponíveis.
+  - Expandidos testes automatizados em `tests/test_plugin_tarefas.py` e `tests/test_shared_markdown.py` (#240).
+
 ### ♻️ Refactor / 🎨 UI/UX
 - **Fonte Única da Verdade para Estilos M3 e Ícones Comuns (`shared/ui`):**
   - Expandido o catálogo oficial de ícones SVG Lucide em `plugins/shared/ui/icons.js` com novos ícones padronizados: alternância de tema (`sun`, `moon`), edição (`edit`, `pencil`), exclusão (`trash`, `trash-2`), configurações (`settings`), ajuda (`info`, `help-circle`), fechamento (`x`, `close`), ações gerais (`plus`, `filter`, `download`, `upload`, `eye`, `eye-off`).
