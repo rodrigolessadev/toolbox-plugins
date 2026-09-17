@@ -45,6 +45,24 @@
             <button type="button" class="filter-btn" id="filterPendingBtn" onclick="setFilter('pending')">Pendentes</button>
             <button type="button" class="filter-btn" id="filterCompletedBtn" onclick="setFilter('completed')">Concluídas</button>
           </div>
+
+          <div class="date-filter-group" id="dateFilterGroup">
+            <div class="date-input-wrapper" title="Data inicial (De)">
+              <span data-icon="calendar" class="date-input-icon"></span>
+              <input type="date" id="dateFilterFrom" class="date-input" onchange="handleDateFilterChange()" />
+            </div>
+            <span class="date-separator">até</span>
+            <div class="date-input-wrapper" title="Data final (Até)">
+              <input type="date" id="dateFilterTo" class="date-input" onchange="handleDateFilterChange()" />
+            </div>
+            <button type="button" class="filter-btn-icon" id="btnResetDateFilter" onclick="resetDateFilter()" title="Redefinir para a janela padrão de 1 mês">
+              <span data-icon="refresh"></span>
+            </button>
+            <button type="button" class="filter-btn date-all-btn" id="btnAllDates" onclick="toggleAllDatesFilter()" title="Alternar para ver todo o período histórico">
+              Todas as datas
+            </button>
+          </div>
+
           <div class="tasks-stats-text" id="tasksStatsText">0 tarefas</div>
         </div>
 

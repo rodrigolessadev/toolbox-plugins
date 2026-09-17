@@ -12,6 +12,11 @@ let state = {
   activeTabId: 'main', // 'main' ou ID da tarefa
   markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
   collapsedParents: new Set(JSON.parse(localStorage.getItem('tarefas-collapsed-parents') || '[]')),
+  dateFilter: {
+    from: localStorage.getItem('tarefas-date-from') || '',
+    to: localStorage.getItem('tarefas-date-to') || '',
+    allDates: localStorage.getItem('tarefas-date-all') === 'true',
+  },
 };
 
 // Fallback Mock para desenvolvimento web fora do pywebview
@@ -147,6 +152,13 @@ const mockApi = {
     state.tasks = sortTasksByStatusAndDate(state.tasks, descending);
     return { success: true, tasks: state.tasks };
   },
+  filter_tasks_by_date: async (from = null, to = null, allDates = false) => {
+    state.dateFilter.from = from || '';
+    state.dateFilter.to = to || '';
+    state.dateFilter.allDates = allDates;
+    renderTasksList();
+    return { success: true, tasks: state.tasks };
+  },
   open_attachment: async () => ({ success: true }),
   open_attachment_folder: async () => ({ success: true }),
   get_plugin_version: async () => ({ success: true, version: '1.0.0' }),
@@ -163,6 +175,7 @@ function getApi() {
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupChatListeners();
+  initDateFilterUI();
 
   // Se pywebview estiver rodando, aguarda evento pywebviewready
   if (window.pywebview) {
@@ -225,6 +238,93 @@ function setFilter(filter) {
   document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
   const activeBtn = document.getElementById(`filter${filter.charAt(0).toUpperCase() + filter.slice(1)}Btn`);
   if (activeBtn) activeBtn.classList.add('active');
+  renderTasksList();
+}
+
+// --- Filtro por Intervalo de Datas ---
+function getDateRangeBoundaries() {
+  if (state.dateFilter.allDates) {
+    return { from: null, to: null, isDefault: false, isAll: true };
+  }
+
+  const cleanFrom = (state.dateFilter.from || '').trim();
+  const cleanTo = (state.dateFilter.to || '').trim();
+
+  // Padrão: 1 mês (últimos 30 dias até hoje) quando ambos em branco
+  if (!cleanFrom && !cleanTo) {
+    const now = new Date();
+    const past = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    const fromStr = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())} 00:00:00`;
+    const toStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 23:59:59`;
+    return { from: fromStr, to: toStr, isDefault: true, isAll: false };
+  }
+
+  const fromStr = cleanFrom ? `${cleanFrom} 00:00:00` : '1970-01-01 00:00:00';
+  const toStr = cleanTo ? `${cleanTo} 23:59:59` : '9999-12-31 23:59:59';
+  return { from: fromStr, to: toStr, isDefault: false, isAll: false };
+}
+
+function isTaskInDateRange(task, bounds) {
+  if (bounds.isAll) return true;
+  const dt = task.created_at || task.updated_at || '';
+  if (!dt) return false;
+  return dt >= bounds.from && dt <= bounds.to;
+}
+
+function initDateFilterUI() {
+  const fromEl = document.getElementById('dateFilterFrom');
+  const toEl = document.getElementById('dateFilterTo');
+  const allBtn = document.getElementById('btnAllDates');
+
+  if (fromEl) fromEl.value = state.dateFilter.from || '';
+  if (toEl) toEl.value = state.dateFilter.to || '';
+
+  if (allBtn) {
+    if (state.dateFilter.allDates) {
+      allBtn.classList.add('active');
+    } else {
+      allBtn.classList.remove('active');
+    }
+  }
+}
+
+function handleDateFilterChange() {
+  const fromEl = document.getElementById('dateFilterFrom');
+  const toEl = document.getElementById('dateFilterTo');
+
+  state.dateFilter.from = fromEl ? fromEl.value : '';
+  state.dateFilter.to = toEl ? toEl.value : '';
+  state.dateFilter.allDates = false;
+
+  localStorage.setItem('tarefas-date-from', state.dateFilter.from);
+  localStorage.setItem('tarefas-date-to', state.dateFilter.to);
+  localStorage.setItem('tarefas-date-all', 'false');
+
+  const allBtn = document.getElementById('btnAllDates');
+  if (allBtn) allBtn.classList.remove('active');
+
+  renderTasksList();
+}
+
+function resetDateFilter() {
+  state.dateFilter.from = '';
+  state.dateFilter.to = '';
+  state.dateFilter.allDates = false;
+
+  localStorage.removeItem('tarefas-date-from');
+  localStorage.removeItem('tarefas-date-to');
+  localStorage.setItem('tarefas-date-all', 'false');
+
+  initDateFilterUI();
+  renderTasksList();
+}
+
+function toggleAllDatesFilter() {
+  state.dateFilter.allDates = !state.dateFilter.allDates;
+  localStorage.setItem('tarefas-date-all', String(state.dateFilter.allDates));
+
+  initDateFilterUI();
   renderTasksList();
 }
 
@@ -393,32 +493,54 @@ function renderTasksList() {
   const statsText = document.getElementById('tasksStatsText');
   if (!container) return;
 
-  const total = state.tasks.length;
-  const completedCount = state.tasks.filter(t => t.completed).length;
-
-  if (statsText) {
-    statsText.textContent = `${completedCount} de ${total} concluída${total === 1 ? '' : 's'}`;
-  }
+  const bounds = getDateRangeBoundaries();
 
   // Identifica tarefas raiz
   const rootTasks = state.tasks.filter(t => !t.parent_id);
 
-  let filteredRoots = rootTasks;
+  // Aplica filtro temporal: raiz incluída se estiver no período OU se alguma de suas subtarefas estiver no período
+  const dateFilteredRoots = rootTasks.filter(task => {
+    if (bounds.isAll) return true;
+    if (isTaskInDateRange(task, bounds)) return true;
+    const subtasks = state.tasks.filter(st => st.parent_id === task.id);
+    return subtasks.some(st => isTaskInDateRange(st, bounds));
+  });
+
+  let filteredRoots = dateFilteredRoots;
   if (state.activeFilter === 'pending') {
-    filteredRoots = rootTasks.filter(t => !t.completed || state.tasks.some(st => st.parent_id === t.id && !st.completed));
+    filteredRoots = dateFilteredRoots.filter(t => !t.completed || state.tasks.some(st => st.parent_id === t.id && !st.completed));
   } else if (state.activeFilter === 'completed') {
-    filteredRoots = rootTasks.filter(t => t.completed);
+    filteredRoots = dateFilteredRoots.filter(t => t.completed);
+  }
+
+  // Estatísticas contextuais
+  const inPeriodTotal = dateFilteredRoots.length;
+  const completedInPeriod = dateFilteredRoots.filter(t => t.completed).length;
+
+  if (statsText) {
+    const periodLabel = bounds.isAll
+      ? ''
+      : (bounds.isDefault ? ' (último mês)' : ' (período)');
+    statsText.textContent = `${completedInPeriod} de ${inPeriodTotal} concluída${inPeriodTotal === 1 ? '' : 's'}${periodLabel}`;
   }
 
   // Aplica ordenação determinística: pendentes no topo, concluídas ao final, mais recentes primeiro
   filteredRoots = sortTasksByStatusAndDate(filteredRoots, true);
 
   if (filteredRoots.length === 0) {
+    const isFilteredByDate = !bounds.isAll;
     container.innerHTML = `
       <div class="empty-state">
-        <div data-icon="check-square" class="empty-icon"></div>
-        <div style="font-size: 14px; font-weight: 600; color: var(--fg);">Nenhuma tarefa encontrada</div>
-        <div style="font-size: 12px;">Use o campo abaixo para adicionar tarefas com rapidez.</div>
+        <div data-icon="${isFilteredByDate ? 'calendar' : 'check-square'}" class="empty-icon"></div>
+        <div style="font-size: 14px; font-weight: 600; color: var(--fg);">Nenhuma tarefa encontrada${isFilteredByDate ? ' neste período' : ''}</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          ${isFilteredByDate ? 'Tente ajustar o intervalo de datas ou alternar para o histórico completo.' : 'Use o campo abaixo para adicionar tarefas com rapidez.'}
+        </div>
+        ${isFilteredByDate ? `
+          <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAllDatesFilter()">
+            <span data-icon="calendar"></span> Ver todas as datas
+          </button>
+        ` : ''}
       </div>
     `;
     if (window.renderIcons) window.renderIcons();
@@ -449,12 +571,18 @@ function renderTasksList() {
          </button>`
       : '';
 
-    // Subtarefas visíveis de acordo com o filtro ativo e ordenadas
+    // Subtarefas visíveis de acordo com o filtro ativo e temporal
     let visibleSubtasks = rawSubtasks;
+    if (!bounds.isAll) {
+      const parentMatches = isTaskInDateRange(task, bounds);
+      if (!parentMatches) {
+        visibleSubtasks = rawSubtasks.filter(st => isTaskInDateRange(st, bounds));
+      }
+    }
     if (state.activeFilter === 'pending') {
-      visibleSubtasks = rawSubtasks.filter(st => !st.completed);
+      visibleSubtasks = visibleSubtasks.filter(st => !st.completed);
     } else if (state.activeFilter === 'completed') {
-      visibleSubtasks = rawSubtasks.filter(st => st.completed);
+      visibleSubtasks = visibleSubtasks.filter(st => st.completed);
     }
     visibleSubtasks = sortTasksByStatusAndDate(visibleSubtasks, true);
 
@@ -1462,3 +1590,6 @@ window.handleDragLeave = handleDragLeave;
 window.handleDragEnd = handleDragEnd;
 window.handleDrop = handleDrop;
 window.sortTasksByStatusAndDate = sortTasksByStatusAndDate;
+window.handleDateFilterChange = handleDateFilterChange;
+window.resetDateFilter = resetDateFilter;
+window.toggleAllDatesFilter = toggleAllDatesFilter;

@@ -117,8 +117,71 @@ def sort_tasks_by_status_and_date(tasks: List[Dict[str, Any]], descending: bool 
         return _sort_flat_group(tasks, descending=descending)
 
 
-def load_tasks(sort_by_status_and_date: bool = False) -> List[Dict[str, Any]]:
-    """Carrega todas as tarefas salvas do arquivo JSON com opção de pré-ordenação."""
+def filter_tasks_by_date_range(
+    tasks: List[Dict[str, Any]],
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    default_one_month: bool = True
+) -> List[Dict[str, Any]]:
+    """
+    Filtra tarefas por intervalo de datas baseando-se em created_at (ou updated_at).
+    Se date_from e date_to forem omitidos e default_one_month for True, aplica janela padrão
+    dos últimos 30 dias contados a partir da data atual.
+    Preserva tarefas pai caso alguma de suas subtarefas esteja no período.
+    """
+    if not tasks:
+        return []
+
+    clean_from = (date_from or "").strip()
+    clean_to = (date_to or "").strip()
+
+    if not clean_from and not clean_to and not default_one_month:
+        return tasks
+
+    now = datetime.datetime.now()
+    if not clean_from and not clean_to and default_one_month:
+        one_month_ago = now - datetime.timedelta(days=30)
+        start_str = one_month_ago.strftime("%Y-%m-%d 00:00:00")
+        end_str = now.strftime("%Y-%m-%d 23:59:59")
+    else:
+        start_str = f"{clean_from} 00:00:00" if clean_from and len(clean_from) == 10 else (clean_from or "1970-01-01 00:00:00")
+        end_str = f"{clean_to} 23:59:59" if clean_to and len(clean_to) == 10 else (clean_to or now.strftime("%Y-%m-%d 23:59:59"))
+
+    def in_range(item: Dict[str, Any]) -> bool:
+        dt = item.get("created_at") or item.get("updated_at") or ""
+        if not dt:
+            return False
+        return start_str <= dt <= end_str
+
+    subtasks_by_parent: Dict[str, List[Dict[str, Any]]] = {}
+    for t in tasks:
+        pid = t.get("parent_id")
+        if pid:
+            subtasks_by_parent.setdefault(pid, []).append(t)
+
+    matching_ids = set()
+    for t in tasks:
+        tid = t.get("id")
+        if in_range(t):
+            matching_ids.add(tid)
+            if t.get("parent_id"):
+                matching_ids.add(t.get("parent_id"))
+
+    for pid, subs in subtasks_by_parent.items():
+        if any(in_range(s) for s in subs):
+            matching_ids.add(pid)
+
+    return [t for t in tasks if t.get("id") in matching_ids]
+
+
+def load_tasks(
+    sort_by_status_and_date: bool = False,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    filter_dates: bool = False,
+    default_one_month: bool = True
+) -> List[Dict[str, Any]]:
+    """Carrega todas as tarefas salvas do arquivo JSON com opções de ordenação e filtro de data."""
     tasks_file = get_tasks_file()
     if not tasks_file.exists():
         return []
@@ -132,6 +195,15 @@ def load_tasks(sort_by_status_and_date: bool = False) -> List[Dict[str, Any]]:
             tasks = data
         elif isinstance(data, dict) and "tasks" in data and isinstance(data["tasks"], list):
             tasks = data["tasks"]
+
+        if filter_dates:
+            tasks = filter_tasks_by_date_range(
+                tasks,
+                date_from=date_from,
+                date_to=date_to,
+                default_one_month=default_one_month
+            )
+
         if sort_by_status_and_date:
             return sort_tasks_by_status_and_date(tasks)
         return tasks

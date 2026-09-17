@@ -28,12 +28,41 @@ spec.loader.exec_module(domain)
 class TarefasApi(BasePluginApi):
     """API exposta para a interface WebView do plugin de Tarefas."""
 
-    def get_tasks(self) -> Dict[str, Any]:
-        """Retorna todas as tarefas salvas."""
+    def get_tasks(
+        self,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        filter_dates: bool = False,
+        all_dates: bool = False,
+        default_one_month: bool = True
+    ) -> Dict[str, Any]:
+        """Retorna tarefas salvas, com suporte opcional a filtro temporal."""
         try:
-            return {"success": True, "tasks": domain.load_tasks()}
+            tasks = domain.load_tasks(
+                date_from=date_from,
+                date_to=date_to,
+                filter_dates=filter_dates and not all_dates,
+                default_one_month=default_one_month and not all_dates
+            )
+            return {"success": True, "tasks": tasks}
         except Exception as exc:
             return {"success": False, "error": str(exc), "tasks": []}
+
+    def filter_tasks_by_date(
+        self,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        all_dates: bool = False,
+        default_one_month: bool = True
+    ) -> Dict[str, Any]:
+        """Filtra tarefas por período, aplicando janela padrão de 30 dias se em branco."""
+        return self.get_tasks(
+            date_from=date_from,
+            date_to=date_to,
+            filter_dates=True,
+            all_dates=all_dates,
+            default_one_month=default_one_month
+        )
 
     def create_task(self, title: str, description: str = "", parent_id: Optional[str] = None) -> Dict[str, Any]:
         """Cria uma nova tarefa ou subtarefa e retorna a lista atualizada."""
