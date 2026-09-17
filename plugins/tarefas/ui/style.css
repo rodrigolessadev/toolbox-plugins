@@ -821,3 +821,38 @@
   border-bottom: 2px solid var(--accent) !important;
 }
 
+/* --- Divisor de Tarefas Concluídas --- */
+.completed-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 8px 0;
+  padding: 0 4px;
+  user-select: none;
+}
+
+.completed-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.completed-divider-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-muted);
+  background: var(--bg-card);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.completed-divider-text [data-icon="check"] {
+  color: var(--success);
+}
+

@@ -64,8 +64,61 @@ def _now_iso() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def load_tasks() -> List[Dict[str, Any]]:
-    """Carrega todas as tarefas salvas do arquivo JSON."""
+def _sort_flat_group(items: List[Dict[str, Any]], descending: bool = True) -> List[Dict[str, Any]]:
+    """Ordena uma lista plana de tarefas colocando pendentes primeiro e ordenando por data."""
+    pending = [t for t in items if not bool(t.get("completed", False))]
+    completed = [t for t in items if bool(t.get("completed", False))]
+
+    key_fn = lambda t: t.get("created_at") or t.get("updated_at") or ""
+    pending.sort(key=key_fn, reverse=descending)
+    completed.sort(key=key_fn, reverse=descending)
+    return pending + completed
+
+
+def sort_tasks_by_status_and_date(tasks: List[Dict[str, Any]], descending: bool = True) -> List[Dict[str, Any]]:
+    """
+    Ordena tarefas garantindo pendentes no topo e concluídas ao final.
+    Dentro de cada grupo (pendentes e concluídas), ordena por data (created_at / updated_at).
+    Se houver relação hierárquica (subtarefas com parent_id), preserva o agrupamento sob cada pai.
+    """
+    if not tasks:
+        return []
+
+    has_parents = any(not t.get("parent_id") for t in tasks)
+    has_children = any(bool(t.get("parent_id")) for t in tasks)
+
+    if has_parents and has_children:
+        roots = [t for t in tasks if not t.get("parent_id")]
+        sorted_roots = _sort_flat_group(roots, descending=descending)
+
+        children_by_parent: Dict[str, List[Dict[str, Any]]] = {}
+        for t in tasks:
+            pid = t.get("parent_id")
+            if pid:
+                children_by_parent.setdefault(pid, []).append(t)
+
+        result: List[Dict[str, Any]] = []
+        handled_ids = set()
+        for root in sorted_roots:
+            result.append(root)
+            handled_ids.add(root.get("id"))
+            subs = children_by_parent.get(root.get("id"), [])
+            if subs:
+                sorted_subs = _sort_flat_group(subs, descending=descending)
+                result.extend(sorted_subs)
+                for s in sorted_subs:
+                    handled_ids.add(s.get("id"))
+
+        orphans = [t for t in tasks if t.get("id") not in handled_ids]
+        if orphans:
+            result.extend(_sort_flat_group(orphans, descending=descending))
+        return result
+    else:
+        return _sort_flat_group(tasks, descending=descending)
+
+
+def load_tasks(sort_by_status_and_date: bool = False) -> List[Dict[str, Any]]:
+    """Carrega todas as tarefas salvas do arquivo JSON com opção de pré-ordenação."""
     tasks_file = get_tasks_file()
     if not tasks_file.exists():
         return []
@@ -74,11 +127,14 @@ def load_tasks() -> List[Dict[str, Any]]:
         if not content.strip():
             return []
         data = json.loads(content)
+        tasks = []
         if isinstance(data, list):
-            return data
+            tasks = data
         elif isinstance(data, dict) and "tasks" in data and isinstance(data["tasks"], list):
-            return data["tasks"]
-        return []
+            tasks = data["tasks"]
+        if sort_by_status_and_date:
+            return sort_tasks_by_status_and_date(tasks)
+        return tasks
     except Exception:
         return []
 
