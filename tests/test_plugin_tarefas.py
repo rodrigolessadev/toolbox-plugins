@@ -1118,3 +1118,62 @@ def test_tarefas_issue_262_user_select_and_rich_text_copy():
     assert "text/html" in app_js, "Deve registrar text/html para cópia rica estilo Word/Docs"
     assert "text/plain" in app_js
     assert "window.setupRichTextCopyHandler = setupRichTextCopyHandler;" in app_js
+
+
+def test_tarefas_issue_263_attachment_trigger_permanent_presence():
+    """
+    Valida a Issue #263:
+    1. Função renderAttachmentTrigger implementada em app.js.
+    2. Presença permanente do botão task-att-trigger em tarefas e subtarefas.
+    3. Diferenciação visual de estados: att-trigger-active (com badge) vs att-trigger-empty (sem badge).
+    4. Substituição do antigo attBadge estático por renderAttachmentTrigger nos templates.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+
+    # 1. Função auxiliar renderAttachmentTrigger
+    assert "function renderAttachmentTrigger(task)" in app_js
+    assert "task-att-trigger" in app_js
+    assert "att-trigger-active" in app_js
+    assert "att-trigger-empty" in app_js
+    assert "att-count-badge" in app_js
+    assert 'data-icon="paperclip"' in app_js
+
+    # 2. Tooltips contextualizados
+    assert "anexo(s) vinculado(s). Clique para visualizar." in app_js
+    assert "Nenhum anexo. Clique para abrir detalhes e anexar." in app_js
+
+    # 3. Uso em tarefas principais e subtarefas
+    assert "attTriggerHtml = renderAttachmentTrigger(task)" in app_js
+    assert "subAttTriggerHtml = renderAttachmentTrigger(sub)" in app_js
+    assert "${attTriggerHtml}" in app_js
+    assert "${subAttTriggerHtml}" in app_js
+
+
+def test_tarefas_issue_263_attachment_trigger_interaction_and_css():
+    """
+    Valida a Issue #263:
+    1. Função handleAttachmentClick com stopPropagation, preventDefault e chamada a openTaskTab.
+    2. Exportação no objeto window.
+    3. Regras de estilo em style.css para .task-att-trigger e modificadores.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+
+    # 1. Interação e navegação
+    assert "function handleAttachmentClick(taskId, event)" in app_js
+    assert "event.stopPropagation()" in app_js
+    assert "openTaskTab(taskId, event)" in app_js
+
+    # 2. Exportações
+    assert "window.renderAttachmentTrigger = renderAttachmentTrigger;" in app_js
+    assert "window.handleAttachmentClick = handleAttachmentClick;" in app_js
+
+    # 3. Estilos CSS
+    assert ".task-att-trigger {" in style_css
+    assert ".task-att-trigger.att-trigger-active {" in style_css
+    assert ".task-att-trigger.att-trigger-empty {" in style_css
+    assert ".att-count-badge {" in style_css
+    assert "var(--accent)" in style_css
+

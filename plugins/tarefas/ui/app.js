@@ -583,6 +583,29 @@ function renderTasksList() {
     return;
   }
 
+  function renderAttachmentTrigger(task) {
+    const attList = task.attachments || [];
+    const attCount = attList.length;
+    const hasAttachments = attCount > 0;
+
+    const stateClass = hasAttachments ? 'att-trigger-active' : 'att-trigger-empty';
+    const titleText = hasAttachments
+      ? `${attCount} anexo(s) vinculado(s). Clique para visualizar.`
+      : 'Nenhum anexo. Clique para abrir detalhes e anexar.';
+
+    return `
+      <button
+        type="button"
+        class="task-att-trigger ${stateClass}"
+        onclick="handleAttachmentClick('${task.id}', event)"
+        title="${titleText}"
+      >
+        <span data-icon="paperclip"></span>
+        ${hasAttachments ? `<span class="att-count-badge">${attCount}</span>` : ''}
+      </button>
+    `;
+  }
+
   function renderRootCardHtml(task) {
     const isCompleted = Boolean(task.completed);
     const rawSubtasks = state.tasks.filter(st => st.parent_id === task.id);
@@ -590,10 +613,7 @@ function renderTasksList() {
     const subCompleted = rawSubtasks.filter(st => st.completed).length;
     const isCollapsed = state.collapsedParents.has(task.id);
 
-    const attCount = (task.attachments || []).length;
-    const attBadge = attCount > 0
-      ? `<span class="task-meta-badge" title="${attCount} anexo(s)"><span data-icon="paperclip"></span> ${attCount}</span>`
-      : '';
+    const attTriggerHtml = renderAttachmentTrigger(task);
 
     const subtaskBadge = subCount > 0
       ? `<span class="subtask-badge" title="${subCompleted} de ${subCount} subtarefas concluídas">
@@ -626,10 +646,7 @@ function renderTasksList() {
       ? `<div class="subtasks-container" id="subtasks_${task.id}">
           ${visibleSubtasks.map(sub => {
             const isSubCompleted = Boolean(sub.completed);
-            const subAttCount = (sub.attachments || []).length;
-            const subAttBadge = subAttCount > 0
-              ? `<span class="task-meta-badge" title="${subAttCount} anexo(s)"><span data-icon="paperclip"></span> ${subAttCount}</span>`
-              : '';
+            const subAttTriggerHtml = renderAttachmentTrigger(sub);
             const isSubSelected = state.selectedTaskId === sub.id;
             const hasSubDesc = Boolean(sub.description && sub.description.trim().length > 0);
             const isSubDescExpanded = Boolean(state.expandedDescCards && state.expandedDescCards.has(sub.id));
@@ -666,7 +683,7 @@ function renderTasksList() {
                       title="${isSubCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
                     />
                     <span class="task-title" title="${escapeHtml(sub.title)}">${escapeHtml(sub.title)}</span>
-                    ${subAttBadge}
+                    ${subAttTriggerHtml}
                   </div>
                   <div class="task-actions">
                     <button
@@ -774,7 +791,7 @@ function renderTasksList() {
                 title="${isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
               />
               <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
-              ${attBadge}
+              ${attTriggerHtml}
               ${subtaskBadge}
             </div>
             <div class="task-actions">
@@ -2445,4 +2462,14 @@ window.handleEmptyTrash = handleEmptyTrash;
 window.toggleDescAccordion = toggleDescAccordion;
 window.handleCopyCardDesc = handleCopyCardDesc;
 window.handleCopyRawDescription = handleCopyRawDescription;
+function handleAttachmentClick(taskId, event) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  openTaskTab(taskId, event);
+}
+
 window.setupRichTextCopyHandler = setupRichTextCopyHandler;
+window.renderAttachmentTrigger = renderAttachmentTrigger;
+window.handleAttachmentClick = handleAttachmentClick;
