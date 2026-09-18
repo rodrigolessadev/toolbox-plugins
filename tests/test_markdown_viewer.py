@@ -306,6 +306,99 @@ def test_markdown_viewer_local_assets_and_gfm_rendering():
     assert "OK" in res.stdout
 
 
+def test_markdown_viewer_nested_ordered_and_unordered_lists():
+    """
+    Valida a Issue #264:
+    1. Listas ordenadas aninhadas (1. Teste -> 4 espaços -> 1. Teste1).
+    2. Listas não-ordenadas aninhadas (* Item -> 4 espaços -> * Subitem).
+    3. Checklists aninhados.
+    """
+    import subprocess
+    ui_dir = ROOT / "plugins" / "markdown-viewer" / "ui"
+    vendor_js = ui_dir / "vendor" / "markdown-field.js"
+    assert vendor_js.exists()
+
+    script = f"""
+    const {{ parseMarkdown }} = require('{vendor_js}');
+
+    // 1. Listas ordenadas aninhadas
+    const sampleOrdered = '1. Teste\\n    1. Teste1\\n        1. Teste2\\n2. Volta ao Nivel 1';
+    const resOrdered = parseMarkdown(sampleOrdered);
+    if (!resOrdered.html.includes('<ol class="tb-list tb-ordered-list">')) {{
+      throw new Error('Tag <ol class="tb-list tb-ordered-list"> não encontrada: ' + resOrdered.html);
+    }}
+    // Contagem de tags <ol> deve indicar aninhamento multinível
+    const olOpens = (resOrdered.html.match(/<ol/g) || []).length;
+    const olCloses = (resOrdered.html.match(/<\\/ol>/g) || []).length;
+    if (olOpens < 3 || olCloses < 3) {{
+      throw new Error('Falha no aninhamento de listas ordenadas: opens=' + olOpens + ', closes=' + olCloses);
+    }}
+
+    // 2. Listas não-ordenadas aninhadas
+    const sampleUnordered = '* Item 1\\n  * Subitem 1\\n    * Subsubitem 1';
+    const resUnordered = parseMarkdown(sampleUnordered);
+    const ulOpens = (resUnordered.html.match(/<ul/g) || []).length;
+    const ulCloses = (resUnordered.html.match(/<\\/ul>/g) || []).length;
+    if (ulOpens < 3 || ulCloses < 3) {{
+      throw new Error('Falha no aninhamento de listas não-ordenadas: opens=' + ulOpens + ', closes=' + ulCloses);
+    }}
+
+    // 3. Checklists aninhados
+    const sampleTask = '- [ ] Tarefa Pai\\n    - [x] Subtarefa 1\\n    - [ ] Subtarefa 2';
+    const resTask = parseMarkdown(sampleTask);
+    if (!resTask.html.includes('tb-task-list') || !resTask.html.includes('tb-task-checkbox')) {{
+      throw new Error('Checklist não renderizou tags de tarefa: ' + resTask.html);
+    }}
+
+    console.log('SUCCESS_NESTED_LISTS');
+    """
+    res = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert res.returncode == 0, f"Erro nos testes de parsing de lista aninhada:\n{res.stderr}"
+    assert "SUCCESS_NESTED_LISTS" in res.stdout
+
+
+def test_markdown_viewer_list_css_hierarchy():
+    """
+    Valida a Issue #264:
+    1. style.css possui lower-roman para ol ol e lower-alpha para ol ol ol.
+    2. style.css possui circle para ul ul e square para ul ul ul.
+    3. markdown-field.css possui regras correspondentes.
+    """
+    ui_dir = ROOT / "plugins" / "markdown-viewer" / "ui"
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    vendor_css = (ui_dir / "vendor" / "markdown-field.css").read_text(encoding="utf-8")
+
+    # style.css
+    assert "lower-roman" in style_css
+    assert "lower-alpha" in style_css
+    assert "circle" in style_css
+    assert "square" in style_css
+    assert ".preview-content ol ol" in style_css
+    assert ".preview-content ol ol ol" in style_css
+
+    # vendor/markdown-field.css
+    assert "lower-roman" in vendor_css
+    assert "lower-alpha" in vendor_css
+    assert "circle" in vendor_css
+    assert "square" in vendor_css
+
+
+def test_markdown_viewer_version_sync_1_6_7():
+    """
+    Valida o bump de versão do markdown-viewer para v1.6.7 em plugin.json, package.json e index.html.
+    """
+    import json
+    p_dir = ROOT / "plugins" / "markdown-viewer"
+    plugin_data = json.loads((p_dir / "plugin.json").read_text(encoding="utf-8"))
+    package_data = json.loads((p_dir / "package.json").read_text(encoding="utf-8"))
+    html_content = (p_dir / "ui" / "index.html").read_text(encoding="utf-8")
+
+    assert plugin_data["version"] == "1.6.7"
+    assert package_data["version"] == "1.6.7"
+    assert "v1.6.7" in html_content
+
+
+
 
 
 

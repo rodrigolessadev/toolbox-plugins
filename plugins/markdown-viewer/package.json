@@ -1,6 +1,6 @@
 {
   "name": "@toolbox-plugins/markdown-viewer",
-  "version": "1.6.4",
+  "version": "1.6.7",
   "description": "Visualizador e editor de Markdown com suporte a múltiplas abas para o ecossistema Toolbox",
   "private": true,
   "dependencies": {
