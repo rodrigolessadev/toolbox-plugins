@@ -93,10 +93,42 @@ class TarefasApi(BasePluginApi):
             return {"success": False, "error": str(exc)}
 
     def delete_task(self, task_id: str) -> Dict[str, Any]:
-        """Exclui uma tarefa e seus anexos."""
+        """Move uma tarefa para a lixeira."""
         try:
             success = domain.delete_task(task_id=task_id)
-            return {"success": success, "tasks": domain.load_tasks()}
+            return {"success": success, "tasks": domain.load_tasks(), "trash": domain.list_trash_tasks()}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    def get_trash_tasks(self) -> Dict[str, Any]:
+        """Retorna tarefas na lixeira com contagem de dias restantes."""
+        try:
+            trash = domain.list_trash_tasks()
+            return {"success": True, "trash": trash}
+        except Exception as exc:
+            return {"success": False, "error": str(exc), "trash": []}
+
+    def restore_task(self, task_id: str) -> Dict[str, Any]:
+        """Restaura uma tarefa e suas subtarefas da lixeira."""
+        try:
+            task = domain.restore_task(task_id)
+            return {"success": True, "task": task, "tasks": domain.load_tasks(), "trash": domain.list_trash_tasks()}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    def purge_task(self, task_id: str) -> Dict[str, Any]:
+        """Exclui definitivamente uma tarefa e seus anexos da lixeira."""
+        try:
+            success = domain.purge_task(task_id)
+            return {"success": success, "trash": domain.list_trash_tasks()}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    def empty_trash(self) -> Dict[str, Any]:
+        """Esvazia a lixeira permanentemente."""
+        try:
+            count = domain.empty_trash()
+            return {"success": True, "purged_count": count, "trash": domain.list_trash_tasks()}
         except Exception as exc:
             return {"success": False, "error": str(exc)}
 

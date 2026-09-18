@@ -23,6 +23,12 @@
           <span data-icon="check-square"></span>
           <span class="tab-title-text">Minhas Tarefas</span>
         </div>
+        <!-- Tab fixa Lixeira -->
+        <div class="tab-item" id="tabTrashBtn" onclick="switchToTab('trash')" title="Lixeira (itens retidos por até 30 dias)">
+          <span data-icon="trash-2"></span>
+          <span class="tab-title-text">Lixeira</span>
+          <span class="badge-trash-count" id="trashCountBadge" style="display: none;">0</span>
+        </div>
         <!-- Abas dinâmicas de tarefas abertas inseridas aqui -->
       </div>
 
@@ -94,6 +100,28 @@
               <span id="chatSubmitText">Enviar</span>
             </button>
           </div>
+        </div>
+      </section>
+ 
+      <!-- Painel Lixeira: Tarefas Excluídas com Retenção Temporária -->
+      <section class="view-pane" id="paneTrash">
+        <div class="trash-toolbar">
+          <div class="trash-info-summary">
+            <span data-icon="trash-2" class="trash-info-icon"></span>
+            <span>Tarefas na lixeira permanecem retidas por até <strong>30 dias</strong> antes do expurgo permanente.</span>
+          </div>
+          <div class="trash-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnRefreshTrash" onclick="loadTrashTasks(true)" title="Recarregar lixeira">
+              <span data-icon="refresh"></span> Atualizar
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" id="btnEmptyTrash" onclick="handleEmptyTrash()" title="Excluir todas as tarefas da lixeira permanentemente">
+              <span data-icon="trash-2"></span> Esvaziar Lixeira
+            </button>
+          </div>
+        </div>
+
+        <div class="tasks-scroll-container" id="trashListContainer">
+          <!-- Cards de tarefas excluídas gerados dinamicamente -->
         </div>
       </section>
 

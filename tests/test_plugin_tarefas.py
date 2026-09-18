@@ -174,10 +174,13 @@ def test_domain_delete_task_cleanup(tmp_path):
     task_att_dir = tarefas_domain.get_attachments_dir(task_id)
     assert task_att_dir.exists()
 
-    # Exclui tarefa
+    # Exclui tarefa (vai para a lixeira; anexo físico é mantido durante o período de retenção)
     assert tarefas_domain.delete_task(task_id) is True
     assert tarefas_domain.get_task(task_id) is None
-    # Verifica que o diretório de anexos da tarefa foi limpo
+    assert task_att_dir.exists(), "Diretório de anexos deve ser mantido durante retenção na lixeira"
+
+    # Expurgo definitivo da lixeira remove o diretório de anexos fisicamente
+    assert tarefas_domain.purge_task(task_id) is True
     assert not task_att_dir.exists()
 
 
@@ -251,17 +254,21 @@ def test_subtasks_lifecycle_and_cascade_delete(tmp_path):
     att_path = Path(att["file_path"])
     assert att_path.exists()
 
-    # Exclui a tarefa pai
+    # Exclui a tarefa pai (soft delete em cascata)
     deleted = tarefas_domain.delete_task(pid)
     assert deleted is True
 
-    # Verifica que tanto o pai quanto as subtarefas foram removidas do banco de dados JSON
+    # Verifica que tanto o pai quanto as subtarefas foram removidas do banco de dados JSON ativo
     all_remaining = tarefas_domain.load_tasks()
     assert len(all_remaining) == 0
     assert tarefas_domain.get_task(pid) is None
     assert tarefas_domain.get_task(sub1["id"]) is None
     assert tarefas_domain.get_task(sub2["id"]) is None
-    assert not att_path.exists(), "Diretório de anexo da subtarefa deve ser excluído em cascata"
+    assert att_path.exists(), "Anexo retido na lixeira antes do expurgo"
+
+    # Expurgo definitivo remove o diretório de anexo da subtarefa em cascata
+    assert tarefas_domain.purge_task(pid) is True
+    assert not att_path.exists(), "Diretório de anexo da subtarefa deve ser excluído em cascata no expurgo definitivo"
 
 
 def test_subtask_validation_invalid_parent():
@@ -838,3 +845,200 @@ def test_tarefas_issue_260_ctrl_click_subtask_and_dblclick():
     assert "switchToTab(taskId)" in app_js
     assert "openTaskTab('${task.id}', event)" in app_js
     assert "openTaskTab('${sub.id}', event)" in app_js
+
+
+def test_tarefas_issue_261_soft_delete_and_trash_listing(tmp_path):
+    """Valida exclusão com retenção (soft delete), dias restantes e permanência dos anexos."""
+    sample_file = tmp_path / "documento.pdf"
+    sample_file.write_text("conteúdo simulado de anexo", encoding="utf-8")
+
+    # 1. Cria tarefa pai e subtarefa com anexo
+    parent = tarefas_domain.create_task("Tarefa Mãe Para Lixeira")
+    child = tarefas_domain.create_subtask(parent["id"], "Subtarefa Para Lixeira")
+    tarefas_domain.add_attachment(parent["id"], str(sample_file))
+
+    parent_att_dir = tarefas_domain.get_attachments_dir(parent["id"])
+    assert parent_att_dir.exists(), "Diretório de anexo deve existir antes da exclusão"
+
+    # 2. Soft delete na tarefa mãe deve mover mãe e filha em cascata para a lixeira
+    deleted = tarefas_domain.soft_delete_task(parent["id"])
+    assert deleted is True
+
+    # 3. Não devem constar em load_tasks ativo
+    active_tasks = tarefas_domain.load_tasks()
+    active_ids = {t["id"] for t in active_tasks}
+    assert parent["id"] not in active_ids
+    assert child["id"] not in active_ids
+
+    # 4. Devem constar em list_trash_tasks()
+    trash = tarefas_domain.list_trash_tasks()
+    trash_ids = {t["id"] for t in trash}
+    assert parent["id"] in trash_ids
+    assert child["id"] in trash_ids
+
+    # 5. Dias restantes calculados (padrão 30)
+    for t in trash:
+        if t["id"] in {parent["id"], child["id"]}:
+            assert t.get("deleted_at") is not None
+            assert t.get("days_remaining") == 30
+
+    # 6. Anexos físicos devem ser mantidos durante o período de retenção
+    assert parent_att_dir.exists(), "Anexo deve ser mantido durante retenção temporária"
+
+
+def test_tarefas_issue_261_hierarchical_restoration_cascade():
+    """Valida que restaurar a tarefa mãe restaura automaticamente todas as suas filhas na lixeira."""
+    parent = tarefas_domain.create_task("Tarefa Mãe Restaurar")
+    child1 = tarefas_domain.create_subtask(parent["id"], "Subtarefa 1")
+    child2 = tarefas_domain.create_subtask(parent["id"], "Subtarefa 2")
+
+    # Envia para a lixeira
+    tarefas_domain.soft_delete_task(parent["id"])
+    assert len(tarefas_domain.load_tasks()) == 0
+    assert len(tarefas_domain.list_trash_tasks()) == 3
+
+    # Restaura a tarefa mãe
+    restored = tarefas_domain.restore_task(parent["id"])
+    assert restored["deleted_at"] is None
+
+    # Todas as tarefas filhas devem ser restauradas conjuntamente
+    active = tarefas_domain.load_tasks()
+    active_ids = {t["id"] for t in active}
+    assert parent["id"] in active_ids
+    assert child1["id"] in active_ids
+    assert child2["id"] in active_ids
+    assert len(tarefas_domain.list_trash_tasks()) == 0
+
+
+def test_tarefas_issue_261_hierarchical_restoration_orphan_promotion():
+    """
+    Valida regra da issue: se a tarefa filha for restaurada sem a mãe (mãe ausente ou ainda na lixeira),
+    a tarefa filha sobe um nível e se torna tarefa principal (parent_id = None).
+    """
+    parent = tarefas_domain.create_task("Tarefa Mãe Fica Na Lixeira")
+    child = tarefas_domain.create_subtask(parent["id"], "Subtarefa Que Sobe de Nível")
+
+    # Ambas para a lixeira
+    tarefas_domain.soft_delete_task(parent["id"])
+
+    # Restaura apenas a filha
+    restored_child = tarefas_domain.restore_task(child["id"])
+    assert restored_child["id"] == child["id"]
+    assert restored_child["parent_id"] is None, "Filha deve ser promovida a raiz se mãe permanecer na lixeira"
+    assert restored_child["deleted_at"] is None
+
+    # Mãe continua na lixeira
+    trash = tarefas_domain.list_trash_tasks()
+    trash_ids = {t["id"] for t in trash}
+    assert parent["id"] in trash_ids
+    assert child["id"] not in trash_ids
+
+
+def test_tarefas_issue_261_purge_and_empty_trash(tmp_path):
+    """Valida expurgo definitivo de tarefa individual e esvaziamento completo da lixeira."""
+    sample_file = tmp_path / "arquivo_purge.txt"
+    sample_file.write_text("dados expurgo", encoding="utf-8")
+
+    t1 = tarefas_domain.create_task("Tarefa Purge 1")
+    t2 = tarefas_domain.create_task("Tarefa Purge 2")
+    tarefas_domain.add_attachment(t1["id"], str(sample_file))
+
+    t1_att_dir = tarefas_domain.get_attachments_dir(t1["id"])
+    assert t1_att_dir.exists()
+
+    tarefas_domain.soft_delete_task(t1["id"])
+    tarefas_domain.soft_delete_task(t2["id"])
+
+    # Expurga individualmente t1
+    purged = tarefas_domain.purge_task(t1["id"])
+    assert purged is True
+    assert not t1_att_dir.exists(), "Diretório de anexo deve ser removido após expurgo permanente"
+
+    trash = tarefas_domain.list_trash_tasks()
+    assert len(trash) == 1
+    assert trash[0]["id"] == t2["id"]
+
+    # Esvazia a lixeira
+    count = tarefas_domain.empty_trash()
+    assert count == 1
+    assert len(tarefas_domain.list_trash_tasks()) == 0
+
+
+def test_tarefas_issue_261_purge_expired_trash():
+    """Valida expurgo automático de tarefas cujo deleted_at ultrapassou a retenção configurada."""
+    import datetime
+
+    t = tarefas_domain.create_task("Tarefa Expirada Há 35 Dias")
+    tarefas_domain.soft_delete_task(t["id"])
+
+    # Simula data de exclusão há 35 dias
+    old_time = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=35)).isoformat()
+    all_tasks = tarefas_domain.load_tasks(include_deleted=True)
+    for task in all_tasks:
+        if task["id"] == t["id"]:
+            task["deleted_at"] = old_time
+    tarefas_domain.save_tasks(all_tasks)
+
+    # Ao listar a lixeira, purge_expired_trash_tasks é executado automaticamente
+    trash = tarefas_domain.list_trash_tasks()
+    assert len(trash) == 0, "Tarefa expirada (>30 dias) deve ter sido expurgada automaticamente"
+
+
+def test_tarefas_issue_261_api_and_ui_contracts():
+    """Valida métodos da TarefasApi e elementos de interface da Lixeira."""
+    api = TarefasApi()
+
+    # Cria e move para lixeira via API
+    t = api.create_task("Tarefa API Lixeira")["task"]
+    res_del = api.delete_task(t["id"])
+    assert res_del["success"] is True
+    assert "trash" in res_del
+    assert len(res_del["trash"]) == 1
+
+    # Consulta lixeira via API
+    res_trash = api.get_trash_tasks()
+    assert res_trash["success"] is True
+    assert len(res_trash["trash"]) == 1
+
+    # Restaura via API
+    res_restore = api.restore_task(t["id"])
+    assert res_restore["success"] is True
+    assert len(res_restore["trash"]) == 0
+    assert len(res_restore["tasks"]) == 1
+
+    # Purge via API
+    api.delete_task(t["id"])
+    res_purge = api.purge_task(t["id"])
+    assert res_purge["success"] is True
+    assert len(res_purge["trash"]) == 0
+
+    # Validação dos elementos de UI
+    ui_dir = TAREFAS_DIR / "ui"
+    index_html = (ui_dir / "index.html").read_text(encoding="utf-8")
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+
+    # index.html
+    assert 'id="tabTrashBtn"' in index_html, "Deve conter botão da aba da lixeira"
+    assert 'id="trashCountBadge"' in index_html, "Deve conter badge de contagem da lixeira"
+    assert 'id="paneTrash"' in index_html, "Deve conter painel da lixeira"
+    assert 'id="trashListContainer"' in index_html, "Deve conter container da lista da lixeira"
+    assert 'id="btnEmptyTrash"' in index_html, "Deve conter botão de esvaziar lixeira"
+
+    # app.js
+    assert "loadTrashTasks" in app_js
+    assert "renderTrashList" in app_js
+    assert "handleRestoreTask" in app_js
+    assert "handlePurgeTask" in app_js
+    assert "handleEmptyTrash" in app_js
+    assert "window.loadTrashTasks = loadTrashTasks;" in app_js
+    assert "window.handleRestoreTask = handleRestoreTask;" in app_js
+    assert "window.handlePurgeTask = handlePurgeTask;" in app_js
+    assert "window.handleEmptyTrash = handleEmptyTrash;" in app_js
+    assert "disabled" in app_js, "Checkbox deve ser disabled na lixeira para impedir alteração de status"
+
+    # style.css
+    assert ".trash-card" in style_css
+    assert ".badge-trash-count" in style_css
+    assert ".trash-toolbar" in style_css
+    assert ".btn-restore-task" in style_css
