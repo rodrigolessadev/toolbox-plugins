@@ -174,6 +174,22 @@
   margin: 0.3em 0;
 }
 
+.tb-list ul,
+.tb-list ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+ul.tb-list { list-style-type: disc; }
+ul.tb-list ul { list-style-type: circle; }
+ul.tb-list ul ul { list-style-type: square; }
+
+ol.tb-ordered-list { list-style-type: decimal; }
+ol.tb-ordered-list ol,
+ul.tb-list ol { list-style-type: lower-roman; }
+ol.tb-ordered-list ol ol,
+ul.tb-list ol ol { list-style-type: lower-alpha; }
+
 .tb-task-list {
   list-style: none;
   padding-left: 4px;
