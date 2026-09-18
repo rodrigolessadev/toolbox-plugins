@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import os
 import re
 import shutil
@@ -15,6 +16,8 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+RETENTION_DAYS = 30
 
 
 def get_data_dir() -> Path:
@@ -179,7 +182,8 @@ def load_tasks(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     filter_dates: bool = False,
-    default_one_month: bool = True
+    default_one_month: bool = True,
+    include_deleted: bool = False
 ) -> List[Dict[str, Any]]:
     """Carrega todas as tarefas salvas do arquivo JSON com opções de ordenação e filtro de data."""
     tasks_file = get_tasks_file()
@@ -195,6 +199,10 @@ def load_tasks(
             tasks = data
         elif isinstance(data, dict) and "tasks" in data and isinstance(data["tasks"], list):
             tasks = data["tasks"]
+
+        # Filtra tarefas excluídas (soft deleted) por padrão
+        if not include_deleted:
+            tasks = [t for t in tasks if t.get("deleted_at") is None]
 
         if filter_dates:
             tasks = filter_tasks_by_date_range(
@@ -221,9 +229,9 @@ def save_tasks(tasks: List[Dict[str, Any]]) -> bool:
         return False
 
 
-def get_task(task_id: str) -> Optional[Dict[str, Any]]:
+def get_task(task_id: str, include_deleted: bool = False) -> Optional[Dict[str, Any]]:
     """Busca uma tarefa pelo seu identificador."""
-    tasks = load_tasks()
+    tasks = load_tasks(include_deleted=include_deleted)
     for t in tasks:
         if t.get("id") == task_id:
             return t
@@ -256,21 +264,27 @@ def create_task(title: str, description: str = "", parent_id: Optional[str] = No
         "completed": False,
         "created_at": now,
         "updated_at": now,
+        "deleted_at": None,
         "attachments": []
     }
 
-    tasks = load_tasks()
+    tasks = load_tasks(include_deleted=True)
     tasks.insert(0, new_task)
     save_tasks(tasks)
     return new_task
 
 
-def get_subtasks(parent_id: str) -> List[Dict[str, Any]]:
+def create_subtask(parent_id: str, title: str, description: str = "") -> Dict[str, Any]:
+    """Cria uma subtarefa vinculada a uma tarefa pai."""
+    return create_task(title=title, description=description, parent_id=parent_id)
+
+
+def get_subtasks(parent_id: str, include_deleted: bool = False) -> List[Dict[str, Any]]:
     """Retorna todas as tarefas filhas vinculadas à tarefa com parent_id."""
     clean_pid = str(parent_id).strip() if parent_id else ""
     if not clean_pid:
         return []
-    tasks = load_tasks()
+    tasks = load_tasks(include_deleted=include_deleted)
     return [t for t in tasks if t.get("parent_id") == clean_pid]
 
 
@@ -344,32 +358,127 @@ def toggle_task_status(task_id: str) -> Dict[str, Any]:
     raise ValueError(f"Tarefa com ID {task_id} não encontrada.")
 
 
-def delete_task(task_id: str) -> bool:
-    """Exclui uma tarefa e recursivamente todas as suas subtarefas e pastas de anexos."""
-    tasks = load_tasks()
-    initial_len = len(tasks)
+def soft_delete_task(task_id: str) -> bool:
+    """Move uma tarefa e recursivamente todas as suas subtarefas ativas para a lixeira."""
+    tasks = load_tasks(include_deleted=True)
 
-    # Identifica recursivamente todos os IDs a serem removidos (a tarefa e suas filhas)
-    ids_to_delete = {task_id}
+    # Identifica recursivamente todos os IDs a serem descartados (a tarefa e suas filhas)
+    ids_to_soft_delete = {task_id}
     changed = True
     while changed:
         changed = False
         for t in tasks:
             tid = t.get("id")
             pid = t.get("parent_id")
-            if pid in ids_to_delete and tid not in ids_to_delete:
-                ids_to_delete.add(tid)
+            if pid in ids_to_soft_delete and tid not in ids_to_soft_delete:
+                ids_to_soft_delete.add(tid)
                 changed = True
 
-    tasks = [t for t in tasks if t.get("id") not in ids_to_delete]
+    now = _now_iso()
+    found_any = False
+    for t in tasks:
+        if t.get("id") in ids_to_soft_delete:
+            t["deleted_at"] = now
+            t["updated_at"] = now
+            found_any = True
 
+    if not found_any:
+        return False
+
+    save_tasks(tasks)
+    return True
+
+
+def delete_task(task_id: str) -> bool:
+    """Encaminha para soft_delete_task para compatibilidade e segurança."""
+    return soft_delete_task(task_id)
+
+
+def list_trash_tasks() -> List[Dict[str, Any]]:
+    """Retorna todas as tarefas na lixeira com cálculo de dias restantes até expurgo."""
+    purge_expired_trash_tasks(RETENTION_DAYS)
+    tasks = load_tasks(include_deleted=True)
+    trash = [t for t in tasks if t.get("deleted_at") is not None]
+
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    for t in trash:
+        del_str = t.get("deleted_at", "")
+        days_rem = RETENTION_DAYS
+        if del_str:
+            try:
+                clean_del = del_str.replace("Z", "+00:00")
+                del_dt = datetime.datetime.fromisoformat(clean_del)
+                if del_dt.tzinfo is None:
+                    del_dt = del_dt.replace(tzinfo=datetime.timezone.utc)
+                elapsed_days = (now_dt - del_dt).total_seconds() / 86400.0
+                days_rem = int(math.ceil(max(0.0, RETENTION_DAYS - elapsed_days)))
+            except Exception:
+                days_rem = RETENTION_DAYS
+        t["days_remaining"] = days_rem
+
+    # Ordena decrescente por data de exclusão
+    trash.sort(key=lambda x: str(x.get("deleted_at", "")), reverse=True)
+    return trash
+
+
+def restore_task(task_id: str) -> Dict[str, Any]:
+    """Restaura uma tarefa da lixeira com rastreamento hierárquico inteligente."""
+    tasks = load_tasks(include_deleted=True)
+    target = None
+    for t in tasks:
+        if t.get("id") == task_id:
+            target = t
+            break
+
+    if not target:
+        raise ValueError(f"Tarefa com ID {task_id} não encontrada.")
+
+    # Rastreamento hierárquico: se a tarefa mãe não existir ou estiver excluída, sobe um nível (raiz)
+    parent_id = target.get("parent_id")
+    if parent_id:
+        parent_task = next((t for t in tasks if t.get("id") == parent_id), None)
+        if not parent_task or parent_task.get("deleted_at") is not None:
+            # Mãe não existe ativa -> sobe um nível para a raiz
+            target["parent_id"] = None
+
+    now = _now_iso()
+    target["deleted_at"] = None
+    target["updated_at"] = now
+
+    # Restauração em cascata: se a tarefa possuir filhas na lixeira, restaura todas conjuntamente
+    for t in tasks:
+        if t.get("parent_id") == task_id and t.get("deleted_at") is not None:
+            t["deleted_at"] = None
+            t["updated_at"] = now
+
+    save_tasks(tasks)
+    return target
+
+
+def purge_task(task_id: str) -> bool:
+    """Exclui definitivamente uma tarefa da lixeira e remove fisicamente seus anexos."""
+    tasks = load_tasks(include_deleted=True)
+    initial_len = len(tasks)
+
+    # Identifica recursivamente a tarefa e suas filhas ainda na lixeira
+    ids_to_purge = {task_id}
+    changed = True
+    while changed:
+        changed = False
+        for t in tasks:
+            tid = t.get("id")
+            pid = t.get("parent_id")
+            if pid in ids_to_purge and tid not in ids_to_purge and t.get("deleted_at") is not None:
+                ids_to_purge.add(tid)
+                changed = True
+
+    tasks = [t for t in tasks if t.get("id") not in ids_to_purge]
     if len(tasks) == initial_len:
         return False
 
     save_tasks(tasks)
 
-    # Exclui pasta de anexos correspondente para cada tarefa removida
-    for did in ids_to_delete:
+    for did in ids_to_purge:
         task_att_dir = get_attachments_dir(did)
         if task_att_dir.exists():
             try:
@@ -378,6 +487,64 @@ def delete_task(task_id: str) -> bool:
                 pass
 
     return True
+
+
+def empty_trash() -> int:
+    """Exclui definitivamente todas as tarefas presentes na lixeira e seus anexos."""
+    tasks = load_tasks(include_deleted=True)
+    ids_to_purge = {t.get("id") for t in tasks if t.get("deleted_at") is not None}
+    if not ids_to_purge:
+        return 0
+
+    tasks = [t for t in tasks if t.get("id") not in ids_to_purge]
+    save_tasks(tasks)
+
+    for did in ids_to_purge:
+        task_att_dir = get_attachments_dir(did)
+        if task_att_dir.exists():
+            try:
+                shutil.rmtree(task_att_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    return len(ids_to_purge)
+
+
+def purge_expired_trash_tasks(retention_days: int = 30) -> int:
+    """Expurga tarefas cujo deleted_at excedeu o limite de retenção configurado."""
+    tasks = load_tasks(include_deleted=True)
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    ids_to_purge = set()
+
+    for t in tasks:
+        del_str = t.get("deleted_at")
+        if not del_str:
+            continue
+        try:
+            clean_del = del_str.replace("Z", "+00:00")
+            del_dt = datetime.datetime.fromisoformat(clean_del)
+            if del_dt.tzinfo is None:
+                del_dt = del_dt.replace(tzinfo=datetime.timezone.utc)
+            if (now_dt - del_dt).total_seconds() > (retention_days * 86400):
+                ids_to_purge.add(t.get("id"))
+        except Exception:
+            pass
+
+    if not ids_to_purge:
+        return 0
+
+    tasks = [t for t in tasks if t.get("id") not in ids_to_purge]
+    save_tasks(tasks)
+
+    for did in ids_to_purge:
+        task_att_dir = get_attachments_dir(did)
+        if task_att_dir.exists():
+            try:
+                shutil.rmtree(task_att_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    return len(ids_to_purge)
 
 
 def reorder_tasks(ordered_task_ids: List[str]) -> bool:

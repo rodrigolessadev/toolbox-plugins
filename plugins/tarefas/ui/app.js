@@ -6,12 +6,13 @@
 // Estado Global
 let state = {
   tasks: [],
+  trashTasks: [],
   activeFilter: 'all', // 'all' | 'pending' | 'completed'
   editingTaskId: null,
   selectedTaskId: null,
   subtaskTargetId: null,
   openTabs: [], // Lista de IDs de tarefas com abas abertas
-  activeTabId: 'main', // 'main' ou ID da tarefa
+  activeTabId: 'main', // 'main' | 'trash' ou ID da tarefa
   markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
   collapsedParents: new Set(JSON.parse(localStorage.getItem('tarefas-collapsed-parents') || '[]')),
   dateFilter: {
@@ -20,6 +21,8 @@ let state = {
     allDates: localStorage.getItem('tarefas-date-all') === 'true',
   },
 };
+
+let mockTrash = [];
 
 // Fallback Mock para desenvolvimento web fora do pywebview
 const mockApi = {
@@ -110,8 +113,63 @@ const mockApi = {
         }
       }
     }
+    const now = new Date().toISOString();
+    for (const t of state.tasks) {
+      if (idsToDelete.has(t.id)) {
+        t.deleted_at = now;
+        t.days_remaining = 30;
+        mockTrash.unshift(t);
+      }
+    }
     state.tasks = state.tasks.filter(t => !idsToDelete.has(t.id));
-    return { success: true, tasks: state.tasks };
+    return { success: true, tasks: state.tasks, trash: mockTrash };
+  },
+  get_trash_tasks: async () => ({
+    success: true,
+    trash: mockTrash
+  }),
+  restore_task: async (taskId) => {
+    const target = mockTrash.find(t => t.id === taskId);
+    if (!target) return { success: false, error: 'Tarefa não encontrada na lixeira' };
+
+    if (target.parent_id) {
+      const parentActive = state.tasks.find(t => t.id === target.parent_id);
+      if (!parentActive) {
+        target.parent_id = null;
+      }
+    }
+    target.deleted_at = null;
+    mockTrash = mockTrash.filter(t => t.id !== taskId);
+    state.tasks.unshift(target);
+
+    const childrenInTrash = mockTrash.filter(t => t.parent_id === taskId);
+    for (const c of childrenInTrash) {
+      c.deleted_at = null;
+      mockTrash = mockTrash.filter(t => t.id !== c.id);
+      state.tasks.push(c);
+    }
+
+    return { success: true, task: target, tasks: state.tasks, trash: mockTrash };
+  },
+  purge_task: async (taskId) => {
+    const toPurge = new Set([taskId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const t of mockTrash) {
+        if (toPurge.has(t.parent_id) && !toPurge.has(t.id)) {
+          toPurge.add(t.id);
+          changed = true;
+        }
+      }
+    }
+    mockTrash = mockTrash.filter(t => !toPurge.has(t.id));
+    return { success: true, trash: mockTrash };
+  },
+  empty_trash: async () => {
+    const count = mockTrash.length;
+    mockTrash = [];
+    return { success: true, purged_count: count, trash: [] };
   },
   add_attachment_dialog: async (taskId) => {
     const t = state.tasks.find(item => item.id === taskId);
@@ -203,6 +261,7 @@ async function loadInitialData() {
     console.error('Erro ao carregar dados iniciais:', err);
   }
   renderTasksList();
+  await loadTrashTasks(false);
   if (window.renderIcons) window.renderIcons();
 }
 
@@ -763,22 +822,36 @@ async function handleToggleTask(taskId) {
   }
 }
 
-// --- Exclusão de Tarefa ---
+// --- Exclusão de Tarefa (Mover para Lixeira) ---
 async function handleDeleteTask(taskId) {
   const task = state.tasks.find(t => t.id === taskId);
   const taskTitle = task ? task.title : 'esta tarefa';
-  if (!confirm(`Deseja realmente excluir "${taskTitle}"?`)) return;
+  if (!confirm(`Deseja mover "${taskTitle}" para a lixeira?`)) return;
 
   const api = getApi();
   try {
     const res = await api.delete_task(taskId);
     if (res && res.success) {
+      const activeIds = new Set((res.tasks || []).map(t => t.id));
+      for (const openId of [...state.openTabs]) {
+        if (!activeIds.has(openId)) {
+          closeTaskTab(openId);
+        }
+      }
       state.tasks = res.tasks;
-      if (state.editingTaskId === taskId) {
+      if (res.trash) {
+        state.trashTasks = res.trash;
+        updateTrashBadge();
+      } else {
+        await loadTrashTasks(false);
+      }
+      if (state.editingTaskId && !activeIds.has(state.editingTaskId)) {
         cancelQuickEdit();
       }
-      closeTaskTab(taskId);
       renderTasksList();
+      if (state.activeTabId === 'trash') {
+        renderTrashList();
+      }
     }
   } catch (err) {
     console.error('Erro ao excluir tarefa:', err);
@@ -1164,6 +1237,9 @@ function switchToTab(tabId) {
   if (tabId === 'main') {
     const mainTabBtn = document.getElementById('tabMainBtn');
     if (mainTabBtn) mainTabBtn.classList.add('active');
+  } else if (tabId === 'trash') {
+    const trashTabBtn = document.getElementById('tabTrashBtn');
+    if (trashTabBtn) trashTabBtn.classList.add('active');
   } else {
     const tabBtn = document.getElementById(`tabBtn_${tabId}`);
     if (tabBtn) tabBtn.classList.add('active');
@@ -1177,6 +1253,10 @@ function switchToTab(tabId) {
   if (tabId === 'main') {
     const mainPane = document.getElementById('paneMain');
     if (mainPane) mainPane.classList.add('active');
+  } else if (tabId === 'trash') {
+    const trashPane = document.getElementById('paneTrash');
+    if (trashPane) trashPane.classList.add('active');
+    loadTrashTasks(true);
   } else {
     const detailPane = document.getElementById(`pane_${tabId}`);
     if (detailPane) detailPane.classList.add('active');
@@ -1916,6 +1996,210 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+// --- Gestão da Lixeira (Requisito Issue #261) ---
+async function loadTrashTasks(render = true) {
+  const api = getApi();
+  try {
+    const res = await api.get_trash_tasks();
+    if (res && res.success) {
+      state.trashTasks = res.trash || [];
+      updateTrashBadge();
+      if (render && state.activeTabId === 'trash') {
+        renderTrashList();
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao carregar lixeira:', err);
+  }
+}
+
+function updateTrashBadge() {
+  const badge = document.getElementById('trashCountBadge');
+  if (!badge) return;
+  const count = (state.trashTasks || []).length;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function formatTrashDate(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  } catch (_) {
+    return isoStr;
+  }
+}
+
+function renderTrashList() {
+  const container = document.getElementById('trashListContainer');
+  if (!container) return;
+
+  const trash = state.trashTasks || [];
+
+  if (trash.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div data-icon="trash-2" class="empty-icon"></div>
+        <div style="font-size: 14px; font-weight: 600; color: var(--fg);">A lixeira está vazia</div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          Nenhuma tarefa excluída recentemente. Tarefas excluídas permanecem aqui por até 30 dias.
+        </div>
+      </div>
+    `;
+    if (window.renderIcons) window.renderIcons();
+    return;
+  }
+
+  let html = '';
+  for (const task of trash) {
+    const isCompleted = Boolean(task.completed);
+    const delDateStr = task.deleted_at ? formatTrashDate(task.deleted_at) : '';
+    const daysRemaining = task.days_remaining !== undefined ? task.days_remaining : 30;
+    const daysLabel = daysRemaining === 0 ? 'Expira hoje' : `Expira em ${daysRemaining} dia${daysRemaining === 1 ? '' : 's'}`;
+
+    let hierarchyBadge = '';
+    if (task.parent_id) {
+      const parentTask = state.tasks.find(t => t.id === task.parent_id) || trash.find(t => t.id === task.parent_id);
+      if (parentTask) {
+        hierarchyBadge = `<span class="trash-hierarchy-badge" title="Subtarefa de: ${escapeHtml(parentTask.title)}"><span data-icon="corner-down-right"></span> Subtarefa de: <strong>${escapeHtml(parentTask.title)}</strong></span>`;
+      } else {
+        hierarchyBadge = `<span class="trash-hierarchy-badge orphan" title="A tarefa mãe não existe mais. Ao restaurar, esta tarefa será promovida à raiz."><span data-icon="corner-down-right"></span> Subtarefa (mãe inexistente)</span>`;
+      }
+    }
+
+    const titleHtml = escapeHtml(task.title || 'Sem título');
+
+    html += `
+      <div class="task-card trash-card ${isCompleted ? 'completed' : ''}" id="trash_card_${task.id}">
+        <div class="task-main-row">
+          <div class="task-checkbox-col">
+            <input
+              type="checkbox"
+              class="task-checkbox-custom"
+              disabled
+              ${isCompleted ? 'checked' : ''}
+              title="Status fixado: ${isCompleted ? 'Concluída' : 'Pendente'}"
+            />
+          </div>
+
+          <div class="task-info-col">
+            <div class="task-title-line">
+              <span class="task-title-text">${titleHtml}</span>
+            </div>
+            <div class="trash-meta-row">
+              ${hierarchyBadge}
+              <span class="trash-date-badge" title="Data de exclusão"><span data-icon="trash"></span> Excluído em: ${delDateStr}</span>
+              <span class="trash-days-badge ${daysRemaining <= 3 ? 'urgent' : ''}" title="Prazo restante de retenção"><span data-icon="clock"></span> ${daysLabel}</span>
+            </div>
+          </div>
+
+          <div class="trash-card-actions">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm btn-restore-task"
+              onclick="handleRestoreTask('${task.id}')"
+              title="Restaurar tarefa para a lista ativa"
+            >
+              <span data-icon="refresh"></span> Restaurar
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger btn-sm btn-purge-task"
+              onclick="handlePurgeTask('${task.id}')"
+              title="Excluir definitivamente"
+            >
+              <span data-icon="trash"></span> Excluir
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+  if (window.renderIcons) window.renderIcons();
+}
+
+async function handleRestoreTask(taskId) {
+  const api = getApi();
+  try {
+    const res = await api.restore_task(taskId);
+    if (res && res.success) {
+      state.tasks = res.tasks || state.tasks;
+      state.trashTasks = res.trash || [];
+      updateTrashBadge();
+      renderTrashList();
+      renderTasksList();
+    } else {
+      alert(res?.error || 'Erro ao restaurar tarefa.');
+    }
+  } catch (err) {
+    console.error('Erro ao restaurar tarefa:', err);
+    alert('Erro ao restaurar tarefa: ' + err.message);
+  }
+}
+
+async function handlePurgeTask(taskId) {
+  const task = (state.trashTasks || []).find(t => t.id === taskId);
+  const taskTitle = task ? task.title : 'esta tarefa';
+  if (!confirm(`Tem certeza que deseja excluir DEFINITIVAMENTE "${taskTitle}"?\nEsta ação não poderá ser desfeita e todos os anexos serão apagados.`)) {
+    return;
+  }
+
+  const api = getApi();
+  try {
+    const res = await api.purge_task(taskId);
+    if (res && res.success) {
+      state.trashTasks = res.trash || [];
+      updateTrashBadge();
+      renderTrashList();
+    } else {
+      alert(res?.error || 'Erro ao expurgar tarefa.');
+    }
+  } catch (err) {
+    console.error('Erro ao expurgar tarefa:', err);
+    alert('Erro ao expurgar tarefa: ' + err.message);
+  }
+}
+
+async function handleEmptyTrash() {
+  const count = (state.trashTasks || []).length;
+  if (count === 0) {
+    alert('A lixeira já está vazia.');
+    return;
+  }
+
+  if (!confirm(`Deseja realmente esvaziar a lixeira e excluir DEFINITIVAMENTE ${count} tarefa(s)?\nEsta ação é irreversível e todos os anexos associados serão apagados.`)) {
+    return;
+  }
+
+  const api = getApi();
+  try {
+    const res = await api.empty_trash();
+    if (res && res.success) {
+      state.trashTasks = res.trash || [];
+      updateTrashBadge();
+      renderTrashList();
+    } else {
+      alert(res?.error || 'Erro ao esvaziar lixeira.');
+    }
+  } catch (err) {
+    console.error('Erro ao esvaziar lixeira:', err);
+    alert('Erro ao esvaziar lixeira: ' + err.message);
+  }
+}
+
 // Exportações globais para chamadas nos inline handlers HTML
 window.switchToTab = switchToTab;
 window.closeTaskTab = closeTaskTab;
@@ -1959,3 +2243,8 @@ window.handleTaskDblClick = handleTaskDblClick;
 window.handleAddSubtaskBtnClick = handleAddSubtaskBtnClick;
 window.isDescendant = isDescendant;
 window.rebuildTasksOrder = rebuildTasksOrder;
+window.loadTrashTasks = loadTrashTasks;
+window.renderTrashList = renderTrashList;
+window.handleRestoreTask = handleRestoreTask;
+window.handlePurgeTask = handlePurgeTask;
+window.handleEmptyTrash = handleEmptyTrash;
