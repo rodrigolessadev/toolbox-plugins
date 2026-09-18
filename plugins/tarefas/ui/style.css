@@ -1285,3 +1285,80 @@
   color: var(--fg);
 }
 
+/* --- Suporte a Listas Aninhadas Ordenadas e Não-Ordenadas (Issue #265) --- */
+.detail-markdown-section ul,
+.detail-markdown-section ol,
+.task-desc-accordion ul,
+.task-desc-accordion ol,
+.tb-reader-body ul,
+.tb-reader-body ol {
+  margin: 6px 0;
+  padding-left: 24px;
+}
+
+.detail-markdown-section ul ul,
+.detail-markdown-section ol ol,
+.detail-markdown-section ul ol,
+.detail-markdown-section ol ul,
+.task-desc-accordion ul ul,
+.task-desc-accordion ol ol,
+.task-desc-accordion ul ol,
+.task-desc-accordion ol ul,
+.tb-reader-body ul ul,
+.tb-reader-body ol ol,
+.tb-reader-body ul ol,
+.tb-reader-body ol ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.detail-markdown-section ul,
+.task-desc-accordion ul,
+.tb-reader-body ul,
+ul.tb-list {
+  list-style-type: disc;
+}
+
+.detail-markdown-section ul ul,
+.task-desc-accordion ul ul,
+.tb-reader-body ul ul,
+ul.tb-list ul {
+  list-style-type: circle;
+}
+
+.detail-markdown-section ul ul ul,
+.task-desc-accordion ul ul ul,
+.tb-reader-body ul ul ul,
+ul.tb-list ul ul {
+  list-style-type: square;
+}
+
+.detail-markdown-section ol,
+.task-desc-accordion ol,
+.tb-reader-body ol,
+ol.tb-ordered-list {
+  list-style-type: decimal;
+}
+
+.detail-markdown-section ol ol,
+.detail-markdown-section ul ol,
+.task-desc-accordion ol ol,
+.task-desc-accordion ul ol,
+.tb-reader-body ol ol,
+.tb-reader-body ul ol,
+ol.tb-ordered-list ol,
+ul.tb-list ol {
+  list-style-type: lower-roman;
+}
+
+.detail-markdown-section ol ol ol,
+.detail-markdown-section ul ol ol,
+.task-desc-accordion ol ol ol,
+.task-desc-accordion ul ol ol,
+.tb-reader-body ol ol ol,
+.tb-reader-body ul ol ol,
+ol.tb-ordered-list ol ol,
+ul.tb-list ol ol {
+  list-style-type: lower-alpha;
+}
+

@@ -1177,3 +1177,91 @@ def test_tarefas_issue_263_attachment_trigger_interaction_and_css():
     assert ".att-count-badge {" in style_css
     assert "var(--accent)" in style_css
 
+
+def test_tarefas_issue_265_nested_lists_parsing():
+    """
+    Valida a Issue #265:
+    1. Parsing de listas ordenadas aninhadas (1. Teste -> 4 espaços -> 1. Teste1).
+    2. Parsing de listas não-ordenadas aninhadas (* Item -> 2 ou 4 espaços -> * Subitem).
+    3. Checklists aninhados no campo Descrição do plugin Tarefas.
+    """
+    import subprocess
+    ui_dir = TAREFAS_DIR / "ui"
+    md_js = ui_dir / "markdown-field.js"
+    assert md_js.exists()
+
+    script = f"""
+    const {{ parseMarkdown }} = require('{md_js}');
+
+    // 1. Listas ordenadas aninhadas
+    const sampleOrdered = '1. Teste\\n    1. Teste1\\n        1. Teste2\\n2. Volta ao Nivel 1';
+    const resOrdered = parseMarkdown(sampleOrdered);
+    if (!resOrdered.html.includes('<ol class="tb-list tb-ordered-list">')) {{
+      throw new Error('Tag <ol class="tb-list tb-ordered-list"> ausente: ' + resOrdered.html);
+    }}
+    const olOpens = (resOrdered.html.match(/<ol/g) || []).length;
+    const olCloses = (resOrdered.html.match(/<\\/ol>/g) || []).length;
+    if (olOpens < 3 || olCloses < 3) {{
+      throw new Error('Falha no aninhamento de listas ordenadas: opens=' + olOpens + ', closes=' + olCloses);
+    }}
+
+    // 2. Listas não-ordenadas aninhadas
+    const sampleUnordered = '* Item 1\\n  * Subitem 1\\n    * Subsubitem 1';
+    const resUnordered = parseMarkdown(sampleUnordered);
+    const ulOpens = (resUnordered.html.match(/<ul/g) || []).length;
+    const ulCloses = (resUnordered.html.match(/<\\/ul>/g) || []).length;
+    if (ulOpens < 3 || ulCloses < 3) {{
+      throw new Error('Falha no aninhamento de listas não-ordenadas: opens=' + ulOpens + ', closes=' + ulCloses);
+    }}
+
+    // 3. Checklists aninhados
+    const sampleTask = '- [ ] Tarefa Pai\\n    - [x] Subtarefa 1\\n    - [ ] Subtarefa 2';
+    const resTask = parseMarkdown(sampleTask);
+    if (!resTask.html.includes('tb-task-list') || !resTask.html.includes('tb-task-checkbox')) {{
+      throw new Error('Checklist não renderizou tags de tarefa: ' + resTask.html);
+    }}
+
+    console.log('SUCCESS_TAREFAS_NESTED_LISTS');
+    """
+    res = subprocess.run(["node", "-e", script], capture_output=True, text=True)
+    assert res.returncode == 0, f"Erro nos testes de parsing de listas aninhadas no Tarefas:\n{res.stderr}"
+    assert "SUCCESS_TAREFAS_NESTED_LISTS" in res.stdout
+
+
+def test_tarefas_issue_265_list_css_hierarchy():
+    """
+    Valida a Issue #265:
+    1. style.css possui lower-roman para ol ol e lower-alpha para ol ol ol.
+    2. style.css possui circle para ul ul e square para ul ul ul.
+    3. markdown-field.css possui regras correspondentes.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    md_css = (ui_dir / "markdown-field.css").read_text(encoding="utf-8")
+
+    assert "lower-roman" in style_css
+    assert "lower-alpha" in style_css
+    assert "circle" in style_css
+    assert "square" in style_css
+
+    assert "lower-roman" in md_css
+    assert "lower-alpha" in md_css
+    assert "circle" in md_css
+    assert "square" in md_css
+
+
+def test_tarefas_version_bump_1_6_0():
+    """
+    Valida que a versão do Tarefas foi avançada para 1.6.0 em plugin.json e catalog.json.
+    """
+    import json
+    p_data = json.loads((TAREFAS_DIR / "plugin.json").read_text(encoding="utf-8"))
+    c_data = json.loads((REPO_ROOT / "catalog.json").read_text(encoding="utf-8"))
+
+    assert p_data["version"] == "1.6.0"
+    tarefas_entry = next((p for p in c_data["plugins"] if p["id"] == "tarefas"), None)
+    assert tarefas_entry is not None
+    assert tarefas_entry["version"] == "1.6.0"
+    assert "tarefas-1.6.0" in tarefas_entry["download_url"]
+
+

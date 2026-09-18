@@ -119,14 +119,65 @@ function parseMarkdown(md, options = {}) {
   let inTable = false;
   let tableBuffer = [];
 
-  let inList = false;
-  let listType = null;
+  const listStack = [];
+
+  function openListTag(type, isTask) {
+    if (type === 'ol') {
+      return '<ol class="tb-list tb-ordered-list">';
+    } else if (isTask) {
+      return '<ul class="tb-list tb-task-list">';
+    } else {
+      return '<ul class="tb-list">';
+    }
+  }
 
   function flushList() {
-    if (inList) {
-      out.push(`</${listType}>`);
-      inList = false;
-      listType = null;
+    while (listStack.length > 0) {
+      const item = listStack.pop();
+      out.push(`</${item.type}>`);
+    }
+  }
+
+  function processListItem(type, indent, isTask, itemHtml) {
+    if (listStack.length === 0) {
+      listStack.push({ type, indent, isTask });
+      out.push(openListTag(type, isTask));
+      out.push(itemHtml);
+      return;
+    }
+
+    let top = listStack[listStack.length - 1];
+
+    if (indent > top.indent) {
+      listStack.push({ type, indent, isTask });
+      out.push(openListTag(type, isTask));
+      out.push(itemHtml);
+    } else if (indent < top.indent) {
+      while (listStack.length > 0 && indent < listStack[listStack.length - 1].indent) {
+        const closed = listStack.pop();
+        out.push(`</${closed.type}>`);
+      }
+      if (listStack.length > 0) {
+        top = listStack[listStack.length - 1];
+        if (top.type !== type || top.isTask !== isTask) {
+          const closed = listStack.pop();
+          out.push(`</${closed.type}>`);
+          listStack.push({ type, indent, isTask });
+          out.push(openListTag(type, isTask));
+        }
+      } else {
+        listStack.push({ type, indent, isTask });
+        out.push(openListTag(type, isTask));
+      }
+      out.push(itemHtml);
+    } else {
+      if (top.type !== type || top.isTask !== isTask) {
+        const closed = listStack.pop();
+        out.push(`</${closed.type}>`);
+        listStack.push({ type, indent, isTask });
+        out.push(openListTag(type, isTask));
+      }
+      out.push(itemHtml);
     }
   }
 
@@ -337,46 +388,33 @@ function parseMarkdown(md, options = {}) {
     // Checklist item: - [ ] or - [x]
     const checkMatch = line.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.+)$/);
     if (checkMatch) {
-      if (!inList || listType !== 'ul') {
-        flushList();
-        inList = true;
-        listType = 'ul';
-        out.push('<ul class="tb-list tb-task-list">');
-      }
+      const indent = checkMatch[1].replace(/\t/g, '    ').length;
       const isChecked = checkMatch[3].toLowerCase() === 'x';
       const itemText = checkMatch[4];
-      out.push(
+      const itemHtml =
         `<li class="tb-task-item">` +
           `<input type="checkbox" ${isChecked ? 'checked' : ''} disabled class="tb-task-checkbox" /> ` +
           `<span>${inlineMarkdown(itemText)}</span>` +
-        `</li>`
-      );
+        `</li>`;
+      processListItem('ul', indent, true, itemHtml);
       continue;
     }
 
     // Unordered List: * or - or +
     const ulMatch = line.match(/^(\s*)([-*+])\s+(.+)$/);
     if (ulMatch) {
-      if (!inList || listType !== 'ul') {
-        flushList();
-        inList = true;
-        listType = 'ul';
-        out.push('<ul class="tb-list">');
-      }
-      out.push(`<li>${inlineMarkdown(ulMatch[3])}</li>`);
+      const indent = ulMatch[1].replace(/\t/g, '    ').length;
+      const itemHtml = `<li>${inlineMarkdown(ulMatch[3])}</li>`;
+      processListItem('ul', indent, false, itemHtml);
       continue;
     }
 
     // Ordered List: 1. text
     const olMatch = line.match(/^(\s*)(\d+)\.\s+(.+)$/);
     if (olMatch) {
-      if (!inList || listType !== 'ol') {
-        flushList();
-        inList = true;
-        listType = 'ol';
-        out.push('<ol class="tb-list tb-ordered-list">');
-      }
-      out.push(`<li>${inlineMarkdown(olMatch[3])}</li>`);
+      const indent = olMatch[1].replace(/\t/g, '    ').length;
+      const itemHtml = `<li>${inlineMarkdown(olMatch[3])}</li>`;
+      processListItem('ol', indent, false, itemHtml);
       continue;
     }
 
