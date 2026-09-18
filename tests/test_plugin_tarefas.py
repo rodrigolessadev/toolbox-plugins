@@ -789,7 +789,52 @@ def test_tarefas_markdown_rendering_and_local_assets():
     assert "OK" in result.stdout
 
 
+def test_tarefas_issue_260_empty_description_by_default():
+    """
+    Valida a Issue #260:
+    Novas tarefas criadas no domínio e via API devem ter description vazia ("") por padrão.
+    """
+    # 1. Domínio
+    task_dom = tarefas_domain.create_task("Tarefa Sem Descrição Inicial")
+    assert task_dom["description"] == "", "Descrição inicial deve ser string vazia no domínio"
+
+    # 2. TarefasApi
+    api = TarefasApi()
+    res_api = api.create_task("Tarefa Sem Descrição API")
+    assert res_api["success"] is True
+    assert res_api["task"]["description"] == "", "Descrição inicial deve ser string vazia na API"
+
+    # 3. Frontend app.js não usa template descritivo falso
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+    assert "const descVal = task.description || '';" in app_js, "app.js deve usar string vazia como fallback de descrição"
 
 
+def test_tarefas_issue_260_ctrl_click_subtask_and_dblclick():
+    """
+    Valida a Issue #260:
+    1. Atalho CTRL + clique para criar subtarefas.
+    2. Duplo clique (dblclick) para edição rápida no card.
+    3. Foco imediato na aba ao clicar em visualizar.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
 
+    # 1. Funções e exportações
+    assert "handleAddSubtaskBtnClick" in app_js
+    assert "handleTaskDblClick" in app_js
+    assert "window.handleAddSubtaskBtnClick = handleAddSubtaskBtnClick;" in app_js
+    assert "window.handleTaskDblClick = handleTaskDblClick;" in app_js
 
+    # 2. Verificação de ctrlKey / metaKey
+    assert "event.ctrlKey || event.metaKey" in app_js, "Deve verificar event.ctrlKey || event.metaKey"
+
+    # 3. Evento ondblclick nos cards
+    assert 'ondblclick="handleTaskDblClick(' in app_js, "Card deve conter manipulador ondblclick"
+
+    # 4. openTaskTab recebe event e interrompe propagação
+    assert "function openTaskTab(taskId, event)" in app_js
+    assert "event.stopPropagation()" in app_js
+    assert "switchToTab(taskId)" in app_js
+    assert "openTaskTab('${task.id}', event)" in app_js
+    assert "openTaskTab('${sub.id}', event)" in app_js

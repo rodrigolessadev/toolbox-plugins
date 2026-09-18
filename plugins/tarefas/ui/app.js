@@ -70,7 +70,7 @@ const mockApi = {
       id: 'task_' + Math.random().toString(36).substr(2, 6),
       parent_id: parentId || null,
       title,
-      description: desc || `# ${title}\n\nDetalhes da tarefa aqui.`,
+      description: desc || '',
       completed: false,
       created_at: new Date().toISOString().replace('T', ' ').substr(0, 19),
       updated_at: new Date().toISOString().replace('T', ' ').substr(0, 19),
@@ -576,7 +576,8 @@ function renderTasksList() {
                 class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''} ${isSubSelected ? 'selected' : ''}"
                 id="card_${sub.id}"
                 draggable="true"
-                onclick="handleCardClick(event, '${task.id}')"
+                onclick="handleCardClick(event, '${sub.id}')"
+                ondblclick="handleTaskDblClick(event, '${sub.id}')"
                 ondragstart="handleDragStart(event, '${sub.id}', '${task.id}')"
                 ondragend="handleDragEnd(event)"
                 ondragover="handleDragOver(event, '${sub.id}', '${task.id}')"
@@ -607,6 +608,14 @@ function renderTasksList() {
                 <div class="task-actions">
                   <button
                     type="button"
+                    class="action-btn action-btn-add-sub"
+                    onclick="handleAddSubtaskBtnClick(event, '${sub.id}')"
+                    title="Adicionar subtarefa (CTRL + clique)"
+                  >
+                    <span data-icon="plus"></span>
+                  </button>
+                  <button
+                    type="button"
                     class="action-btn action-btn-edit"
                     onclick="startQuickEdit('${sub.id}')"
                     title="Editar rapidamente no chat"
@@ -616,7 +625,7 @@ function renderTasksList() {
                   <button
                     type="button"
                     class="action-btn action-btn-view"
-                    onclick="openTaskTab('${sub.id}')"
+                    onclick="openTaskTab('${sub.id}', event)"
                     title="Visualizar detalhes em aba dedicada"
                   >
                     <span data-icon="eye"></span>
@@ -644,6 +653,7 @@ function renderTasksList() {
           id="card_${task.id}"
           draggable="true"
           onclick="handleCardClick(event, '${task.id}')"
+          ondblclick="handleTaskDblClick(event, '${task.id}')"
           ondragstart="handleDragStart(event, '${task.id}', null)"
           ondragend="handleDragEnd(event)"
           ondragover="handleDragOver(event, '${task.id}', null)"
@@ -676,8 +686,8 @@ function renderTasksList() {
             <button
               type="button"
               class="action-btn action-btn-add-sub"
-              onclick="prepareSubtaskCreation('${task.id}')"
-              title="Adicionar subtarefa"
+              onclick="handleAddSubtaskBtnClick(event, '${task.id}')"
+              title="Adicionar subtarefa (CTRL + clique)"
             >
               <span data-icon="plus"></span>
             </button>
@@ -692,7 +702,7 @@ function renderTasksList() {
             <button
               type="button"
               class="action-btn action-btn-view"
-              onclick="openTaskTab('${task.id}')"
+              onclick="openTaskTab('${task.id}', event)"
               title="Visualizar detalhes em aba dedicada"
             >
               <span data-icon="eye"></span>
@@ -1024,11 +1034,34 @@ function cancelSubtaskCreation() {
 }
 
 function selectTask(taskId) {
-  if (state.selectedTaskId === taskId) {
+  if (state.selectedTaskId === taskId && !state.subtaskTargetId) {
     clearSelection();
     return;
   }
-  prepareSubtaskCreation(taskId);
+  state.selectedTaskId = taskId;
+  document.querySelectorAll('.task-card.selected').forEach(card => card.classList.remove('selected'));
+  const cardEl = document.getElementById('card_' + taskId);
+  if (cardEl) {
+    cardEl.classList.add('selected');
+  }
+}
+
+function handleAddSubtaskBtnClick(event, taskId) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  const isCtrlOrMeta = Boolean(event && (event.ctrlKey || event.metaKey));
+  if (isCtrlOrMeta) {
+    prepareSubtaskCreation(taskId);
+  } else {
+    selectTask(taskId);
+    const input = document.getElementById('chatInput');
+    if (input) {
+      input.placeholder = 'Dica: segure CTRL e clique em + para criar uma subtarefa...';
+      input.focus();
+    }
+  }
 }
 
 function handleCardClick(event, taskId) {
@@ -1037,7 +1070,23 @@ function handleCardClick(event, taskId) {
       return;
     }
   }
-  selectTask(taskId);
+  const isCtrlOrMeta = Boolean(event && (event.ctrlKey || event.metaKey));
+  if (isCtrlOrMeta) {
+    prepareSubtaskCreation(taskId);
+  } else {
+    selectTask(taskId);
+  }
+}
+
+function handleTaskDblClick(event, taskId) {
+  if (event) {
+    if (event.target && event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  startQuickEdit(taskId);
 }
 
 async function handleChatSubmit() {
@@ -1136,7 +1185,11 @@ function switchToTab(tabId) {
   if (window.renderIcons) window.renderIcons();
 }
 
-function openTaskTab(taskId) {
+function openTaskTab(taskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
   const task = state.tasks.find(t => t.id === taskId);
   if (!task) return;
 
@@ -1406,7 +1459,7 @@ function initMarkdownFieldForTask(task) {
   const container = document.getElementById(`markdownContainer_${task.id}`);
   if (!container) return;
 
-  const descVal = task.description || `# ${task.title}\n\nDescreva os detalhes e passos desta tarefa aqui...`;
+  const descVal = task.description || '';
 
   if (window.ToolboxMarkdown && window.ToolboxMarkdown.MarkdownField) {
     const mf = new window.ToolboxMarkdown.MarkdownField({
@@ -1902,5 +1955,7 @@ window.clearSelection = clearSelection;
 window.selectTask = selectTask;
 window.handleCardClick = handleCardClick;
 window.handleChatCancel = handleChatCancel;
+window.handleTaskDblClick = handleTaskDblClick;
+window.handleAddSubtaskBtnClick = handleAddSubtaskBtnClick;
 window.isDescendant = isDescendant;
 window.rebuildTasksOrder = rebuildTasksOrder;
