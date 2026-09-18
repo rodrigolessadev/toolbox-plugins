@@ -1239,3 +1239,49 @@
   -webkit-user-select: text !important;
 }
 
+/* --- Indicador Permanente de Anexos no Card (Issue #263) --- */
+.task-att-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.task-att-trigger.att-trigger-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.task-att-trigger.att-trigger-active:hover {
+  background: rgba(99, 102, 241, 0.25);
+  color: var(--accent-hover);
+}
+
+.att-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.task-att-trigger.att-trigger-empty {
+  color: var(--fg-muted);
+  opacity: 0.45;
+}
+
+.task-att-trigger.att-trigger-empty:hover {
+  opacity: 0.9;
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+  color: var(--fg);
+}
+
