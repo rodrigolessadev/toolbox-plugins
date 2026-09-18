@@ -309,15 +309,23 @@
 /* --- Task Item Card --- */
 .task-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   background-color: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 10px 14px;
-  gap: 12px;
+  gap: 0;
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+.task-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
 }
 
 .task-card:hover {
@@ -1138,5 +1146,96 @@
 .btn-purge-task:hover {
   background: var(--danger);
   color: #ffffff;
+}
+
+/* --- Expansão Sanfona no Card e Cópia RAW / Rich Text (Issue #262) --- */
+.action-btn-expand-desc {
+  transition: transform var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.action-btn-expand-desc.active {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+.task-desc-accordion {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--fg);
+  cursor: default;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.task-desc-accordion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.task-desc-accordion-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-muted);
+}
+
+.btn-copy-card-desc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-card-desc:hover {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  border-color: var(--accent);
+}
+
+.task-desc-accordion-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  color: var(--fg);
+  max-height: 220px;
+  overflow-y: auto;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* Habilitação irrestrita de seleção com cursor para leitura e cópia Rich Text */
+.detail-markdown-section,
+.detail-markdown-section *,
+.tb-markdown-field,
+.tb-markdown-reader,
+.tb-reader-body,
+.tb-reader-body *,
+.task-desc-accordion,
+.task-desc-accordion-content,
+.native-desc-content {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
