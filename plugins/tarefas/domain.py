@@ -246,7 +246,7 @@ def create_task(title: str, description: str = "", parent_id: Optional[str] = No
     now = _now_iso()
     task_id = f"task_{uuid.uuid4().hex[:8]}"
 
-    desc = description.strip() if description else f"# {clean_title}\n\nDescreva os detalhes e etapas desta tarefa aqui."
+    desc = description.strip() if description else ""
 
     new_task: Dict[str, Any] = {
         "id": task_id,
