@@ -15,6 +15,7 @@ let state = {
   activeTabId: 'main', // 'main' | 'trash' ou ID da tarefa
   markdownFields: {}, // Instâncias ativas de MarkdownField por taskId
   collapsedParents: new Set(JSON.parse(localStorage.getItem('tarefas-collapsed-parents') || '[]')),
+  expandedDescCards: new Set(),
   dateFilter: {
     from: localStorage.getItem('tarefas-date-from') || '',
     to: localStorage.getItem('tarefas-date-to') || '',
@@ -630,6 +631,8 @@ function renderTasksList() {
               ? `<span class="task-meta-badge" title="${subAttCount} anexo(s)"><span data-icon="paperclip"></span> ${subAttCount}</span>`
               : '';
             const isSubSelected = state.selectedTaskId === sub.id;
+            const hasSubDesc = Boolean(sub.description && sub.description.trim().length > 0);
+            const isSubDescExpanded = Boolean(state.expandedDescCards && state.expandedDescCards.has(sub.id));
             return `
               <div
                 class="task-card task-card-nested ${isSubCompleted ? 'completed' : ''} ${isSubSelected ? 'selected' : ''}"
@@ -643,61 +646,91 @@ function renderTasksList() {
                 ondragleave="handleDragLeave(event)"
                 ondrop="handleDrop(event, '${sub.id}', '${task.id}')"
               >
-                <div class="task-left">
-                  <span
-                    class="drag-handle"
-                    draggable="true"
-                    ondragstart="handleDragStart(event, '${sub.id}', '${task.id}')"
-                    ondragend="handleDragEnd(event)"
-                    title="Arrastar para reordenar subtarefa"
-                  >
-                    <span data-icon="grip-vertical"></span>
-                  </span>
-                  <span class="subtask-indicator" data-icon="corner-down-right"></span>
-                  <input
-                    type="checkbox"
-                    class="task-checkbox-custom"
-                    ${isSubCompleted ? 'checked' : ''}
-                    onchange="handleToggleTask('${sub.id}')"
-                    title="${isSubCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
-                  />
-                  <span class="task-title" title="${escapeHtml(sub.title)}">${escapeHtml(sub.title)}</span>
-                  ${subAttBadge}
+                <div class="task-main-row">
+                  <div class="task-left">
+                    <span
+                      class="drag-handle"
+                      draggable="true"
+                      ondragstart="handleDragStart(event, '${sub.id}', '${task.id}')"
+                      ondragend="handleDragEnd(event)"
+                      title="Arrastar para reordenar subtarefa"
+                    >
+                      <span data-icon="grip-vertical"></span>
+                    </span>
+                    <span class="subtask-indicator" data-icon="corner-down-right"></span>
+                    <input
+                      type="checkbox"
+                      class="task-checkbox-custom"
+                      ${isSubCompleted ? 'checked' : ''}
+                      onchange="handleToggleTask('${sub.id}')"
+                      title="${isSubCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
+                    />
+                    <span class="task-title" title="${escapeHtml(sub.title)}">${escapeHtml(sub.title)}</span>
+                    ${subAttBadge}
+                  </div>
+                  <div class="task-actions">
+                    <button
+                      type="button"
+                      class="action-btn action-btn-add-sub"
+                      onclick="handleAddSubtaskBtnClick(event, '${sub.id}')"
+                      title="Adicionar subtarefa (CTRL + clique)"
+                    >
+                      <span data-icon="plus"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn action-btn-edit"
+                      onclick="startQuickEdit('${sub.id}')"
+                      title="Editar rapidamente no chat"
+                    >
+                      <span data-icon="edit"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn action-btn-view"
+                      onclick="openTaskTab('${sub.id}', event)"
+                      title="Visualizar detalhes em aba dedicada"
+                    >
+                      <span data-icon="eye"></span>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn action-btn-delete"
+                      onclick="handleDeleteTask('${sub.id}')"
+                      title="Excluir subtarefa"
+                    >
+                      <span data-icon="trash-2"></span>
+                    </button>
+                    ${hasSubDesc ? `
+                      <button
+                        type="button"
+                        class="action-btn action-btn-expand-desc ${isSubDescExpanded ? 'active' : ''}"
+                        onclick="toggleDescAccordion('${sub.id}', event)"
+                        title="${isSubDescExpanded ? 'Recolher descrição' : 'Expandir descrição'}"
+                      >
+                        <span data-icon="chevron-down"></span>
+                      </button>
+                    ` : ''}
+                  </div>
                 </div>
-                <div class="task-actions">
-                  <button
-                    type="button"
-                    class="action-btn action-btn-add-sub"
-                    onclick="handleAddSubtaskBtnClick(event, '${sub.id}')"
-                    title="Adicionar subtarefa (CTRL + clique)"
-                  >
-                    <span data-icon="plus"></span>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn action-btn-edit"
-                    onclick="startQuickEdit('${sub.id}')"
-                    title="Editar rapidamente no chat"
-                  >
-                    <span data-icon="edit"></span>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn action-btn-view"
-                    onclick="openTaskTab('${sub.id}', event)"
-                    title="Visualizar detalhes em aba dedicada"
-                  >
-                    <span data-icon="eye"></span>
-                  </button>
-                  <button
-                    type="button"
-                    class="action-btn action-btn-delete"
-                    onclick="handleDeleteTask('${sub.id}')"
-                    title="Excluir subtarefa"
-                  >
-                    <span data-icon="trash-2"></span>
-                  </button>
-                </div>
+                ${(hasSubDesc && isSubDescExpanded) ? `
+                  <div class="task-desc-accordion" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+                    <div class="task-desc-accordion-header">
+                      <span class="task-desc-accordion-label">Descrição & Detalhes</span>
+                      <button
+                        type="button"
+                        class="btn-copy-card-desc"
+                        id="btnCopyCard_${sub.id}"
+                        onclick="handleCopyCardDesc('${sub.id}', event)"
+                        title="Copiar descrição da tarefa"
+                      >
+                        <span data-icon="copy" id="iconCopyCard_${sub.id}"></span>
+                        <span id="textCopyCard_${sub.id}">Copiar</span>
+                      </button>
+                    </div>
+                    <div class="task-desc-accordion-content">${escapeHtml(sub.description)}</div>
+                  </div>
+                ` : ''}
               </div>
             `;
           }).join('')}
@@ -705,6 +738,8 @@ function renderTasksList() {
       : '';
 
     const isSelected = state.selectedTaskId === task.id;
+    const hasDesc = Boolean(task.description && task.description.trim().length > 0);
+    const isDescExpanded = Boolean(state.expandedDescCards && state.expandedDescCards.has(task.id));
     return `
       <div class="subtasks-wrapper">
         <div
@@ -719,62 +754,92 @@ function renderTasksList() {
           ondragleave="handleDragLeave(event)"
           ondrop="handleDrop(event, '${task.id}', null)"
         >
-          <div class="task-left">
-            <span
-              class="drag-handle"
-              draggable="true"
-              ondragstart="handleDragStart(event, '${task.id}', null)"
-              ondragend="handleDragEnd(event)"
-              title="Arrastar para reordenar tarefa"
-            >
-              <span data-icon="grip-vertical"></span>
-            </span>
-            ${chevronBtn}
-            <input
-              type="checkbox"
-              class="task-checkbox-custom"
-              ${isCompleted ? 'checked' : ''}
-              onchange="handleToggleTask('${task.id}')"
-              title="${isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
-            />
-            <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
-            ${attBadge}
-            ${subtaskBadge}
+          <div class="task-main-row">
+            <div class="task-left">
+              <span
+                class="drag-handle"
+                draggable="true"
+                ondragstart="handleDragStart(event, '${task.id}', null)"
+                ondragend="handleDragEnd(event)"
+                title="Arrastar para reordenar tarefa"
+              >
+                <span data-icon="grip-vertical"></span>
+              </span>
+              ${chevronBtn}
+              <input
+                type="checkbox"
+                class="task-checkbox-custom"
+                ${isCompleted ? 'checked' : ''}
+                onchange="handleToggleTask('${task.id}')"
+                title="${isCompleted ? 'Marcar como pendente' : 'Marcar como concluída'}"
+              />
+              <span class="task-title" title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</span>
+              ${attBadge}
+              ${subtaskBadge}
+            </div>
+            <div class="task-actions">
+              <button
+                type="button"
+                class="action-btn action-btn-add-sub"
+                onclick="handleAddSubtaskBtnClick(event, '${task.id}')"
+                title="Adicionar subtarefa (CTRL + clique)"
+              >
+                <span data-icon="plus"></span>
+              </button>
+              <button
+                type="button"
+                class="action-btn action-btn-edit"
+                onclick="startQuickEdit('${task.id}')"
+                title="Editar rapidamente no chat"
+              >
+                <span data-icon="edit"></span>
+              </button>
+              <button
+                type="button"
+                class="action-btn action-btn-view"
+                onclick="openTaskTab('${task.id}', event)"
+                title="Visualizar detalhes em aba dedicada"
+              >
+                <span data-icon="eye"></span>
+              </button>
+              <button
+                type="button"
+                class="action-btn action-btn-delete"
+                onclick="handleDeleteTask('${task.id}')"
+                title="Excluir tarefa"
+              >
+                <span data-icon="trash-2"></span>
+              </button>
+              ${hasDesc ? `
+                <button
+                  type="button"
+                  class="action-btn action-btn-expand-desc ${isDescExpanded ? 'active' : ''}"
+                  onclick="toggleDescAccordion('${task.id}', event)"
+                  title="${isDescExpanded ? 'Recolher descrição' : 'Expandir descrição'}"
+                >
+                  <span data-icon="chevron-down"></span>
+                </button>
+              ` : ''}
+            </div>
           </div>
-          <div class="task-actions">
-            <button
-              type="button"
-              class="action-btn action-btn-add-sub"
-              onclick="handleAddSubtaskBtnClick(event, '${task.id}')"
-              title="Adicionar subtarefa (CTRL + clique)"
-            >
-              <span data-icon="plus"></span>
-            </button>
-            <button
-              type="button"
-              class="action-btn action-btn-edit"
-              onclick="startQuickEdit('${task.id}')"
-              title="Editar rapidamente no chat"
-            >
-              <span data-icon="edit"></span>
-            </button>
-            <button
-              type="button"
-              class="action-btn action-btn-view"
-              onclick="openTaskTab('${task.id}', event)"
-              title="Visualizar detalhes em aba dedicada"
-            >
-              <span data-icon="eye"></span>
-            </button>
-            <button
-              type="button"
-              class="action-btn action-btn-delete"
-              onclick="handleDeleteTask('${task.id}')"
-              title="Excluir tarefa"
-            >
-              <span data-icon="trash-2"></span>
-            </button>
-          </div>
+          ${(hasDesc && isDescExpanded) ? `
+            <div class="task-desc-accordion" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">
+              <div class="task-desc-accordion-header">
+                <span class="task-desc-accordion-label">Descrição & Detalhes</span>
+                <button
+                  type="button"
+                  class="btn-copy-card-desc"
+                  id="btnCopyCard_${task.id}"
+                  onclick="handleCopyCardDesc('${task.id}', event)"
+                  title="Copiar texto da descrição"
+                >
+                  <span data-icon="copy" id="iconCopyCard_${task.id}"></span>
+                  <span id="textCopyCard_${task.id}">Copiar</span>
+                </button>
+              </div>
+              <div class="task-desc-accordion-content">${escapeHtml(task.description)}</div>
+            </div>
+          ` : ''}
         </div>
         ${subtasksHtml}
       </div>
@@ -1139,7 +1204,7 @@ function handleAddSubtaskBtnClick(event, taskId) {
 
 function handleCardClick(event, taskId) {
   if (event && event.target) {
-    if (event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a')) {
+    if (event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a, .task-desc-accordion')) {
       return;
     }
   }
@@ -1153,7 +1218,7 @@ function handleCardClick(event, taskId) {
 
 function handleTaskDblClick(event, taskId) {
   if (event) {
-    if (event.target && event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a')) {
+    if (event.target && event.target.closest('button, input, .drag-handle, .subtask-collapse-btn, a, .task-desc-accordion')) {
       return;
     }
     event.preventDefault();
@@ -1369,15 +1434,26 @@ function createDetailPane(task) {
           <div class="detail-section-title" style="margin-bottom: 0;">
             <span data-icon="file-text"></span> Descrição & Detalhes (Markdown)
           </div>
-          <button
-            type="button"
-            class="btn btn-secondary btn-sm"
-            id="btnEditDesc_${task.id}"
-            onclick="handleToggleDescriptionEdit('${task.id}')"
-            title="Alternar entre modo de visualização e edição"
-          >
-            <span data-icon="edit"></span> <span id="btnEditDescText_${task.id}">Editar Descrição</span>
-          </button>
+          <div class="description-header-actions" style="display: flex; align-items: center; gap: 8px;">
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              id="btnCopyDescRaw_${task.id}"
+              onclick="handleCopyRawDescription('${task.id}')"
+              title="Copiar código Markdown bruto (RAW)"
+            >
+              <span data-icon="copy" id="btnCopyDescRawIcon_${task.id}"></span> <span id="btnCopyDescRawText_${task.id}">Copiar RAW</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              id="btnEditDesc_${task.id}"
+              onclick="handleToggleDescriptionEdit('${task.id}')"
+              title="Alternar entre modo de visualização e edição"
+            >
+              <span data-icon="edit"></span> <span id="btnEditDescText_${task.id}">Editar Descrição</span>
+            </button>
+          </div>
         </div>
         <div id="markdownContainer_${task.id}" style="flex: 1; min-height: 180px;">
           <!-- Componente <markdown-field> montado aqui -->
@@ -1578,6 +1654,7 @@ function initMarkdownFieldForTask(task) {
 
     container.innerHTML = '';
     container.appendChild(mf.element);
+    setupRichTextCopyHandler(container);
     updateDescHeaderButton(task.id, 'view');
   } else if (typeof customElements !== 'undefined' && customElements.get('markdown-field')) {
     // Fallback para Web Component se declarado
@@ -2200,6 +2277,123 @@ async function handleEmptyTrash() {
   }
 }
 
+// --- Expansão Rápida no Card, Cópia RAW e Rich Text (Issue #262) ---
+function toggleDescAccordion(taskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (!state.expandedDescCards) {
+    state.expandedDescCards = new Set();
+  }
+  if (state.expandedDescCards.has(taskId)) {
+    state.expandedDescCards.delete(taskId);
+  } else {
+    state.expandedDescCards.add(taskId);
+  }
+  renderTasksList();
+}
+
+async function handleCopyCardDesc(taskId, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task || !task.description) return;
+
+  const btn = document.getElementById(`btnCopyCard_${taskId}`);
+  const icon = document.getElementById(`iconCopyCard_${taskId}`);
+  const text = document.getElementById(`textCopyCard_${taskId}`);
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(task.description);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = task.description;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    if (text) text.textContent = 'Copiado!';
+    if (icon) icon.setAttribute('data-icon', 'check');
+    if (window.renderIcons) window.renderIcons();
+
+    setTimeout(() => {
+      if (text) text.textContent = 'Copiar';
+      if (icon) icon.setAttribute('data-icon', 'copy');
+      if (window.renderIcons) window.renderIcons();
+    }, 2000);
+  } catch (err) {
+    console.error('Erro ao copiar descrição do card:', err);
+  }
+}
+
+async function handleCopyRawDescription(taskId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  const rawContent = (task && task.description) ? task.description : '';
+
+  const btn = document.getElementById(`btnCopyDescRaw_${taskId}`);
+  const icon = document.getElementById(`btnCopyDescRawIcon_${taskId}`);
+  const text = document.getElementById(`btnCopyDescRawText_${taskId}`);
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(rawContent);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = rawContent;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    if (text) text.textContent = 'Copiado!';
+    if (icon) icon.setAttribute('data-icon', 'check');
+    if (window.renderIcons) window.renderIcons();
+
+    setTimeout(() => {
+      if (text) text.textContent = 'Copiar RAW';
+      if (icon) icon.setAttribute('data-icon', 'copy');
+      if (window.renderIcons) window.renderIcons();
+    }, 2000);
+  } catch (err) {
+    console.error('Erro ao copiar Markdown RAW:', err);
+  }
+}
+
+function setupRichTextCopyHandler(container) {
+  if (!container || container._richCopySetup) return;
+  container._richCopySetup = true;
+  container.addEventListener('copy', (e) => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+
+    try {
+      const containerNode = document.createElement('div');
+      for (let i = 0; i < selection.rangeCount; i++) {
+        containerNode.appendChild(selection.getRangeAt(i).cloneContents());
+      }
+      const html = containerNode.innerHTML;
+      const text = selection.toString();
+
+      if (e.clipboardData && html) {
+        e.clipboardData.setData('text/html', html);
+        e.clipboardData.setData('text/plain', text);
+        e.preventDefault();
+      }
+    } catch (_) {}
+  });
+}
+
 // Exportações globais para chamadas nos inline handlers HTML
 window.switchToTab = switchToTab;
 window.closeTaskTab = closeTaskTab;
@@ -2248,3 +2442,7 @@ window.renderTrashList = renderTrashList;
 window.handleRestoreTask = handleRestoreTask;
 window.handlePurgeTask = handlePurgeTask;
 window.handleEmptyTrash = handleEmptyTrash;
+window.toggleDescAccordion = toggleDescAccordion;
+window.handleCopyCardDesc = handleCopyCardDesc;
+window.handleCopyRawDescription = handleCopyRawDescription;
+window.setupRichTextCopyHandler = setupRichTextCopyHandler;

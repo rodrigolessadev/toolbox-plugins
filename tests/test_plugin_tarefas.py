@@ -1042,3 +1042,79 @@ def test_tarefas_issue_261_api_and_ui_contracts():
     assert ".badge-trash-count" in style_css
     assert ".trash-toolbar" in style_css
     assert ".btn-restore-task" in style_css
+
+
+def test_tarefas_issue_262_accordion_expand_button_conditional():
+    """
+    Valida a Issue #262:
+    1. Botão action-btn-expand-desc é condicional (apenas quando description existir e não for vazia).
+    2. Botão posicionado logo após action-btn-delete.
+    3. Gaveta sanfona task-desc-accordion com botão Copiar.
+    4. Funções toggleDescAccordion e handleCopyCardDesc implementadas e exportadas.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+
+    # 1. Condição estrita de exibição do botão
+    assert "hasSubDesc = Boolean(sub.description && sub.description.trim().length > 0)" in app_js
+    assert "hasDesc = Boolean(task.description && task.description.trim().length > 0)" in app_js
+
+    # 2. Classe e elemento do botão
+    assert "action-btn-expand-desc" in app_js
+    assert "toggleDescAccordion" in app_js
+
+    # 3. Posicionado após action-btn-delete
+    del_pos = app_js.find("action-btn-delete")
+    expand_pos = app_js.find("action-btn-expand-desc", del_pos)
+    assert expand_pos > del_pos, "action-btn-expand-desc deve estar posicionado imediatamente após action-btn-delete"
+
+    # 4. Gaveta task-desc-accordion e botão Copiar
+    assert "task-desc-accordion" in app_js
+    assert "btn-copy-card-desc" in app_js
+    assert "handleCopyCardDesc" in app_js
+    assert "window.toggleDescAccordion = toggleDescAccordion;" in app_js
+    assert "window.handleCopyCardDesc = handleCopyCardDesc;" in app_js
+
+
+def test_tarefas_issue_262_copy_raw_button_in_detail_pane():
+    """
+    Valida a Issue #262:
+    1. Botão btnCopyDescRaw no cabeçalho de Descrição & Detalhes.
+    2. Função handleCopyRawDescription copia conteúdo bruto original e exibe feedback.
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+
+    # 1. Botão presente no cabeçalho
+    assert 'id="btnCopyDescRaw_${task.id}"' in app_js
+    assert 'onclick="handleCopyRawDescription(\'${task.id}\')"' in app_js
+    assert "Copiar RAW" in app_js
+
+    # 2. Implementação e exportação
+    assert "async function handleCopyRawDescription(taskId)" in app_js
+    assert "window.handleCopyRawDescription = handleCopyRawDescription;" in app_js
+    assert "Copiado!" in app_js, "Deve apresentar feedback visual de cópia"
+
+
+def test_tarefas_issue_262_user_select_and_rich_text_copy():
+    """
+    Valida a Issue #262:
+    1. CSS user-select: text !important nas seções de Markdown e na prévia sanfona.
+    2. Função setupRichTextCopyHandler capturando payload HTML (MIME text/html) para editores ricos (Word/Docs).
+    """
+    ui_dir = TAREFAS_DIR / "ui"
+    style_css = (ui_dir / "style.css").read_text(encoding="utf-8")
+    app_js = (ui_dir / "app.js").read_text(encoding="utf-8")
+
+    # 1. Regras de estilo em style.css
+    assert "user-select: text !important;" in style_css
+    assert "-webkit-user-select: text !important;" in style_css
+    assert ".task-desc-accordion" in style_css
+    assert ".action-btn-expand-desc.active" in style_css
+    assert "transform: rotate(180deg);" in style_css
+
+    # 2. Interceptador de cópia rica em app.js
+    assert "setupRichTextCopyHandler" in app_js
+    assert "text/html" in app_js, "Deve registrar text/html para cópia rica estilo Word/Docs"
+    assert "text/plain" in app_js
+    assert "window.setupRichTextCopyHandler = setupRichTextCopyHandler;" in app_js
